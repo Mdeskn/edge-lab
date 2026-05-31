@@ -4,9 +4,16 @@ Generate ground truth coordinates from a video.
 Usage:
     python generate_ground_truth.py \
         --video test_video.mp4 \
-        --model yolov10n.onnx \
         --output ground_truth.csv \
         --tracker tennis-ball-color
+
+Optional YOLO mode:
+    python generate_ground_truth.py \
+        --video test_video.mp4 \
+        --model yolov10n.onnx \
+        --output ground_truth.csv \
+        --tracker yolo \
+        --target-class-id 32
 
 Output:
 frame_number,center_x,center_y,confidence,class_id,class_name
