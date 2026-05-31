@@ -33,6 +33,10 @@ export function VideoPanel({ state }: Props) {
         <span><i className="legend-dot pred" />Predicted position</span>
         <span><i className="legend-line" />Displacement</span>
       </div>
+      <div className="video-coords">
+        <span>GT ({state.latest.true_x != null ? `${state.latest.true_x.toFixed(0)}, ${state.latest.true_y?.toFixed(0)}` : "N/A"})</span>
+        <span>Pred ({state.latest.predicted_x != null ? `${state.latest.predicted_x.toFixed(0)}, ${state.latest.predicted_y?.toFixed(0)}` : "N/A"})</span>
+      </div>
     </section>
   );
 }

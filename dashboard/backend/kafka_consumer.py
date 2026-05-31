@@ -27,18 +27,9 @@ class DashboardKafkaConsumer:
             ),
         )
         self._app_topics = [topic.strip() for topic in configured_topics.split(",") if topic.strip()]
-        self._gpu_topic = os.environ.get(
-            "SERVER_METRICS_TOPIC",
-            os.environ.get("KAFKA_GPU_TOPIC", "/edgelab/server/metrics"),
-        )
-        self._network_topic = os.environ.get(
-            "NETWORK_METRICS_TOPIC",
-            os.environ.get("KAFKA_NET_TOPIC", "/edgelab/network/metrics"),
-        )
-        self._phase_topic = os.environ.get(
-            "PHASE_TOPIC",
-            os.environ.get("KAFKA_PHASE_TOPIC", "/edgelab/server/events/phase"),
-        )
+        self._gpu_topic = os.environ.get("KAFKA_GPU_TOPIC", "/edgelab/server/metrics")
+        self._network_topic = os.environ.get("KAFKA_NET_TOPIC", "/edgelab/network/metrics")
+        self._phase_topic = os.environ.get("KAFKA_PHASE_TOPIC", "/edgelab/server/events/phase")
         self._topic_groups = {
             topic: normalize_group_id(topic.rsplit("/", 1)[-1])
             for topic in self._app_topics

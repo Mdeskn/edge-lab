@@ -11,8 +11,15 @@
 | 60–90    | `network_load` | No  | Yes |
 | 90–120   | `combined`     | Yes | Yes |
 
-The scenario loops continuously. SeQaM publishes the current phase name to the
-`experiment.phase` Kafka topic so the SP-Agent can react.
+SeQaM runs the scenario once and then exits (the `exit` command at t=120s
+terminates the process). To run it continuously, use the provided wrapper:
+
+```bash
+./scripts/run_scenario_loop.sh
+```
+
+SeQaM publishes the current phase name to the `experiment.phase` Kafka topic
+so the SP-Agent can react.
 
 ## Loading into SeQaM
 

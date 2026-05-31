@@ -254,6 +254,24 @@ class DashboardState:
         with self._lock:
             return self._get_group(normalize_group_id(group_id)).frame_image
 
+    def reset_group(self, group_id: str) -> None:
+        """Reset cumulative counters and history for one group.
+
+        The last received JPEG frame is preserved so the video panel stays live
+        instead of going blank until the next frame arrives.
+        """
+        normalized_group = normalize_group_id(group_id)
+        with self._lock:
+            old = self._get_group(normalized_group)
+            fresh = GroupState(
+                history=deque(maxlen=self.max_history),
+                seen_samples=deque(maxlen=self.max_history * 4),
+            )
+            fresh.frame_image = old.frame_image
+            fresh.frame_sequence = old.frame_sequence
+            fresh.frame_updated_at = old.frame_updated_at
+            self._groups[normalized_group] = fresh
+
     def health(self) -> dict[str, Any]:
         """Return backend health and live source status."""
         with self._lock:

@@ -179,14 +179,14 @@ class Scorer:
             except Exception as exc:
                 logger.warning("Dashboard publish error in Scorer: %s", exc)
 
-            if (
-                displacement_px is not None
-                and (pred_x > 0.0 or pred_y > 0.0)
-                and displacement_px > 50
-            ):
-                logger.warning(
-                    "Large displacement: %.1fpx frame=%d", displacement_px, frame_number
-                )
+            if displacement_px is not None and (pred_x > 0.0 or pred_y > 0.0):
+                frame_h, frame_w = frame.shape[:2]
+                warn_threshold = math.sqrt(frame_w ** 2 + frame_h ** 2) * 0.05
+                if displacement_px > warn_threshold:
+                    logger.warning(
+                        "Large displacement: %.1fpx (threshold %.1fpx) frame=%d",
+                        displacement_px, warn_threshold, frame_number,
+                    )
 
         logger.info("Scorer stopped")
 
@@ -237,7 +237,7 @@ class Scorer:
         )
         cv2.putText(
             frame,
-            f"Frames: {score_summary['frames_processed']}",
+            f"Scored frames: {score_summary['frames_processed']}",
             (10, 155),
             _FONT,
             0.6,

@@ -9,6 +9,10 @@ export interface FrameMetric {
   latency_ms?: number;
   displacement_px?: number;
   cumulative_displacement_px?: number;
+  true_x?: number | null;
+  true_y?: number | null;
+  predicted_x?: number | null;
+  predicted_y?: number | null;
 }
 
 export interface InfrastructureMetric {

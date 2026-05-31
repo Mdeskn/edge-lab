@@ -5,6 +5,7 @@ services:
     build:
       context: ./publishers/network_conditions
       dockerfile: Dockerfile
+    container_name: edge-lab-net-publisher
     env_file:
       - .env
     network_mode: host

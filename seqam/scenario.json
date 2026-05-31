@@ -35,6 +35,10 @@
       "executionTime": 90000
     },
     {
+      "command": "ssh net-vm 'bash /scripts/tc_clear.sh eth0'",
+      "executionTime": 119000
+    },
+    {
       "command": "exit",
       "executionTime": 120000
     }

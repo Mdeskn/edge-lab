@@ -137,6 +137,15 @@ async def post_frame(group_id: str, update: FrameUpdate) -> dict[str, Any]:
     return {"accepted": True, "group_id": normalized_group}
 
 
+@app.post("/api/reset/{group_id}", status_code=200)
+async def reset_group(group_id: str) -> dict[str, Any]:
+    """Reset cumulative totals for a group. Call this between experiment runs."""
+    normalized_group = normalize_group_id(group_id)
+    dashboard_state.reset_group(normalized_group)
+    await socket_manager.broadcast(normalized_group)
+    return {"reset": True, "group_id": normalized_group}
+
+
 @app.get("/api/frame/{group_id}")
 def get_frame(group_id: str) -> Response:
     jpeg = dashboard_state.frame_image(group_id)

@@ -12,6 +12,8 @@ pipeline is writing the processing mode via set_mode().
 METRICS AVAILABLE IN YOUR decide() METHOD:
 
     self.gpu_metrics  (dict):
+        These keys are absent until the first Kafka message arrives.
+        Always use .get(key, default) to avoid KeyError.
         "gpu_utilization_pct"           float  GPU server load (0-100)
         "gpu_memory_used_mb"            float
         "gpu_memory_total_mb"           float
@@ -21,6 +23,8 @@ METRICS AVAILABLE IN YOUR decide() METHOD:
         "triton_inference_duration_ms"  float  pure GPU inference time
 
     self.net_metrics  (dict):
+        These keys are absent until the first Kafka message arrives.
+        Always use .get(key, default) to avoid KeyError.
         "delay_ms"                      float  added network delay
         "jitter_ms"                     float  variation in delay
         "packet_loss_pct"               float  percentage of packets dropped

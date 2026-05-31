@@ -88,6 +88,7 @@ Root: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab`
 - scripts/
     - benchmark_inference.py
     - gpu_stressor.sh
+    - run_scenario_loop.sh
     - setup_pi.sh
     - tc_apply.sh
     - tc_clear.sh
@@ -381,7 +382,7 @@ class RemoteClient:
 ### `client/metrics/__init__.py`
 
 - Path: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab/client/metrics/__init__.py`
-- Size: 278 bytes
+- Size: 300 bytes
 
 ```python
 """Metrics: Kafka, dashboard, and OpenTelemetry publishing."""
@@ -389,7 +390,7 @@ from metrics.dashboard_publisher import DashboardPublisher
 from metrics.kafka_publisher import AppMetricsPublisher
 from metrics.telemetry import setup_telemetry
 
-__all__ = ["AppMetricsPublisher", "setup_telemetry"]
+__all__ = ["DashboardPublisher", "AppMetricsPublisher", "setup_telemetry"]
 ```
 
 ### `client/metrics/dashboard_publisher.py`
@@ -753,7 +754,7 @@ __all__ = ["SPAgentBase", "SPAgent"]
 ### `client/student/sp_agent.py`
 
 - Path: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab/client/student/sp_agent.py`
-- Size: 1386 bytes
+- Size: 1428 bytes
 
 ```python
 """
@@ -776,8 +777,9 @@ class SPAgent(SPAgentBase):
     Tips:
     - Check self.experiment_phase to know what load is currently running
     - Check self.avg_latency to see how recent performance has been
-    - Check self.gpu_metrics["gpu_utilization_pct"] to see if the server is stressed
-    - Check self.net_metrics["delay_ms"] to see if the network is stressed
+    - Use .get() for metric dicts: they are empty until the first Kafka message arrives.
+      Example: self.gpu_metrics.get("gpu_utilization_pct", 0)
+               self.net_metrics.get("delay_ms", 0)
     - You can add your own state in __init__ (e.g. counters, thresholds)
     """
 
@@ -802,7 +804,7 @@ class SPAgent(SPAgentBase):
 ### `client/student/sp_agent_base.py`
 
 - Path: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab/client/student/sp_agent_base.py`
-- Size: 11089 bytes
+- Size: 11341 bytes
 
 ```python
 """
@@ -819,6 +821,8 @@ pipeline is writing the processing mode via set_mode().
 METRICS AVAILABLE IN YOUR decide() METHOD:
 
     self.gpu_metrics  (dict):
+        These keys are absent until the first Kafka message arrives.
+        Always use .get(key, default) to avoid KeyError.
         "gpu_utilization_pct"           float  GPU server load (0-100)
         "gpu_memory_used_mb"            float
         "gpu_memory_total_mb"           float
@@ -828,6 +832,8 @@ METRICS AVAILABLE IN YOUR decide() METHOD:
         "triton_inference_duration_ms"  float  pure GPU inference time
 
     self.net_metrics  (dict):
+        These keys are absent until the first Kafka message arrives.
+        Always use .get(key, default) to avoid KeyError.
         "delay_ms"                      float  added network delay
         "jitter_ms"                     float  variation in delay
         "packet_loss_pct"               float  percentage of packets dropped
@@ -1105,7 +1111,7 @@ __all__ = ["FrameReader", "Dispatcher", "Scorer"]
 ### `client/threads/dispatcher.py`
 
 - Path: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab/client/threads/dispatcher.py`
-- Size: 5854 bytes
+- Size: 6194 bytes
 
 ```python
 """
@@ -1130,9 +1136,11 @@ logger = logging.getLogger(__name__)
 class Dispatcher:
     """
     Fetches frames from the reader queue, selects inference backend based on
-    the current processing mode, and forwards results to the scorer queue.
+    the requested processing mode, and forwards results to the scorer queue.
 
     Falls back to local inference automatically when remote inference fails.
+    The "local_fallback" result label is reported with the scored frame but is
+    never written back as an SP-Agent placement choice.
     """
 
     def __init__(
@@ -1173,20 +1181,21 @@ class Dispatcher:
                 continue
 
             dispatch_start = time.time()
-            mode = self.shared_state.get_processing_mode()
+            requested_mode = self.shared_state.get_processing_mode()
 
             try:
                 with self.tracer.start_as_current_span("frame_pipeline") as span:
                     span.set_attribute("frame.number", frame_number)
-                    span.set_attribute("processing.mode", mode)
+                    span.set_attribute("processing.mode", requested_mode)
+                    span.set_attribute("processing.requested_mode", requested_mode)
 
                     with self.tracer.start_as_current_span("preprocess") as pre_span:
                         preprocessed = self._preprocess(frame)
                         pre_span.set_attribute("input.shape", str(frame.shape))
 
-                    actual_mode = mode
+                    result_mode = requested_mode
                     remote_ok = (
-                        mode == "remote"
+                        requested_mode == "remote"
                         and self.remote_client is not None
                         and self.remote_client.is_available()
                     )
@@ -1212,13 +1221,15 @@ class Dispatcher:
                                     pred_x, pred_y = self.local_server.infer(
                                         preprocessed, frame.shape
                                     )
-                                actual_mode = "local_fallback"
+                                result_mode = "local_fallback"
                     else:
                         with self.tracer.start_as_current_span("local_inference") as li_span:
                             li_span.set_attribute("model.name", "yolov10n")
                             pred_x, pred_y = self.local_server.infer(
                                 preprocessed, frame.shape
                             )
+
+                    span.set_attribute("processing.result_mode", result_mode)
 
             except Exception:
                 logger.exception("Unhandled error in Dispatcher for frame %d", frame_number)
@@ -1237,7 +1248,7 @@ class Dispatcher:
                         pred_x,
                         pred_y,
                         latency_ms,
-                        actual_mode,
+                        result_mode,
                         time.time(),
                     ),
                     timeout=0.05,
@@ -1804,7 +1815,7 @@ CMD ["python", "main.py"]
 ### `client/main.py`
 
 - Path: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab/client/main.py`
-- Size: 10157 bytes
+- Size: 10146 bytes
 
 ```python
 """
@@ -1814,7 +1825,6 @@ import json
 import logging
 import os
 import queue
-import sys
 import threading
 
 from config import load_config, Config
@@ -2127,7 +2137,7 @@ requests==2.32.3
 ### `client/shared_state.py`
 
 - Path: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab/client/shared_state.py`
-- Size: 5515 bytes
+- Size: 5990 bytes
 
 ```python
 """
@@ -2137,6 +2147,9 @@ Every field is accessed through getter/setter methods protected by a single lock
 import threading
 from collections import deque
 from typing import Optional
+
+
+REQUESTED_PROCESSING_MODES = ("local", "remote")
 
 
 class SharedState:
@@ -2154,7 +2167,7 @@ class SharedState:
         self._current_gt_y: Optional[float] = None
         self._current_frame_number: int = 0
 
-        self._processing_mode: str = initial_mode
+        self._processing_mode: str = self._validate_processing_mode(initial_mode)
 
         self._recent_latencies: deque = deque(maxlen=20)
 
@@ -2169,16 +2182,29 @@ class SharedState:
     # --- Processing mode ---
 
     def set_processing_mode(self, mode: str) -> None:
-        """Set the current processing mode. Raises ValueError if not 'local' or 'remote'."""
-        if mode not in ("local", "remote"):
-            raise ValueError(f"Invalid processing mode: {mode!r}. Must be 'local' or 'remote'.")
+        """
+        Set the requested inference placement.
+
+        Only SP-Agent choices belong in shared state. Dispatcher result labels
+        such as "local_fallback" travel with scored frames instead.
+        """
         with self._lock:
-            self._processing_mode = mode
+            self._processing_mode = self._validate_processing_mode(mode)
 
     def get_processing_mode(self) -> str:
-        """Return the current processing mode ('local' or 'remote')."""
+        """Return the requested inference placement ('local' or 'remote')."""
         with self._lock:
             return self._processing_mode
+
+    @staticmethod
+    def _validate_processing_mode(mode: str) -> str:
+        """Return a valid requested placement or raise ValueError."""
+        if mode not in REQUESTED_PROCESSING_MODES:
+            raise ValueError(
+                f"Invalid requested processing mode: {mode!r}. "
+                "Must be 'local' or 'remote'."
+            )
+        return mode
 
     # --- Ground truth ---
 
@@ -2495,7 +2521,7 @@ class DashboardKafkaConsumer:
 ### `dashboard/backend/main.py`
 
 - Path: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab/dashboard/backend/main.py`
-- Size: 5384 bytes
+- Size: 5788 bytes
 
 ```python
 """FastAPI application for the Edge-Lab live dashboard."""
@@ -2637,6 +2663,15 @@ async def post_frame(group_id: str, update: FrameUpdate) -> dict[str, Any]:
     return {"accepted": True, "group_id": normalized_group}
 
 
+@app.post("/api/reset/{group_id}", status_code=200)
+async def reset_group(group_id: str) -> dict[str, Any]:
+    """Reset cumulative totals for a group. Call this between experiment runs."""
+    normalized_group = normalize_group_id(group_id)
+    dashboard_state.reset_group(normalized_group)
+    await socket_manager.broadcast(normalized_group)
+    return {"reset": True, "group_id": normalized_group}
+
+
 @app.get("/api/frame/{group_id}")
 def get_frame(group_id: str) -> Response:
     jpeg = dashboard_state.frame_image(group_id)
@@ -2749,7 +2784,7 @@ class PhaseMetric(BaseModel):
 ### `dashboard/backend/state.py`
 
 - Path: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab/dashboard/backend/state.py`
-- Size: 12385 bytes
+- Size: 12808 bytes
 
 ```python
 """Thread-safe rolling dashboard state."""
@@ -3008,6 +3043,15 @@ class DashboardState:
         with self._lock:
             return self._get_group(normalize_group_id(group_id)).frame_image
 
+    def reset_group(self, group_id: str) -> None:
+        """Reset all cumulative counters for one group. Useful when students rerun their agent."""
+        normalized_group = normalize_group_id(group_id)
+        with self._lock:
+            self._groups[normalized_group] = GroupState(
+                history=deque(maxlen=self.max_history),
+                seen_samples=deque(maxlen=self.max_history * 4),
+            )
+
     def health(self) -> dict[str, Any]:
         """Return backend health and live source status."""
         with self._lock:
@@ -3070,7 +3114,7 @@ class DashboardState:
 ### `dashboard/frontend/src/components/Charts.tsx`
 
 - Path: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab/dashboard/frontend/src/components/Charts.tsx`
-- Size: 4124 bytes
+- Size: 4305 bytes
 
 ```tsx
 import type { DashboardState, FrameMetric, InfrastructureMetric } from "../types";
@@ -3156,9 +3200,14 @@ export function Charts({ state }: Props) {
         <SparkChart title="Frame displacement" unit=" px" series={[{ label: "distance", color: "#d14a45", values: frameValues(frames, "displacement_px") }]} />
         <SparkChart title="Cumulative displacement" unit=" px" series={[{ label: "score", color: "#b37916", values: frameValues(frames, "cumulative_displacement_px") }]} />
         <SparkChart title="Placement mode" unit="" min={0} max={1} series={[{
-          label: "remote = 1",
+          label: "local=0  fallback=0.5  remote=1",
           color: "#6559a8",
-          values: frames.map((frame) => frame.processing_mode === "remote" ? 1 : frame.processing_mode ? 0 : null),
+          values: frames.map((frame) => {
+            if (frame.processing_mode === "remote") return 1;
+            if (frame.processing_mode === "local_fallback") return 0.5;
+            if (frame.processing_mode === "local") return 0;
+            return null;
+          }),
         }]} />
         <SparkChart title="GPU utilization" unit="%" min={0} max={100} series={[{ label: "GPU", color: "#26845a", values: infraValues(gpu, "gpu_utilization_pct") }]} />
         <SparkChart title="Network conditions" unit=" ms" series={[
@@ -8692,6 +8741,44 @@ echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) GPU stressor finished (exit code: $EXIT_COD
 exit $EXIT_CODE
 ```
 
+### `scripts/run_scenario_loop.sh`
+
+- Path: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab/scripts/run_scenario_loop.sh`
+- Size: 933 bytes
+
+```bash
+#!/bin/bash
+# Continuously loop the SeQaM experiment scenario.
+#
+# SeQaM runs the scenario once then exits (the "exit" command at t=120000
+# terminates the SeQaM process). This wrapper restarts it immediately so
+# the lab runs continuously without manual intervention.
+#
+# Usage:
+#   ./scripts/run_scenario_loop.sh [path/to/seqam] [path/to/scenario.json]
+#
+# Defaults:
+#   SEQAM_BIN   - seqam (must be on PATH, or set this env var)
+#   SCENARIO    - seqam/scenario.json relative to the repo root
+
+set -e
+
+SEQAM_BIN=${SEQAM_BIN:-seqam}
+SCENARIO=${1:-seqam/scenario.json}
+LOOP=0
+
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) Starting continuous scenario loop: $SCENARIO"
+
+while true; do
+    LOOP=$((LOOP + 1))
+    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) === Iteration $LOOP ==="
+    "$SEQAM_BIN" run --scenario "$SCENARIO" || {
+        echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) seqam exited with error $?; restarting in 2s"
+        sleep 2
+    }
+done
+```
+
 ### `scripts/setup_pi.sh`
 
 - Path: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab/scripts/setup_pi.sh`
@@ -8712,7 +8799,7 @@ echo "Setup complete."
 ### `scripts/tc_apply.sh`
 
 - Path: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab/scripts/tc_apply.sh`
-- Size: 663 bytes
+- Size: 823 bytes
 
 ```bash
 #!/bin/bash
@@ -8733,21 +8820,23 @@ tc qdisc add dev "$INTERFACE" root netem \
 
 echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) tc_apply: interface=$INTERFACE delay=${DELAY_MS}ms jitter=${JITTER_MS}ms loss=${LOSS_PCT}%"
 
-# Signal publisher so it publishes immediately
-pkill -SIGUSR1 -f network_conditions_publisher.py 2>/dev/null || true
+# Signal publisher so it publishes immediately.
+# The publisher runs inside the edge-lab-net-publisher Docker container, so
+# pkill on the host process namespace would never reach it. Use docker exec instead.
+docker exec edge-lab-net-publisher kill -USR1 1 2>/dev/null || true
 ```
 
 ### `scripts/tc_clear.sh`
 
 - Path: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab/scripts/tc_clear.sh`
-- Size: 234 bytes
+- Size: 232 bytes
 
 ```bash
 #!/bin/bash
 INTERFACE=${1:-eth0}
 tc qdisc del dev "$INTERFACE" root 2>/dev/null || true
 echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) tc_clear: cleared rules on $INTERFACE"
-pkill -SIGUSR1 -f network_conditions_publisher.py 2>/dev/null || true
+docker exec edge-lab-net-publisher kill -USR1 1 2>/dev/null || true
 ```
 
 ### `seqam/README.md`
@@ -8781,7 +8870,7 @@ CLI at this file. Ensure the `experiment.phase` topic exists before starting.
 ### `seqam/scenario.json`
 
 - Path: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab/seqam/scenario.json`
-- Size: 1635 bytes
+- Size: 1742 bytes
 
 ```json
 {
@@ -8819,6 +8908,10 @@ CLI at this file. Ensure the `experiment.phase` topic exists before starting.
     {
       "command": "ssh gpu-server 'bash /scripts/gpu_stressor.sh yolov10n 100 30'",
       "executionTime": 90000
+    },
+    {
+      "command": "ssh net-vm 'bash /scripts/tc_clear.sh eth0'",
+      "executionTime": 119000
     },
     {
       "command": "exit",
@@ -9158,7 +9251,7 @@ services:
 ### `docker-compose.netvm.yml`
 
 - Path: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab/docker-compose.netvm.yml`
-- Size: 223 bytes
+- Size: 266 bytes
 
 ```yaml
 version: "3.9"
@@ -9168,6 +9261,7 @@ services:
     build:
       context: ./publishers/network_conditions
       dockerfile: Dockerfile
+    container_name: edge-lab-net-publisher
     env_file:
       - .env
     network_mode: host
@@ -9977,7 +10071,7 @@ You can absolutely have the Pi number by Monday night. Don't let perfect be the 
 ### `README.md`
 
 - Path: `/Users/maede/Library/CloudStorage/OneDrive-FHDortmund/Work/Apps/edge-lab/README.md`
-- Size: 48709 bytes
+- Size: 48855 bytes
 
 ```markdown
 # Edge Computing Lab
@@ -10400,7 +10494,10 @@ These come from the `/edgelab/app/metrics/group{N}` Kafka topic. Every time the 
 
 ### Current mode (`self.current_mode`)
 
-The mode that is currently active. Either `"local"` or `"remote"`. Useful if you want to avoid switching too frequently (mode thrashing).
+The placement currently requested by your SP-Agent. Either `"local"` or
+`"remote"`. Useful if you want to avoid switching too frequently (mode
+thrashing). A scored result can separately report `"local_fallback"` when a
+remote request fails and the Dispatcher runs that frame locally.
 
 ---
 

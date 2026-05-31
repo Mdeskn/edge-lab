@@ -160,6 +160,7 @@ edge-lab/
 |   |-- tc_clear.sh                    <- removes all network rules
 |   |-- gpu_stressor.sh                <- floods Triton with requests to stress GPU
 |   |-- setup_pi.sh                    <- one-time Pi dependency installer
+|   |-- run_scenario_loop.sh           <- runs SeQaM scenario continuously (restart wrapper)
 |
 |-- seqam/
 |   |-- scenario.json                  <- the 4-phase load schedule for SeQaM
@@ -818,6 +819,14 @@ The dashboard shows the annotated tennis-ball video, actual `LOCAL` or `REMOTE`
 processing mode, latency, displacement score, experiment phase, GPU metrics,
 and network conditions.
 
+**Resetting a group between runs:** If a student reruns their agent without restarting the dashboard backend, cumulative totals from the previous run will remain visible. Reset them with:
+
+```bash
+curl -X POST http://<dashboard-host-ip>:8080/api/reset/group1
+```
+
+Replace `group1` with the relevant group. The last video frame stays visible; only counters and history are cleared.
+
 ---
 
 #### Benchmark inference latency (do this before starting the experiment)
@@ -853,6 +862,12 @@ Upload `seqam/scenario.json` to the SeQaM web interface and start the experiment
 - Publish experiment phases to Kafka every 30 seconds.
 - Trigger the GPU stressor and tc scripts via SSH commands to the GPU server and Network VM.
 
+SeQaM runs the scenario once and exits after the 120-second cycle. To keep the lab running continuously, wrap it with the provided loop script on the SeQaM host:
+
+```bash
+./scripts/run_scenario_loop.sh
+```
+
 ---
 
 ## 12. Running the experiment
@@ -886,7 +901,7 @@ If you have the Network VM set up, you can manually apply and remove network deg
 ./scripts/tc_clear.sh eth0
 ```
 
-These scripts also send a signal to the network conditions publisher so Kafka gets updated immediately.
+These scripts send a signal to the network conditions publisher so Kafka gets updated immediately rather than waiting for the next 2-second poll. The publisher runs inside the `edge-lab-net-publisher` Docker container on the Network VM; the scripts use `docker exec` to deliver the signal across the container boundary.
 
 ---
 
@@ -936,7 +951,7 @@ If `DISPLAY_OUTPUT=true`, you will see:
 - **Green circle**: the ground truth position.
 - **Red circle**: the model's prediction.
 - **Line**: the distance between them (the displacement for this frame).
-- **HUD text** in the top-left corner: current mode (local/remote), current experiment phase, rolling-average latency (last 5 frames), per-frame displacement, cumulative displacement, total frame count.
+- **HUD text** in the top-left corner: current mode (local/remote), current experiment phase, rolling-average latency (last 5 frames), per-frame displacement, cumulative displacement, scored frame count (frames where the ball was visible and a displacement was computed).
 
 ---
 
@@ -1049,12 +1064,13 @@ You will see `"Queue full, dropping frame"` in the logs at DEBUG level. Try:
 | File | Purpose |
 |------|---------|
 | `triton/model_repository/yolov10n/config.pbtxt` | Triton model configuration. Defines input shape (1, 3, 640, 640) and output shape (-1, 6). Sets dynamic batching. Copy `yolov10n.onnx` to the `1/` folder as `model.onnx`. |
-| `seqam/scenario.json` | Experiment scenario for the SeQaM platform. Defines the 4-phase loop: baseline, gpu_load, network_load, combined. Each phase is 30 seconds. |
-| `scripts/tc_apply.sh` | Applies netem traffic control rules. Usage: `./tc_apply.sh [interface] [delay_ms] [jitter_ms] [loss_pct]`. |
-| `scripts/tc_clear.sh` | Removes all tc rules. Usage: `./tc_clear.sh [interface]`. |
+| `seqam/scenario.json` | Experiment scenario for the SeQaM platform. Defines the 4-phase loop: baseline, gpu_load, network_load, combined. Each phase is 30 seconds. Network rules are cleared at t=119s so each loop iteration starts clean. |
+| `scripts/tc_apply.sh` | Applies netem traffic control rules. Usage: `./tc_apply.sh [interface] [delay_ms] [jitter_ms] [loss_pct]`. Uses `docker exec` to signal the publisher inside its container immediately. |
+| `scripts/tc_clear.sh` | Removes all tc rules. Usage: `./tc_clear.sh [interface]`. Uses `docker exec` to signal the publisher inside its container immediately. |
+| `scripts/run_scenario_loop.sh` | Runs the SeQaM scenario continuously. SeQaM exits after each 120-second cycle; this script restarts it immediately so the lab loops without manual intervention. |
 | `scripts/benchmark_inference.py` | Measures local CPU inference latency vs remote Triton latency. Run once before the experiment to calibrate your SP-Agent strategy. Prints mean/min/max/p95/p99 for both backends and a recommendation. |
 | `scripts/gpu_stressor.sh` | Stresses the GPU with many concurrent Triton requests. Usage: `./gpu_stressor.sh [model_name] [concurrency] [duration_seconds]`. |
-| `scripts/setup_pi.sh` | One-time setup script for the Pi. Installs Python 3.11, OpenCV, and all Python dependencies into `/opt/edge-lab-venv/`. |
+| `scripts/setup_pi.sh` | One-time setup script for the Pi. Deploy the repo to `/opt/edge-lab/` first (git clone or rsync), then run this script. Installs Python 3.11, OpenCV, and all Python dependencies into `/opt/edge-lab-venv/`. |
 
 ### Docker compose files
 

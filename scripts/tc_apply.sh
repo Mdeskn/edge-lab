@@ -16,5 +16,7 @@ tc qdisc add dev "$INTERFACE" root netem \
 
 echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) tc_apply: interface=$INTERFACE delay=${DELAY_MS}ms jitter=${JITTER_MS}ms loss=${LOSS_PCT}%"
 
-# Signal publisher so it publishes immediately
-pkill -SIGUSR1 -f network_conditions_publisher.py 2>/dev/null || true
+# Signal publisher so it publishes immediately.
+# The publisher runs inside the edge-lab-net-publisher Docker container, so
+# pkill on the host process namespace would never reach it. Use docker exec instead.
+docker exec edge-lab-net-publisher kill -USR1 1 2>/dev/null || true

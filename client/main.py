@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import queue
-import sys
 import threading
 
 from config import load_config, Config

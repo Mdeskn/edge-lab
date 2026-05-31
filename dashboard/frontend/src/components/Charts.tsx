@@ -81,9 +81,14 @@ export function Charts({ state }: Props) {
         <SparkChart title="Frame displacement" unit=" px" series={[{ label: "distance", color: "#d14a45", values: frameValues(frames, "displacement_px") }]} />
         <SparkChart title="Cumulative displacement" unit=" px" series={[{ label: "score", color: "#b37916", values: frameValues(frames, "cumulative_displacement_px") }]} />
         <SparkChart title="Placement mode" unit="" min={0} max={1} series={[{
-          label: "remote = 1",
+          label: "local=0  fallback=0.5  remote=1",
           color: "#6559a8",
-          values: frames.map((frame) => frame.processing_mode === "remote" ? 1 : frame.processing_mode ? 0 : null),
+          values: frames.map((frame) => {
+            if (frame.processing_mode === "remote") return 1;
+            if (frame.processing_mode === "local_fallback") return 0.5;
+            if (frame.processing_mode === "local") return 0;
+            return null;
+          }),
         }]} />
         <SparkChart title="GPU utilization" unit="%" min={0} max={100} series={[{ label: "GPU", color: "#26845a", values: infraValues(gpu, "gpu_utilization_pct") }]} />
         <SparkChart title="Network conditions" unit=" ms" series={[

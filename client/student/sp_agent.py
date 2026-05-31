@@ -18,8 +18,9 @@ class SPAgent(SPAgentBase):
     Tips:
     - Check self.experiment_phase to know what load is currently running
     - Check self.avg_latency to see how recent performance has been
-    - Check self.gpu_metrics["gpu_utilization_pct"] to see if the server is stressed
-    - Check self.net_metrics["delay_ms"] to see if the network is stressed
+    - Use .get() for metric dicts: they are empty until the first Kafka message arrives.
+      Example: self.gpu_metrics.get("gpu_utilization_pct", 0)
+               self.net_metrics.get("delay_ms", 0)
     - You can add your own state in __init__ (e.g. counters, thresholds)
     """
 
