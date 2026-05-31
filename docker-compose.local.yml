@@ -1,0 +1,62 @@
+services:
+  dashboard-backend:
+    build:
+      context: .
+      dockerfile: dashboard/backend/Dockerfile
+    env_file:
+      - .env
+    environment:
+      DASHBOARD_HOST: 0.0.0.0
+      DASHBOARD_PORT: 8080
+      KAFKA_BROKERS: ""
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  dashboard-frontend:
+    build:
+      context: ./dashboard/frontend
+      dockerfile: Dockerfile
+    environment:
+      VITE_API_URL: http://localhost:8080
+    ports:
+      - "5173:5173"
+    depends_on:
+      dashboard-backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      VIDEO_PATH: /data/test_video.mp4
+      GROUND_TRUTH_PATH: /data/ground_truth.csv
+      MODEL_PATH: /data/yolov10n.onnx
+      TRITON_URL: ""
+      KAFKA_BROKERS: ""
+      AUTO_STOP: "false"
+      DISPLAY_OUTPUT: "false"
+      RESULTS_LOG_PATH: /data/results.csv
+      DASHBOARD_ENABLED: "true"
+      DASHBOARD_URL: http://dashboard-backend:8080
+    volumes:
+      - ./data:/data
+    depends_on:
+      dashboard-backend:
+        condition: service_healthy
+    restart: unless-stopped

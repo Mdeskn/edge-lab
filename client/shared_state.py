@@ -7,6 +7,9 @@ from collections import deque
 from typing import Optional
 
 
+REQUESTED_PROCESSING_MODES = ("local", "remote")
+
+
 class SharedState:
     """
     Central shared state object accessed by all four threads.
@@ -22,7 +25,7 @@ class SharedState:
         self._current_gt_y: Optional[float] = None
         self._current_frame_number: int = 0
 
-        self._processing_mode: str = initial_mode
+        self._processing_mode: str = self._validate_processing_mode(initial_mode)
 
         self._recent_latencies: deque = deque(maxlen=20)
 
@@ -37,16 +40,29 @@ class SharedState:
     # --- Processing mode ---
 
     def set_processing_mode(self, mode: str) -> None:
-        """Set the current processing mode. Raises ValueError if not 'local' or 'remote'."""
-        if mode not in ("local", "remote"):
-            raise ValueError(f"Invalid processing mode: {mode!r}. Must be 'local' or 'remote'.")
+        """
+        Set the requested inference placement.
+
+        Only SP-Agent choices belong in shared state. Dispatcher result labels
+        such as "local_fallback" travel with scored frames instead.
+        """
         with self._lock:
-            self._processing_mode = mode
+            self._processing_mode = self._validate_processing_mode(mode)
 
     def get_processing_mode(self) -> str:
-        """Return the current processing mode ('local' or 'remote')."""
+        """Return the requested inference placement ('local' or 'remote')."""
         with self._lock:
             return self._processing_mode
+
+    @staticmethod
+    def _validate_processing_mode(mode: str) -> str:
+        """Return a valid requested placement or raise ValueError."""
+        if mode not in REQUESTED_PROCESSING_MODES:
+            raise ValueError(
+                f"Invalid requested processing mode: {mode!r}. "
+                "Must be 'local' or 'remote'."
+            )
+        return mode
 
     # --- Ground truth ---
 

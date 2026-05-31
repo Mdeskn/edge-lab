@@ -20,9 +20,11 @@ logger = logging.getLogger(__name__)
 class Dispatcher:
     """
     Fetches frames from the reader queue, selects inference backend based on
-    the current processing mode, and forwards results to the scorer queue.
+    the requested processing mode, and forwards results to the scorer queue.
 
     Falls back to local inference automatically when remote inference fails.
+    The "local_fallback" result label is reported with the scored frame but is
+    never written back as an SP-Agent placement choice.
     """
 
     def __init__(
@@ -63,20 +65,21 @@ class Dispatcher:
                 continue
 
             dispatch_start = time.time()
-            mode = self.shared_state.get_processing_mode()
+            requested_mode = self.shared_state.get_processing_mode()
 
             try:
                 with self.tracer.start_as_current_span("frame_pipeline") as span:
                     span.set_attribute("frame.number", frame_number)
-                    span.set_attribute("processing.mode", mode)
+                    span.set_attribute("processing.mode", requested_mode)
+                    span.set_attribute("processing.requested_mode", requested_mode)
 
                     with self.tracer.start_as_current_span("preprocess") as pre_span:
                         preprocessed = self._preprocess(frame)
                         pre_span.set_attribute("input.shape", str(frame.shape))
 
-                    actual_mode = mode
+                    result_mode = requested_mode
                     remote_ok = (
-                        mode == "remote"
+                        requested_mode == "remote"
                         and self.remote_client is not None
                         and self.remote_client.is_available()
                     )
@@ -102,13 +105,15 @@ class Dispatcher:
                                     pred_x, pred_y = self.local_server.infer(
                                         preprocessed, frame.shape
                                     )
-                                actual_mode = "local_fallback"
+                                result_mode = "local_fallback"
                     else:
                         with self.tracer.start_as_current_span("local_inference") as li_span:
                             li_span.set_attribute("model.name", "yolov10n")
                             pred_x, pred_y = self.local_server.infer(
                                 preprocessed, frame.shape
                             )
+
+                    span.set_attribute("processing.result_mode", result_mode)
 
             except Exception:
                 logger.exception("Unhandled error in Dispatcher for frame %d", frame_number)
@@ -127,7 +132,7 @@ class Dispatcher:
                         pred_x,
                         pred_y,
                         latency_ms,
-                        actual_mode,
+                        result_mode,
                         time.time(),
                     ),
                     timeout=0.05,

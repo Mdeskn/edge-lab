@@ -418,7 +418,10 @@ These come from the `/edgelab/app/metrics/group{N}` Kafka topic. Every time the 
 
 ### Current mode (`self.current_mode`)
 
-The mode that is currently active. Either `"local"` or `"remote"`. Useful if you want to avoid switching too frequently (mode thrashing).
+The placement currently requested by your SP-Agent. Either `"local"` or
+`"remote"`. Useful if you want to avoid switching too frequently (mode
+thrashing). A scored result can separately report `"local_fallback"` when a
+remote request fails and the Dispatcher runs that frame locally.
 
 ---
 
