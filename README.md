@@ -141,6 +141,7 @@ edge-lab/
 |   |
 |   |-- network_conditions/
 |       |-- network_conditions_publisher.py  <- runs on Network VM, reads tc rules
+|       |-- tc_controller.py                 <- publishes SeQaM phase-file changes to Kafka
 |       |-- requirements.txt
 |       |-- Dockerfile
 |
@@ -163,17 +164,18 @@ edge-lab/
 |   |-- run_scenario_loop.sh           <- runs SeQaM scenario continuously (restart wrapper)
 |
 |-- seqam/
+|   |-- ScenarioConfig.json            <- static SeQaM SSH target entries to merge
 |   |-- scenario.json                  <- the 4-phase load schedule for SeQaM
 |   |-- README.md
 |
 |-- dashboard/                         <- optional browser dashboard
 |   |-- backend/                       <- FastAPI API, Kafka consumer, WebSocket server
 |   |-- frontend/                      <- React live visualization
-|   |-- docker-compose.yml             <- starts the dashboard host services
+|   |-- docker-compose.yml             <- optional dashboard-only stack for the Pi
 |
-|-- docker-compose.pi.yml              <- Docker setup for the Pi client
+|-- docker-compose.pi.yml              <- Docker setup for the Pi client + dashboard
 |-- docker-compose.gpu-server.yml      <- Docker setup for Triton + GPU publisher
-|-- docker-compose.netvm.yml           <- Docker setup for the network publisher
+|-- docker-compose.netvm.yml           <- Docker setup for Network VM publishers
 ```
 
 ---
@@ -181,15 +183,15 @@ edge-lab/
 ## 4. The lab machines
 
 The student lab experiment uses the Pi, remote GPU server, Network VM, and SeQaM
-platform together. The browser dashboard runs on a reachable dashboard host.
+platform together. Each group runs its own browser dashboard on its Raspberry
+Pi.
 
 | Machine | What runs on it | Minimum requirements |
 |---------|----------------|----------------------|
-| Raspberry Pi 5 | The main client app | Python 3.11, ARM64 |
+| Raspberry Pi 5 | The main client app + one group's dashboard | Docker, ARM64 |
 | GPU Server | Triton Inference Server + GPU metrics publisher | Docker, NVIDIA GPU, nvidia-container-toolkit |
 | Network VM | Network conditions publisher, tc netem | Docker, iproute2 (tc) |
 | SeQaM platform | Kafka broker, experiment phase controller | Provided by the lab |
-| Dashboard Host | FastAPI backend + React frontend | Docker |
 
 For an optional Pi-only smoke test, Kafka and Triton can be left empty. The
 course experiment itself uses the Pi and remote GPU server together.
@@ -442,7 +444,10 @@ The SeQaM platform runs a 120-second loop that cycles through four phases, 30 se
      |                         packet loss
 ```
 
-The scenario also publishes the phase name to the `/edgelab/server/events/phase` Kafka topic so your agent can react proactively before performance actually degrades.
+For each phase, the scenario writes the phase name to `/tmp/edgelab_phase` on
+the Network VM. The `tc_controller.py` sidecar watches that file and publishes
+the phase payload to `/edgelab/server/events/phase` so your agent can react
+proactively before performance actually degrades.
 
 ### Auto-stop behavior
 
@@ -529,7 +534,7 @@ Copy `.env.example` to `.env` and fill in the values. Variables marked **require
 | `KAFKA_BROKERS` | No | `""` | Kafka broker address, e.g. `192.168.1.200:9092`. Leave blank to disable all Kafka features. |
 | `KAFKA_GPU_TOPIC` | No | `/edgelab/server/metrics` | Topic the GPU metrics publisher writes to. |
 | `KAFKA_NET_TOPIC` | No | `/edgelab/network/metrics` | Topic the network conditions publisher writes to. |
-| `KAFKA_PHASE_TOPIC` | No | `/edgelab/server/events/phase` | Topic the SeQaM platform writes experiment phases to. |
+| `KAFKA_PHASE_TOPIC` | No | `/edgelab/server/events/phase` | Topic the Network VM phase sidecar writes experiment phases to. |
 
 ### Processing behavior
 
@@ -562,20 +567,20 @@ Pi client variables:
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DASHBOARD_ENABLED` | No | `false` | Send annotated JPEG snapshots and frame metrics to the dashboard backend. |
-| `DASHBOARD_URL` | No | `http://localhost:8080` | Dashboard backend URL reachable from the Pi. Use `http://<dashboard-host-ip>:8080` in the lab. |
+| `DASHBOARD_URL` | No | `http://localhost:8080` | Dashboard backend URL used by the client on the same Pi. Keep the default for the lab. |
 | `DASHBOARD_FPS` | No | `5` | Maximum dashboard image updates per second. |
 | `DASHBOARD_JPEG_QUALITY` | No | `70` | JPEG compression quality for dashboard snapshots. |
 | `DASHBOARD_FRAME_WIDTH` | No | `960` | Maximum JPEG width. Smaller values reduce Pi and network overhead. |
 
-Dashboard host variables:
+Dashboard backend variables on the same Pi:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DASHBOARD_HOST` | No | `0.0.0.0` | Backend listen address. |
 | `DASHBOARD_PORT` | No | `8080` | Backend listen port. |
 | `DASHBOARD_MAX_HISTORY` | No | `300` | Rolling metric samples kept in memory. |
-| `DASHBOARD_PUBLIC_API_URL` | No | `http://localhost:8080` | Backend URL used by students' browsers. Set to `http://<dashboard-host-ip>:8080` before starting the dashboard compose stack. |
-| `APP_METRICS_TOPICS` | No | all four group topics | Kafka app-metric topics consumed by the dashboard backend. |
+| `DASHBOARD_PUBLIC_API_URL` | No | `""` | Optional browser-facing backend override. Leave blank to derive `http://<pi-host>:8080` automatically. |
+| `APP_METRICS_TOPIC` | No | `/edgelab/app/metrics/group${GROUP_ID}` | Kafka app-metric topic consumed by this group's dashboard backend. |
 
 ### GPU metrics publisher (runs on GPU server, not the Pi)
 
@@ -669,10 +674,13 @@ You should see an OpenCV window with the video playing and an overlay showing de
 
 ```bash
 # Make sure .env is filled in (same as Option A Step 3)
-docker compose -f docker-compose.pi.yml up
+docker compose -f docker-compose.pi.yml up --build
 ```
 
-The Docker container mounts the `./data/` folder inside the container. Make sure your `.env` uses `/data/video.mp4`, `/data/ground_truth.csv`, etc. (the container path, not the host path).
+This starts the client and the group's dashboard on the Pi. The client container
+mounts the `./data/` folder inside the container. Make sure your `.env` uses
+`/data/video.mp4`, `/data/ground_truth.csv`, etc. (the container path, not the
+host path).
 
 ---
 
@@ -737,13 +745,15 @@ KAFKA_BROKERS=<seqam-ip>:9092
 NETWORK_INTERFACE=eth0   # or whatever interface connects to the Pi
 ```
 
-**Step 2: Start the network conditions publisher**
+**Step 2: Start the Network VM publishers**
 
 ```bash
 docker compose -f docker-compose.netvm.yml up -d
 ```
 
-This starts the **network conditions publisher** which reads the current `tc netem` rules every 2 seconds and publishes them to the `/edgelab/network/metrics` Kafka topic.
+This starts:
+- The **network conditions publisher**, which reads the current `tc netem` rules every 2 seconds and publishes them to `/edgelab/network/metrics`.
+- The **phase publisher**, which watches the host's `/tmp/edgelab_phase` file and publishes changes to `/edgelab/server/events/phase`.
 
 ---
 
@@ -775,60 +785,35 @@ TRITON_URL=<gpu-server-ip>:8000
 KAFKA_BROKERS=<seqam-ip>:9092
 DISPLAY_OUTPUT=false   # running headless
 DASHBOARD_ENABLED=true
-DASHBOARD_URL=http://<dashboard-host-ip>:8080
+DASHBOARD_URL=http://localhost:8080
 TARGET_CLASS_ID=32
 TARGET_CONFIDENCE_THRESHOLD=0.1
 ```
 
-**Step 3: Start the client**
+**Step 3: Start the client and dashboard**
 
 ```bash
-docker compose -f docker-compose.pi.yml up
-```
-
----
-
-#### On the Dashboard Host
-
-**Step 1: Configure `.env`**
-
-```bash
-cp .env.example .env
-```
-
-Set the Kafka broker and dashboard settings:
-
-```dotenv
-KAFKA_BROKERS=<seqam-ip>:9092
-DASHBOARD_HOST=0.0.0.0
-DASHBOARD_PORT=8080
-DASHBOARD_MAX_HISTORY=300
-DASHBOARD_PUBLIC_API_URL=http://<dashboard-host-ip>:8080
-```
-
-**Step 2: Start the dashboard**
-
-```bash
-docker compose -f dashboard/docker-compose.yml up --build -d
+docker compose -f docker-compose.pi.yml up --build
 ```
 
 Open the dashboard in a browser:
 
 ```text
-http://<dashboard-host-ip>:5173
+http://<pi-ip>:5173
 ```
 
 The dashboard shows the annotated tennis-ball video, actual `LOCAL` or `REMOTE`
 processing mode, latency, displacement score, experiment phase, GPU metrics,
-and network conditions.
+and network conditions. Its frontend automatically connects back to port `8080`
+on the Pi hostname used by the browser.
 
-**Resetting a group between runs:** If a student reruns their agent without restarting the dashboard backend, cumulative totals from the previous run will remain visible. Reset them with:
+**Resetting between runs:** If a student reruns their agent without restarting the dashboard backend, cumulative totals from the previous run will remain visible. Reset them with:
 
 ```bash
-curl -X POST http://<dashboard-host-ip>:8080/api/reset/group1
+curl -X POST http://<pi-ip>:8080/api/reset
 ```
 
-Replace `group1` with the relevant group. The last video frame stays visible; only counters and history are cleared.
+The last video frame stays visible; only counters and history are cleared.
 
 ---
 
@@ -861,15 +846,23 @@ The `--mode local` result also tells you whether the Pi is fast enough to make t
 
 #### On the SeQaM platform
 
-Upload `seqam/scenario.json` to the SeQaM web interface and start the experiment. SeQaM will:
-- Publish experiment phases to Kafka every 30 seconds.
-- Trigger the GPU stressor and tc scripts via SSH commands to the GPU server and Network VM.
+Merge the static SSH targets from `seqam/ScenarioConfig.json` into
+`~/.seqam_fh_dortmund_project_emulate/ScenarioConfig.json` before starting
+SeQaM. Both entries are under `router` because this SeQaM revision loads those
+entries as static SSH targets. Install SeQaM's generated `ecdsa.pub` key for
+user `mae` on both machines and place the stress scripts under `/scripts`.
 
-SeQaM runs the scenario once and exits after the 120-second cycle. To keep the lab running continuously, wrap it with the provided loop script on the SeQaM host:
+Run the HTTP wrapper on a host that can reach SeQaM. It POSTs the experiment
+config again after each 120-second run:
 
 ```bash
+SEQAM_API_URL=http://<seqam-host>:8000 \
 ./scripts/run_scenario_loop.sh
 ```
+
+SeQaM triggers the GPU stressor and `tc` scripts over SSH. Its phase SSH
+commands update `/tmp/edgelab_phase` on the Network VM; the sidecar publishes
+those changes to Kafka.
 
 ---
 
@@ -1055,6 +1048,7 @@ You will see `"Queue full, dropping frame"` in the logs at DEBUG level. Try:
 |------|---------|
 | `publishers/gpu_metrics/gpu_metrics_publisher.py` | Runs on GPU server. Polls `nvidia-smi` for GPU utilization/memory/temperature. Polls Triton's Prometheus endpoint for queue and inference timing. Publishes to `/edgelab/server/metrics` Kafka topic every second (override with `KAFKA_GPU_TOPIC`). |
 | `publishers/network_conditions/network_conditions_publisher.py` | Runs on Network VM. Parses `tc qdisc show` output to read current netem rules (delay, jitter, loss). Publishes to `/edgelab/network/metrics` Kafka topic every 2 seconds (override with `KAFKA_NET_TOPIC`). Also publishes immediately on SIGUSR1 signal (sent by tc_apply.sh and tc_clear.sh). |
+| `publishers/network_conditions/tc_controller.py` | Runs on Network VM. Watches the SeQaM-controlled `/tmp/edgelab_phase` file and publishes phase payloads to `/edgelab/server/events/phase`. |
 
 ### Ground truth generation
 
@@ -1067,10 +1061,11 @@ You will see `"Queue full, dropping frame"` in the logs at DEBUG level. Try:
 | File | Purpose |
 |------|---------|
 | `triton/model_repository/yolov10n/config.pbtxt` | Triton model configuration. Defines input shape (1, 3, 640, 640) and output shape (-1, 6). Sets dynamic batching. Copy `yolov10n.onnx` to the `1/` folder as `model.onnx`. |
+| `seqam/ScenarioConfig.json` | Static SSH target entries to merge into SeQaM's installed `ScenarioConfig.json`. |
 | `seqam/scenario.json` | Experiment scenario for the SeQaM platform. Defines the 4-phase loop: baseline, gpu_load, network_load, combined. Each phase is 30 seconds. Network rules are cleared at t=119s so each loop iteration starts clean. |
 | `scripts/tc_apply.sh` | Applies netem traffic control rules. Usage: `./tc_apply.sh [interface] [delay_ms] [jitter_ms] [loss_pct]`. Uses `docker exec` to signal the publisher inside its container immediately. |
 | `scripts/tc_clear.sh` | Removes all tc rules. Usage: `./tc_clear.sh [interface]`. Uses `docker exec` to signal the publisher inside its container immediately. |
-| `scripts/run_scenario_loop.sh` | Runs the SeQaM scenario continuously. SeQaM exits after each 120-second cycle; this script restarts it immediately so the lab loops without manual intervention. |
+| `scripts/run_scenario_loop.sh` | Runs the SeQaM scenario continuously by POSTing it to SeQaM's `POST /config/ExperimentConfig.json` endpoint after each cycle. |
 | `scripts/benchmark_inference.py` | Measures local CPU inference latency vs remote Triton latency. Run once before the experiment to calibrate your SP-Agent strategy. Prints mean/min/max/p95/p99 for both backends and a recommendation. |
 | `scripts/gpu_stressor.sh` | Stresses the GPU with many concurrent Triton requests. Usage: `./gpu_stressor.sh [model_name] [concurrency] [duration_seconds]`. |
 | `scripts/setup_pi.sh` | One-time setup script for the Pi. Deploy the repo to `/opt/edge-lab/` first (git clone or rsync), then run this script. Installs Python 3.11, OpenCV, and all Python dependencies into `/opt/edge-lab-venv/`. |
@@ -1079,7 +1074,7 @@ You will see `"Queue full, dropping frame"` in the logs at DEBUG level. Try:
 
 | File | Machine | What it starts |
 |------|---------|---------------|
-| `docker-compose.pi.yml` | Raspberry Pi | The client app. Mounts `./data` to `/data` inside the container. |
+| `docker-compose.pi.yml` | Raspberry Pi | The client app plus the group's FastAPI dashboard backend and React frontend. Mounts `./data` to `/data` inside the client container. |
 | `docker-compose.gpu-server.yml` | GPU Server | Triton Inference Server (ports 8000/8001/8002) + GPU metrics publisher. |
-| `docker-compose.netvm.yml` | Network VM | Network conditions publisher. |
-| `dashboard/docker-compose.yml` | Dashboard Host | FastAPI backend and React frontend. |
+| `docker-compose.netvm.yml` | Network VM | Network conditions publisher and phase-file publisher. |
+| `dashboard/docker-compose.yml` | Raspberry Pi | Optional dashboard-only stack for troubleshooting without the client. |

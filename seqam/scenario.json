@@ -1,41 +1,42 @@
 {
   "experiment_name": "edge-computing-lab-loop",
   "description": "4-phase loop: baseline (no load) -> GPU load -> network load -> both. Duration: 120s. Loops continuously.",
+  "execute_immediately": true,
   "eventList": [
     {
-      "command": "publish /edgelab/server/events/phase {\"phase\": \"baseline\", \"description\": \"No load applied\", \"gpu_load\": false, \"network_load\": false}",
+      "command": "ssh src_device_type:router src_device_name:net-vm command:'bash /scripts/tc_clear.sh eth0'",
       "executionTime": 0
     },
     {
-      "command": "ssh net-vm 'bash /scripts/tc_clear.sh eth0'",
+      "command": "ssh src_device_type:router src_device_name:net-vm command:'echo baseline > /tmp/edgelab_phase'",
       "executionTime": 0
     },
     {
-      "command": "publish /edgelab/server/events/phase {\"phase\": \"gpu_load\", \"description\": \"GPU server under load (100 RPS)\", \"gpu_load\": true, \"network_load\": false}",
+      "command": "ssh src_device_type:router src_device_name:net-vm command:'echo gpu_load > /tmp/edgelab_phase'",
       "executionTime": 30000
     },
     {
-      "command": "ssh gpu-server 'bash /scripts/gpu_stressor.sh yolov10n 100 30'",
+      "command": "ssh src_device_type:router src_device_name:gpu-server command:'bash /scripts/gpu_stressor.sh yolov10n 100 30'",
       "executionTime": 30000
     },
     {
-      "command": "publish /edgelab/server/events/phase {\"phase\": \"network_load\", \"description\": \"Network degraded (100ms delay, 20ms jitter, 2% loss)\", \"gpu_load\": false, \"network_load\": true}",
+      "command": "ssh src_device_type:router src_device_name:net-vm command:'bash /scripts/tc_apply.sh eth0 100 20 2'",
       "executionTime": 60000
     },
     {
-      "command": "ssh net-vm 'bash /scripts/tc_apply.sh eth0 100 20 2'",
+      "command": "ssh src_device_type:router src_device_name:net-vm command:'echo network_load > /tmp/edgelab_phase'",
       "executionTime": 60000
     },
     {
-      "command": "publish /edgelab/server/events/phase {\"phase\": \"combined\", \"description\": \"Both GPU and network load active\", \"gpu_load\": true, \"network_load\": true}",
+      "command": "ssh src_device_type:router src_device_name:net-vm command:'echo combined > /tmp/edgelab_phase'",
       "executionTime": 90000
     },
     {
-      "command": "ssh gpu-server 'bash /scripts/gpu_stressor.sh yolov10n 100 30'",
+      "command": "ssh src_device_type:router src_device_name:gpu-server command:'bash /scripts/gpu_stressor.sh yolov10n 100 30'",
       "executionTime": 90000
     },
     {
-      "command": "ssh net-vm 'bash /scripts/tc_clear.sh eth0'",
+      "command": "ssh src_device_type:router src_device_name:net-vm command:'bash /scripts/tc_clear.sh eth0'",
       "executionTime": 119000
     },
     {

@@ -7,11 +7,8 @@ import time
 from typing import Any
 
 
-GROUPS = ("group1", "group2", "group3", "group4")
-
-
 def normalize_group_id(group_id: str | int | None) -> str:
-    """Return a stable groupN identifier for URLs, topics, and client state."""
+    """Return a stable groupN identifier for topics and dashboard state."""
     value = str(group_id or "group1").strip().lower()
     if value.startswith("group"):
         suffix = value[5:]
@@ -66,18 +63,13 @@ class GroupState:
 
 
 class DashboardState:
-    """Maintain latest values and rolling history for REST and WebSocket clients."""
+    """Maintain one group's latest values and rolling history."""
 
-    def __init__(self, max_history: int = 300):
+    def __init__(self, max_history: int = 300, group_id: str = "1"):
         self.max_history = max(10, max_history)
+        self.group_id = normalize_group_id(group_id)
         self._lock = RLock()
-        self._groups = {
-            group_id: GroupState(
-                history=deque(maxlen=self.max_history),
-                seen_samples=deque(maxlen=self.max_history * 4),
-            )
-            for group_id in GROUPS
-        }
+        self._group = self._new_group()
         self._gpu_metrics: dict[str, Any] = {}
         self._network_metrics: dict[str, Any] = {}
         self._phase = "unknown"
@@ -89,12 +81,11 @@ class DashboardState:
             "last_message_at": None,
         }
 
-    def update_app_metric(self, group_id: str, metric: dict[str, Any]) -> bool:
+    def update_app_metric(self, metric: dict[str, Any]) -> bool:
         """Record one scored frame, returning True when it is a new sample."""
-        normalized_group = normalize_group_id(group_id)
         with self._lock:
-            group = self._get_group(normalized_group)
-            clean = self._normalize_app_metric(normalized_group, metric)
+            group = self._group
+            clean = self._normalize_app_metric(metric)
             group.latest_metric = clean
             if clean.get("experiment_phase"):
                 self._phase = clean["experiment_phase"]
@@ -147,12 +138,11 @@ class DashboardState:
                 group.cumulative_displacement = float(cumulative)
             return True
 
-    def update_frame(self, group_id: str, metric: dict[str, Any], image: bytes) -> None:
+    def update_frame(self, metric: dict[str, Any], image: bytes) -> None:
         """Store a decoded JPEG and its scored metric record."""
-        normalized_group = normalize_group_id(group_id)
-        self.update_app_metric(normalized_group, metric)
+        self.update_app_metric(metric)
         with self._lock:
-            group = self._get_group(normalized_group)
+            group = self._group
             group.frame_image = image
             group.frame_sequence += 1
             group.frame_updated_at = time.time()
@@ -189,11 +179,10 @@ class DashboardState:
             self._kafka_status["detail"] = "receiving metrics"
             self._kafka_status["last_message_at"] = time.time()
 
-    def snapshot(self, group_id: str = "group1", include_history: bool = True) -> dict[str, Any]:
-        """Return a JSON-ready immutable view of one group's dashboard."""
-        normalized_group = normalize_group_id(group_id)
+    def snapshot(self, include_history: bool = True) -> dict[str, Any]:
+        """Return a JSON-ready immutable dashboard view."""
         with self._lock:
-            group = self._get_group(normalized_group)
+            group = self._group
             latency_values = _numbers(group.history, "latency_ms")
             displacement_values = _numbers(group.history, "displacement_px")
             dashboard_connected = (
@@ -207,15 +196,14 @@ class DashboardState:
                 "network": list(self._network_history) if include_history else [],
             }
             return {
-                "group_id": normalized_group,
-                "groups": list(GROUPS),
+                "group_id": self.group_id,
                 "latest": deepcopy(group.latest_metric),
                 "experiment_phase": self._phase,
                 "frame": {
                     "sequence": group.frame_sequence,
                     "frame_number": group.latest_metric.get("frame_number"),
                     "url": (
-                        f"/api/frame/{normalized_group}?v={group.frame_sequence}"
+                        f"/api/frame?v={group.frame_sequence}"
                         if group.frame_image is not None
                         else None
                     ),
@@ -245,55 +233,48 @@ class DashboardState:
                 "updated_at": time.time(),
             }
 
-    def history(self, group_id: str = "group1") -> dict[str, Any]:
+    def history(self) -> dict[str, Any]:
         """Return only rolling chart history."""
-        return self.snapshot(group_id)["history"]
+        return self.snapshot()["history"]
 
-    def frame_image(self, group_id: str) -> bytes | None:
-        """Return the newest JPEG bytes for one group."""
+    def frame_image(self) -> bytes | None:
+        """Return the newest JPEG bytes."""
         with self._lock:
-            return self._get_group(normalize_group_id(group_id)).frame_image
+            return self._group.frame_image
 
-    def reset_group(self, group_id: str) -> None:
-        """Reset cumulative counters and history for one group.
+    def reset(self) -> None:
+        """Reset cumulative counters and history.
 
         The last received JPEG frame is preserved so the video panel stays live
         instead of going blank until the next frame arrives.
         """
-        normalized_group = normalize_group_id(group_id)
         with self._lock:
-            old = self._get_group(normalized_group)
-            fresh = GroupState(
-                history=deque(maxlen=self.max_history),
-                seen_samples=deque(maxlen=self.max_history * 4),
-            )
+            old = self._group
+            fresh = self._new_group()
             fresh.frame_image = old.frame_image
             fresh.frame_sequence = old.frame_sequence
             fresh.frame_updated_at = old.frame_updated_at
-            self._groups[normalized_group] = fresh
+            self._group = fresh
 
     def health(self) -> dict[str, Any]:
         """Return backend health and live source status."""
         with self._lock:
             return {
                 "status": "ok",
-                "groups": list(GROUPS),
+                "group_id": self.group_id,
                 "kafka": deepcopy(self._kafka_status),
                 "max_history": self.max_history,
             }
 
-    def _get_group(self, group_id: str) -> GroupState:
-        if group_id not in self._groups:
-            self._groups[group_id] = GroupState(
-                history=deque(maxlen=self.max_history),
-                seen_samples=deque(maxlen=self.max_history * 4),
-            )
-        return self._groups[group_id]
+    def _new_group(self) -> GroupState:
+        return GroupState(
+            history=deque(maxlen=self.max_history),
+            seen_samples=deque(maxlen=self.max_history * 4),
+        )
 
-    @staticmethod
-    def _normalize_app_metric(group_id: str, metric: dict[str, Any]) -> dict[str, Any]:
+    def _normalize_app_metric(self, metric: dict[str, Any]) -> dict[str, Any]:
         clean = deepcopy(metric)
-        clean["group_id"] = group_id
+        clean["group_id"] = self.group_id
         clean.setdefault("timestamp", time.time())
         clean.setdefault("experiment_phase", "unknown")
         clean.setdefault("processing_mode", "unknown")

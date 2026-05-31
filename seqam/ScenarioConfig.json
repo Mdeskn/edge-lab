@@ -1,0 +1,22 @@
+{
+  "distributed": {
+    "router": [
+      {
+        "name": "net-vm",
+        "description": "Static SSH target for the Edge Lab network VM",
+        "host": "172.22.174.141",
+        "component_type": "distributed_event_manager",
+        "ssh_user": "mae",
+        "ssh_port": 22
+      },
+      {
+        "name": "gpu-server",
+        "description": "Static SSH target for the Edge Lab GPU server",
+        "host": "172.22.174.139",
+        "component_type": "distributed_event_manager",
+        "ssh_user": "mae",
+        "ssh_port": 22
+      }
+    ]
+  }
+}

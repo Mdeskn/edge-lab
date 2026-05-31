@@ -24,7 +24,7 @@ class DashboardPublisher:
 
     def __init__(self, config: Config):
         self._enabled = config.dashboard_enabled
-        self._url = f"{config.dashboard_url.rstrip('/')}/api/frame/group{config.group_id}"
+        self._url = f"{config.dashboard_url.rstrip('/')}/api/frame"
         self._fps = max(config.dashboard_fps, 0.1)
         self._jpeg_quality = min(max(config.dashboard_jpeg_quality, 1), 100)
         self._frame_width = max(config.dashboard_frame_width, 0)

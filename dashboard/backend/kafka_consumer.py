@@ -19,21 +19,14 @@ class DashboardKafkaConsumer:
         self._thread: threading.Thread | None = None
         self._consumer = None
         self._brokers = os.environ.get("KAFKA_BROKERS", "").strip()
-        configured_topics = os.environ.get(
-            "APP_METRICS_TOPICS",
-            os.environ.get(
-                "APP_METRICS_TOPIC",
-                ",".join(f"/edgelab/app/metrics/group{i}" for i in range(1, 5)),
-            ),
+        self._group_id = state.group_id
+        self._app_topic = (
+            os.environ.get("APP_METRICS_TOPIC", "").strip()
+            or f"/edgelab/app/metrics/{self._group_id}"
         )
-        self._app_topics = [topic.strip() for topic in configured_topics.split(",") if topic.strip()]
         self._gpu_topic = os.environ.get("KAFKA_GPU_TOPIC", "/edgelab/server/metrics")
         self._network_topic = os.environ.get("KAFKA_NET_TOPIC", "/edgelab/network/metrics")
         self._phase_topic = os.environ.get("KAFKA_PHASE_TOPIC", "/edgelab/server/events/phase")
-        self._topic_groups = {
-            topic: normalize_group_id(topic.rsplit("/", 1)[-1])
-            for topic in self._app_topics
-        }
 
     def start(self) -> None:
         if not self._brokers:
@@ -61,12 +54,12 @@ class DashboardKafkaConsumer:
             logger.warning("Dashboard Kafka consumer disabled: confluent-kafka package unavailable")
             return
 
-        topics = [*self._app_topics, self._gpu_topic, self._network_topic, self._phase_topic]
+        topics = [self._app_topic, self._gpu_topic, self._network_topic, self._phase_topic]
         try:
             self._consumer = Consumer(
                 {
                     "bootstrap.servers": self._brokers,
-                    "group.id": "edge-lab-dashboard",
+                    "group.id": f"edge-lab-dashboard-{self._group_id}",
                     "auto.offset.reset": "latest",
                 }
             )
@@ -81,7 +74,7 @@ class DashboardKafkaConsumer:
                 if message.error():
                     logger.warning("Dashboard Kafka consumer error: %s", message.error())
                     self._state.update_kafka_status(False, str(message.error()))
-                    self._notify(None)
+                    self._notify()
                     continue
 
                 try:
@@ -92,19 +85,18 @@ class DashboardKafkaConsumer:
 
                 self._state.touch_kafka()
                 topic = message.topic()
-                if topic in self._topic_groups:
-                    group_id = self._topic_groups[topic]
-                    self._state.update_app_metric(group_id, payload)
-                    self._notify(group_id)
+                if topic == self._app_topic:
+                    self._state.update_app_metric(payload)
+                    self._notify()
                 elif topic == self._gpu_topic:
                     self._state.update_gpu_metrics(payload)
-                    self._notify(None)
+                    self._notify()
                 elif topic == self._network_topic:
                     self._state.update_network_metrics(payload)
-                    self._notify(None)
+                    self._notify()
                 elif topic == self._phase_topic:
                     self._state.update_phase(payload.get("phase", "unknown"))
-                    self._notify(None)
+                    self._notify()
         except Exception as exc:
             self._state.update_kafka_status(False, str(exc))
             logger.exception("Dashboard Kafka consumer crashed")

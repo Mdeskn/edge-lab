@@ -5,7 +5,7 @@ import uvicorn
 
 
 def main() -> None:
-    """Run the API using the documented dashboard host and port variables."""
+    """Run the API using the documented dashboard bind host and port variables."""
     uvicorn.run(
         "dashboard.backend.main:app",
         host=os.environ.get("DASHBOARD_HOST", "0.0.0.0"),

@@ -10,6 +10,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY network_conditions_publisher.py .
+COPY tc_controller.py .
 
 ENV PYTHONUNBUFFERED=1
 

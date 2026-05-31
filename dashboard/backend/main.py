@@ -8,13 +8,13 @@ import os
 from typing import Any
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from .kafka_consumer import DashboardKafkaConsumer
 from .schemas import FrameUpdate
-from .state import DashboardState, normalize_group_id
+from .state import DashboardState
 
 load_dotenv()
 
@@ -26,52 +26,52 @@ logger = logging.getLogger(__name__)
 
 
 class WebSocketManager:
-    """Track browser clients and publish group-specific state snapshots."""
+    """Track browser clients and publish state snapshots."""
 
     def __init__(self, state: DashboardState):
         self._state = state
-        self._connections: dict[WebSocket, str] = {}
+        self._connections: set[WebSocket] = set()
         self._lock = asyncio.Lock()
 
-    async def connect(self, websocket: WebSocket, group_id: str) -> None:
+    async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
         async with self._lock:
-            self._connections[websocket] = normalize_group_id(group_id)
+            self._connections.add(websocket)
 
     async def disconnect(self, websocket: WebSocket) -> None:
         async with self._lock:
-            self._connections.pop(websocket, None)
+            self._connections.discard(websocket)
 
-    async def broadcast(self, group_id: str | None = None) -> None:
-        normalized_group = normalize_group_id(group_id) if group_id else None
+    async def broadcast(self) -> None:
         async with self._lock:
-            connections = list(self._connections.items())
+            connections = list(self._connections)
 
         disconnected: list[WebSocket] = []
-        for websocket, connection_group in connections:
-            if normalized_group and connection_group != normalized_group:
-                continue
+        for websocket in connections:
             try:
-                await websocket.send_json(self._state.snapshot(connection_group))
+                await websocket.send_json(self._state.snapshot())
             except Exception:
                 disconnected.append(websocket)
 
         if disconnected:
             async with self._lock:
                 for websocket in disconnected:
-                    self._connections.pop(websocket, None)
+                    self._connections.discard(websocket)
 
 
 max_history = int(os.environ.get("DASHBOARD_MAX_HISTORY", "300"))
-dashboard_state = DashboardState(max_history=max_history)
+dashboard_state = DashboardState(
+    max_history=max_history,
+    group_id=os.environ.get("GROUP_ID", "1"),
+)
 socket_manager = WebSocketManager(dashboard_state)
 event_loop: asyncio.AbstractEventLoop | None = None
 
 
-def schedule_broadcast(group_id: str | None) -> None:
+def schedule_broadcast() -> None:
     """Bridge Kafka's worker thread into FastAPI's asyncio loop."""
     if event_loop is not None and event_loop.is_running():
-        asyncio.run_coroutine_threadsafe(socket_manager.broadcast(group_id), event_loop)
+        asyncio.run_coroutine_threadsafe(socket_manager.broadcast(), event_loop)
 
 
 kafka_consumer = DashboardKafkaConsumer(dashboard_state, schedule_broadcast)
@@ -111,17 +111,17 @@ def health() -> dict[str, Any]:
 
 
 @app.get("/api/state")
-def state(group_id: str = Query("group1")) -> dict[str, Any]:
-    return dashboard_state.snapshot(group_id)
+def state() -> dict[str, Any]:
+    return dashboard_state.snapshot()
 
 
 @app.get("/api/history")
-def history(group_id: str = Query("group1")) -> dict[str, Any]:
-    return dashboard_state.history(group_id)
+def history() -> dict[str, Any]:
+    return dashboard_state.history()
 
 
-@app.post("/api/frame/{group_id}", status_code=202)
-async def post_frame(group_id: str, update: FrameUpdate) -> dict[str, Any]:
+@app.post("/api/frame", status_code=202)
+async def post_frame(update: FrameUpdate) -> dict[str, Any]:
     try:
         jpeg = base64.b64decode(update.image_base64, validate=True)
     except (binascii.Error, ValueError) as exc:
@@ -130,25 +130,23 @@ async def post_frame(group_id: str, update: FrameUpdate) -> dict[str, Any]:
     if not jpeg.startswith(b"\xff\xd8") or not jpeg.endswith(b"\xff\xd9"):
         raise HTTPException(status_code=400, detail="image_base64 must contain a JPEG image")
 
-    normalized_group = normalize_group_id(group_id)
     metric = update.model_dump(exclude={"image_base64"})
-    dashboard_state.update_frame(normalized_group, metric, jpeg)
-    await socket_manager.broadcast(normalized_group)
-    return {"accepted": True, "group_id": normalized_group}
+    dashboard_state.update_frame(metric, jpeg)
+    await socket_manager.broadcast()
+    return {"accepted": True, "group_id": dashboard_state.group_id}
 
 
-@app.post("/api/reset/{group_id}", status_code=200)
-async def reset_group(group_id: str) -> dict[str, Any]:
-    """Reset cumulative totals for a group. Call this between experiment runs."""
-    normalized_group = normalize_group_id(group_id)
-    dashboard_state.reset_group(normalized_group)
-    await socket_manager.broadcast(normalized_group)
-    return {"reset": True, "group_id": normalized_group}
+@app.post("/api/reset", status_code=200)
+async def reset() -> dict[str, Any]:
+    """Reset cumulative totals. Call this between experiment runs."""
+    dashboard_state.reset()
+    await socket_manager.broadcast()
+    return {"reset": True, "group_id": dashboard_state.group_id}
 
 
-@app.get("/api/frame/{group_id}")
-def get_frame(group_id: str) -> Response:
-    jpeg = dashboard_state.frame_image(group_id)
+@app.get("/api/frame")
+def get_frame() -> Response:
+    jpeg = dashboard_state.frame_image()
     if jpeg is None:
         raise HTTPException(status_code=404, detail="No dashboard frame received yet")
     return Response(
@@ -159,9 +157,9 @@ def get_frame(group_id: str) -> Response:
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, group_id: str = "group1") -> None:
-    await socket_manager.connect(websocket, group_id)
-    await websocket.send_json(dashboard_state.snapshot(group_id))
+async def websocket_endpoint(websocket: WebSocket) -> None:
+    await socket_manager.connect(websocket)
+    await websocket.send_json(dashboard_state.snapshot())
     try:
         while True:
             await websocket.receive_text()

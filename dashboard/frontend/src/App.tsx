@@ -10,7 +10,6 @@ import { SummaryPanel } from "./components/SummaryPanel";
 import { VideoPanel } from "./components/VideoPanel";
 import type { DashboardState } from "./types";
 
-const groups = ["group1", "group2", "group3", "group4"];
 const phaseDescriptions: Record<string, string> = {
   baseline: "No artificial load",
   network_load: "Network delay, jitter, or packet loss active",
@@ -20,7 +19,6 @@ const phaseDescriptions: Record<string, string> = {
 };
 
 export default function App() {
-  const [groupId, setGroupId] = useState("group1");
   const [state, setState] = useState<DashboardState | null>(null);
   const [socketConnected, setSocketConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,11 +27,10 @@ export default function App() {
     let active = true;
     setState(null);
     setError(null);
-    fetchDashboardState(groupId)
+    fetchDashboardState()
       .then((next) => active && setState(next))
       .catch((reason: Error) => active && setError(reason.message));
     const unsubscribe = subscribeToDashboard(
-      groupId,
       (next) => {
         setState(next);
         setError(null);
@@ -44,7 +41,7 @@ export default function App() {
       active = false;
       unsubscribe();
     };
-  }, [groupId]);
+  }, []);
 
   const phase = state?.experiment_phase || "unknown";
 
@@ -60,12 +57,6 @@ export default function App() {
         </div>
         <div className="topbar-controls">
           <StatusDot connected={socketConnected} label={socketConnected ? "Live" : "Reconnecting"} />
-          <label className="group-control">
-            <span>Group</span>
-            <select value={groupId} onChange={(event) => setGroupId(event.target.value)}>
-              {groups.map((group) => <option key={group} value={group}>{group}</option>)}
-            </select>
-          </label>
           <div className="phase-block">
             <span className="eyebrow">Experiment phase</span>
             <strong>{phase.replace("_", " ")}</strong>

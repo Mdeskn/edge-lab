@@ -1,7 +1,8 @@
 # Edge-Lab Live Dashboard
 
-The dashboard is optional. The experiment pipeline continues to run when the
-dashboard is disabled, offline, or missing its dependencies.
+The dashboard is optional and runs on each student group's Raspberry Pi beside
+the client. The experiment pipeline continues to run when the dashboard is
+disabled, offline, or missing its dependencies.
 
 For a feature-by-feature explanation and exact data flow, see
 [FEATURES_AND_ARCHITECTURE.md](FEATURES_AND_ARCHITECTURE.md).
@@ -31,12 +32,15 @@ cp .env.example .env
 Dashboard backend:
 
 ```dotenv
+GROUP_ID=1
 DASHBOARD_HOST=0.0.0.0
 DASHBOARD_PORT=8080
 DASHBOARD_MAX_HISTORY=300
-DASHBOARD_PUBLIC_API_URL=http://DASHBOARD_HOST:8080
+# Optional override. Leave blank to derive http://<pi-host>:8080 in the browser.
+DASHBOARD_PUBLIC_API_URL=
 KAFKA_BROKERS=
-APP_METRICS_TOPICS=/edgelab/app/metrics/group1,/edgelab/app/metrics/group2,/edgelab/app/metrics/group3,/edgelab/app/metrics/group4
+# Optional override; defaults to /edgelab/app/metrics/group${GROUP_ID}.
+APP_METRICS_TOPIC=
 KAFKA_GPU_TOPIC=/edgelab/server/metrics
 KAFKA_NET_TOPIC=/edgelab/network/metrics
 KAFKA_PHASE_TOPIC=/edgelab/server/events/phase
@@ -46,27 +50,33 @@ Pi client:
 
 ```dotenv
 DASHBOARD_ENABLED=true
-DASHBOARD_URL=http://DASHBOARD_HOST:8080
+DASHBOARD_URL=http://localhost:8080
 DASHBOARD_FPS=5
 DASHBOARD_JPEG_QUALITY=70
 DASHBOARD_FRAME_WIDTH=960
 ```
 
-Use the dashboard computer's reachable IP address for `DASHBOARD_HOST` in the
-Pi client's `DASHBOARD_URL` and in `DASHBOARD_PUBLIC_API_URL`. Do not use
-`localhost` unless the client, browser, and dashboard backend run on the same
-computer.
+Keep `DASHBOARD_URL=http://localhost:8080`: the client and dashboard backend run
+on the same Pi. The browser frontend derives `http://<pi-host>:8080`
+automatically. Set `DASHBOARD_PUBLIC_API_URL` only when an explicit override is
+needed.
 
 ## Start With Docker Compose
 
-Create `.env` in the repository root, then run:
+Create `.env` in the repository root, then start the Pi client and dashboard:
+
+```bash
+docker compose -f docker-compose.pi.yml up --build
+```
+
+Open `http://PI_IP:5173`. The backend health endpoint is
+`http://PI_IP:8080/health`.
+
+For dashboard-only troubleshooting on the same Pi, run:
 
 ```bash
 docker compose -f dashboard/docker-compose.yml up --build
 ```
-
-Open `http://DASHBOARD_HOST:5173`. The backend health endpoint is
-`http://DASHBOARD_HOST:8080/health`.
 
 ## Run The Experiment
 
@@ -77,22 +87,23 @@ Full Kafka and Triton lab:
    `docker compose -f docker-compose.gpu-server.yml up --build`.
 3. Start the network publisher with
    `docker compose -f docker-compose.netvm.yml up --build`.
-4. Start the dashboard and Pi client.
+4. Start the Pi client and dashboard with `docker-compose.pi.yml`.
 
 ## Backend API
 
 - `GET /health`
-- `GET /api/state?group_id=group1`
-- `GET /api/history?group_id=group1`
-- `POST /api/frame/group1`
-- `GET /api/frame/group1`
-- `WS /ws?group_id=group1`
+- `GET /api/state`
+- `GET /api/history`
+- `POST /api/frame`
+- `GET /api/frame`
+- `POST /api/reset`
+- `WS /ws`
 
 ## Troubleshooting
 
 ### The browser says reconnecting
 
-Check `http://DASHBOARD_HOST:8080/health`. If it does not load, start the backend or
+Check `http://PI_IP:8080/health`. If it does not load, start the backend or
 check whether port `8080` is already in use.
 
 ### Video is missing but Kafka charts update

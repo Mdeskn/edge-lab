@@ -236,7 +236,7 @@ class Scorer:
         if displacement_px is None:
             displacement_text = "N/A"
         elif not has_prediction:
-            displacement_text = f"MISS ({displacement_px:.0f}px penalty)"
+            displacement_text = f"MISS ({displacement_px:.1f}px penalty)"
         else:
             displacement_text = f"{displacement_px:.1f}px"
         cv2.putText(frame, f"Displacement: {displacement_text}", (10, 105), _FONT, 0.6, _WHITE, 1)

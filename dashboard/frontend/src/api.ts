@@ -1,13 +1,15 @@
 import type { DashboardState } from "./types";
 
-export const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:8080").replace(/\/$/, "");
+const defaultApiUrl = `${window.location.protocol}//${window.location.hostname}:8080`;
+
+export const API_BASE = (import.meta.env.VITE_API_URL || defaultApiUrl).replace(/\/$/, "");
 
 export function resolveApiUrl(path?: string | null): string | null {
   return path ? `${API_BASE}${path}` : null;
 }
 
-export async function fetchDashboardState(groupId: string): Promise<DashboardState> {
-  const response = await fetch(`${API_BASE}/api/state?group_id=${encodeURIComponent(groupId)}`);
+export async function fetchDashboardState(): Promise<DashboardState> {
+  const response = await fetch(`${API_BASE}/api/state`);
   if (!response.ok) {
     throw new Error(`Dashboard API returned ${response.status}`);
   }
@@ -15,7 +17,6 @@ export async function fetchDashboardState(groupId: string): Promise<DashboardSta
 }
 
 export function subscribeToDashboard(
-  groupId: string,
   onUpdate: (state: DashboardState) => void,
   onConnection: (connected: boolean) => void,
 ): () => void {
@@ -25,7 +26,7 @@ export function subscribeToDashboard(
   const websocketBase = API_BASE.replace(/^http/, "ws");
 
   const connect = () => {
-    socket = new WebSocket(`${websocketBase}/ws?group_id=${encodeURIComponent(groupId)}`);
+    socket = new WebSocket(`${websocketBase}/ws`);
     socket.onopen = () => onConnection(true);
     socket.onmessage = (event) => {
       try {

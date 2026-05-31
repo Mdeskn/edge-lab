@@ -22,7 +22,6 @@ export interface InfrastructureMetric {
 
 export interface DashboardState {
   group_id: string;
-  groups: string[];
   latest: FrameMetric;
   experiment_phase: string;
   frame: {

@@ -36,7 +36,7 @@ displacement in pixels. Lower is better.
 Open the dashboard at:
 
 ```text
-http://DASHBOARD_HOST:5173
+http://PI_IP:5173
 ```
 
 ### Live Annotated Video
@@ -178,19 +178,10 @@ Its rules are deliberately simple:
 | Remote mode with healthy GPU and network | Remote inference is currently beneficial |
 | Local mode | Local inference avoids network and server variability |
 
-### Group Selector And Connection Status
+### Per-Group Deployment And Connection Status
 
-The group selector supports:
-
-```text
-group1
-group2
-group3
-group4
-```
-
-Each browser WebSocket subscribes to one group. Switching groups reloads the
-initial REST snapshot and opens a new group-specific WebSocket connection.
+Each student group deploys its own dashboard instance with its `GROUP_ID`.
+There is no central dashboard and no browser-side group switcher.
 
 The top-bar status shows whether the browser WebSocket is live. If disconnected,
 the frontend retries after `1.5` seconds.
@@ -352,20 +343,21 @@ It is a small FastAPI application with in-memory state. There is no database.
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /health` | Backend health, groups, Kafka status, and history size |
-| `GET /api/state?group_id=group1` | Full initial dashboard snapshot |
-| `GET /api/history?group_id=group1` | Rolling chart histories only |
-| `POST /api/frame/group1` | Receive annotated JPEG and frame metrics from client |
-| `GET /api/frame/group1` | Return the latest JPEG for one group |
-| `WS /ws?group_id=group1` | Push live JSON state snapshots |
+| `GET /health` | Backend health, configured group, Kafka status, and history size |
+| `GET /api/state` | Full initial dashboard snapshot |
+| `GET /api/history` | Rolling chart histories only |
+| `POST /api/frame` | Receive annotated JPEG and frame metrics from this group's client |
+| `GET /api/frame` | Return the latest JPEG |
+| `POST /api/reset` | Reset retained counters and history between runs |
+| `WS /ws` | Push live JSON state snapshots |
 | `GET /docs` | FastAPI-generated API documentation |
 
 ### In-Memory State
 
 `dashboard/backend/state.py` stores:
 
-- Latest frame metrics for each group.
-- Latest JPEG for each group.
+- Latest frame metrics for the configured group.
+- Latest JPEG for the configured group.
 - A frame sequence number used as a cache-busting query parameter.
 - Latest GPU and network metrics.
 - Rolling frame, GPU, and network histories.
@@ -401,7 +393,7 @@ When enabled, its background thread subscribes to:
 
 | Environment variable | Default topic | Data |
 | --- | --- | --- |
-| `APP_METRICS_TOPICS` | `/edgelab/app/metrics/group1` through `group4` | Per-frame app metrics |
+| `APP_METRICS_TOPIC` | `/edgelab/app/metrics/group${GROUP_ID}` | This group's per-frame app metrics |
 | `KAFKA_GPU_TOPIC` | `/edgelab/server/metrics` | GPU and Triton metrics |
 | `KAFKA_NET_TOPIC` | `/edgelab/network/metrics` | Delay, jitter, packet loss |
 | `KAFKA_PHASE_TOPIC` | `/edgelab/server/events/phase` | Current experiment phase |
@@ -433,7 +425,7 @@ It is a React and Vite application.
 The backend returns a JPEG URL such as:
 
 ```text
-/api/frame/group1?v=1251
+/api/frame?v=1251
 ```
 
 The sequence value changes for each received image. This prevents browser image
@@ -502,27 +494,28 @@ The deployed lab uses:
 
 | Machine | Services |
 | --- | --- |
-| Raspberry Pi | Client, SP-Agent, local ONNX inference |
+| Raspberry Pi | Client, SP-Agent, local ONNX inference, and one group's dashboard |
 | GPU server | Triton and GPU metrics publisher |
 | Network VM | Network conditions publisher and Linux `tc netem` |
 | SeQaM platform | Kafka broker and phase controller |
-| Dashboard host | FastAPI backend and React frontend |
 
 Configure:
 
 ```dotenv
+GROUP_ID=1
 KAFKA_BROKERS=HOST:PORT
 TRITON_URL=GPU_SERVER:8000
 DASHBOARD_ENABLED=true
-DASHBOARD_URL=http://DASHBOARD_HOST:8080
+DASHBOARD_URL=http://localhost:8080
 TARGET_CLASS_ID=32
 TARGET_CONFIDENCE_THRESHOLD=0.1
 ```
 
-On the dashboard host, also set the URL used by students' browsers:
+The browser derives the Pi dashboard API address from the hostname used to open
+the frontend. An explicit override is optional:
 
 ```dotenv
-DASHBOARD_PUBLIC_API_URL=http://DASHBOARD_HOST:8080
+DASHBOARD_PUBLIC_API_URL=
 ```
 
 In the full lab, the dashboard shows external GPU metrics, network conditions,
@@ -550,14 +543,15 @@ For setup and run commands, follow the root [README.md](../README.md).
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `DASHBOARD_ENABLED` | `false` | Enables optional client JPEG publishing |
-| `DASHBOARD_URL` | `http://DASHBOARD_HOST:8080` | Backend URL reachable from the Pi client |
+| `DASHBOARD_URL` | `http://localhost:8080` | Dashboard backend URL used by the client on the same Pi |
 | `DASHBOARD_FPS` | `5` | Maximum dashboard JPEG updates per second |
 | `DASHBOARD_JPEG_QUALITY` | `70` | JPEG compression quality |
 | `DASHBOARD_FRAME_WIDTH` | `960` | Maximum published image width |
+| `GROUP_ID` | `1` | Student group number; selects this dashboard's app-metrics topic |
 | `DASHBOARD_MAX_HISTORY` | `300` | Rolling backend sample count |
 | `DASHBOARD_HOST` | `0.0.0.0` | Backend listen host |
 | `DASHBOARD_PORT` | `8080` | Backend listen port |
-| `DASHBOARD_PUBLIC_API_URL` | `http://localhost:8080` | Backend URL used by students' browsers |
+| `DASHBOARD_PUBLIC_API_URL` | empty | Optional browser-facing backend override; otherwise derive `http://<pi-host>:8080` |
 | `TARGET_CLASS_ID` | empty | Optional YOLO COCO class filter; use `32` for ball-only mode |
 | `TARGET_CONFIDENCE_THRESHOLD` | same as `CONFIDENCE_THRESHOLD` | Detection threshold after target filtering |
 
@@ -618,7 +612,7 @@ Check Kafka, Triton, and the infrastructure publishers described in the root
 Check:
 
 ```bash
-curl http://DASHBOARD_HOST:8080/health
+curl http://PI_IP:8080/health
 ```
 
-Restart the dashboard services on the dashboard host if needed.
+Restart the dashboard services on the group's Pi if needed.
