@@ -102,11 +102,20 @@ class Scorer:
             avg_display_latency = sum(self._display_latencies) / len(self._display_latencies)
 
             has_ground_truth = gt_x is not None and gt_y is not None
-            displacement_px = (
-                math.sqrt((gt_x - pred_x) ** 2 + (gt_y - pred_y) ** 2)
-                if has_ground_truth
-                else None
-            )
+            # (0.0, 0.0) is the sentinel returned by both inference backends when
+            # no detection passes the confidence threshold.
+            has_prediction = pred_x != 0.0 or pred_y != 0.0
+
+            if has_ground_truth and has_prediction:
+                displacement_px = math.sqrt((gt_x - pred_x) ** 2 + (gt_y - pred_y) ** 2)
+            elif has_ground_truth:
+                # Detection failure: model returned no result but ball is visible.
+                # Score as a fixed penalty so the cumulative total reflects the
+                # dropout consistently, regardless of where the ball is in the frame.
+                displacement_px = self.config.miss_penalty_px
+            else:
+                displacement_px = None  # ball absent in ground truth, skip frame
+
             if displacement_px is not None:
                 self.shared_state.add_displacement(displacement_px)
                 self.shared_state.add_phase_displacement(current_phase, displacement_px)
@@ -114,7 +123,7 @@ class Scorer:
 
             self._draw_overlay(
                 frame, gt_x, gt_y, pred_x, pred_y,
-                displacement_px, avg_display_latency, mode, current_phase, score_summary,
+                displacement_px, has_prediction, avg_display_latency, mode, current_phase, score_summary,
             )
 
             if self.config.display_output:
@@ -179,7 +188,7 @@ class Scorer:
             except Exception as exc:
                 logger.warning("Dashboard publish error in Scorer: %s", exc)
 
-            if displacement_px is not None and (pred_x > 0.0 or pred_y > 0.0):
+            if displacement_px is not None and has_prediction:
                 frame_h, frame_w = frame.shape[:2]
                 warn_threshold = math.sqrt(frame_w ** 2 + frame_h ** 2) * 0.05
                 if displacement_px > warn_threshold:
@@ -198,6 +207,7 @@ class Scorer:
         pred_x: float,
         pred_y: float,
         displacement_px: float | None,
+        has_prediction: bool,
         avg_display_latency: float,
         mode: str,
         current_phase: str,
@@ -205,7 +215,6 @@ class Scorer:
     ) -> None:
         """Draw ground truth, prediction, connecting line, and HUD text onto frame."""
         has_ground_truth = gt_x is not None and gt_y is not None
-        has_prediction = pred_x > 0.0 or pred_y > 0.0
         if has_ground_truth:
             cv2.circle(frame, (int(gt_x), int(gt_y)), 8, _GREEN, -1)
             cv2.putText(frame, "GT", (int(gt_x) + 10, int(gt_y) - 8), _FONT, 0.5, _GREEN, 1)
@@ -224,7 +233,12 @@ class Scorer:
         cv2.putText(frame, f"Mode: {mode}", (10, 30), _FONT, 0.6, _WHITE, 1)
         cv2.putText(frame, f"Phase: {current_phase}", (10, 55), _FONT, 0.6, _WHITE, 1)
         cv2.putText(frame, f"Latency (avg 5): {avg_display_latency:.0f}ms", (10, 80), _FONT, 0.6, _WHITE, 1)
-        displacement_text = f"{displacement_px:.1f}px" if displacement_px is not None else "N/A"
+        if displacement_px is None:
+            displacement_text = "N/A"
+        elif not has_prediction:
+            displacement_text = f"MISS ({displacement_px:.0f}px penalty)"
+        else:
+            displacement_text = f"{displacement_px:.1f}px"
         cv2.putText(frame, f"Displacement: {displacement_text}", (10, 105), _FONT, 0.6, _WHITE, 1)
         cv2.putText(
             frame,

@@ -38,6 +38,7 @@ class Config:
     sp_agent_interval_ms: int
     log_level: str
     auto_stop: bool
+    miss_penalty_px: float
     dashboard_enabled: bool
     dashboard_url: str
     dashboard_fps: float
@@ -78,6 +79,7 @@ def load_config() -> Config:
         sp_agent_interval_ms=int(os.environ.get("SP_AGENT_INTERVAL_MS", "500")),
         log_level=os.environ.get("LOG_LEVEL", "INFO"),
         auto_stop=os.environ.get("AUTO_STOP", "true").lower() == "true",
+        miss_penalty_px=float(os.environ.get("MISS_PENALTY_PX", "100.0")),
         dashboard_enabled=os.environ.get("DASHBOARD_ENABLED", "false").lower() == "true",
         dashboard_url=os.environ.get("DASHBOARD_URL", "http://localhost:8080"),
         dashboard_fps=float(os.environ.get("DASHBOARD_FPS", "5")),

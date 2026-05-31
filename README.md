@@ -462,18 +462,20 @@ For development without a running SeQaM platform, set `AUTO_STOP=false` in your 
 
 ### What gets measured
 
-For every frame, the Scorer calculates:
+Each processed frame falls into one of three cases:
 
-```
-displacement = sqrt((predicted_x - true_x)^2 + (predicted_y - true_y)^2)
-```
+| Situation | Displacement recorded |
+|-----------|----------------------|
+| Ground truth is absent (ball not on screen) | Not scored (excluded from cumulative) |
+| Ground truth present, model returned a detection | `sqrt((predicted_x - true_x)^2 + (predicted_y - true_y)^2)` in pixels |
+| Ground truth present, model returned no detection (0,0) | `MISS_PENALTY_PX` (fixed penalty, default 100 px) |
 
-This is simply the Euclidean distance in pixels between where your model said the tennis ball is and where it actually is. Frames where the supplied CSV marks the ball as absent have `N/A` displacement and are excluded from the cumulative score.
+The third case matters: without a fixed penalty, a missed detection would be scored as the distance from the top-left corner of the frame (0,0) to wherever the ball actually is, typically 1000-1500 px. That completely dominates the cumulative total and hides the latency-induced displacement that the lab is actually trying to measure. The fixed penalty keeps dropouts priced consistently regardless of ball position.
 
 The score for the whole experiment is:
 
 ```
-cumulative_displacement = sum of displacement for all frames
+cumulative_displacement = sum of displacement for all scored frames
 ```
 
 ### Why does inference quality vary?
@@ -545,6 +547,7 @@ Copy `.env.example` to `.env` and fill in the values. Variables marked **require
 | `DISPLAY_OUTPUT` | No | `true` | Show OpenCV windows with the overlay. Set `false` for headless (SSH or Docker without X11). |
 | `LOG_LEVEL` | No | `INFO` | Logging verbosity. Options: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
 | `AUTO_STOP` | No | `true` | When `true` and `KAFKA_BROKERS` is set: wait for first phase message, run one full 120s cycle, then stop automatically. Set `false` for development (runs until Ctrl+C). |
+| `MISS_PENALTY_PX` | No | `100.0` | Fixed penalty added to the cumulative score when the model returns no detection (0,0) but ground truth is present. Without this, missed detections score as distance-from-origin (~1000-1500 px) and swamp the real latency signal. Set to `0` to exclude missed frames from scoring entirely. |
 
 ### OpenTelemetry tracing
 

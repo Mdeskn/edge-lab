@@ -154,6 +154,7 @@ def main() -> None:
     logger.info("  target_conf_threshold: %.2f", config.target_conf_threshold)
     logger.info("  sp_agent_interval_ms : %d", config.sp_agent_interval_ms)
     logger.info("  auto_stop            : %s", config.auto_stop)
+    logger.info("  miss_penalty_px      : %.1f", config.miss_penalty_px)
     logger.info("  dashboard_enabled    : %s", config.dashboard_enabled)
     logger.info("  dashboard_url        : %s", config.dashboard_url)
     logger.info("=" * 60)
