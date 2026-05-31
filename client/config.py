@@ -33,14 +33,23 @@ class Config:
     results_log_path: str
     queue_max_size: int
     conf_threshold: float
+    target_class_id: int | None
+    target_conf_threshold: float
     sp_agent_interval_ms: int
     log_level: str
     auto_stop: bool
+    dashboard_enabled: bool
+    dashboard_url: str
+    dashboard_fps: float
+    dashboard_jpeg_quality: int
+    dashboard_frame_width: int
 
 
 def load_config() -> Config:
     """Load and return a Config instance from environment variables."""
     group_id = os.environ.get("GROUP_ID", "1")
+    target_class_value = os.environ.get("TARGET_CLASS_ID", "").strip()
+    conf_threshold = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.3"))
     return Config(
         group_id=group_id,
         video_path=os.environ["VIDEO_PATH"],
@@ -61,8 +70,17 @@ def load_config() -> Config:
         display_output=os.environ.get("DISPLAY_OUTPUT", "true").lower() == "true",
         results_log_path=os.environ.get("RESULTS_LOG_PATH", "results.csv"),
         queue_max_size=int(os.environ.get("QUEUE_MAX_SIZE", "10")),
-        conf_threshold=float(os.environ.get("CONFIDENCE_THRESHOLD", "0.3")),
+        conf_threshold=conf_threshold,
+        target_class_id=int(target_class_value) if target_class_value else None,
+        target_conf_threshold=float(
+            os.environ.get("TARGET_CONFIDENCE_THRESHOLD", str(conf_threshold))
+        ),
         sp_agent_interval_ms=int(os.environ.get("SP_AGENT_INTERVAL_MS", "500")),
         log_level=os.environ.get("LOG_LEVEL", "INFO"),
         auto_stop=os.environ.get("AUTO_STOP", "true").lower() == "true",
+        dashboard_enabled=os.environ.get("DASHBOARD_ENABLED", "false").lower() == "true",
+        dashboard_url=os.environ.get("DASHBOARD_URL", "http://localhost:8080"),
+        dashboard_fps=float(os.environ.get("DASHBOARD_FPS", "5")),
+        dashboard_jpeg_quality=int(os.environ.get("DASHBOARD_JPEG_QUALITY", "70")),
+        dashboard_frame_width=int(os.environ.get("DASHBOARD_FRAME_WIDTH", "960")),
     )

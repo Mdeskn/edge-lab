@@ -53,12 +53,13 @@ class AppMetricsPublisher:
         experiment_phase: str,
         processing_mode: str,
         latency_ms: float,
-        displacement_px: float,
-        true_x: float,
-        true_y: float,
+        displacement_px: float | None,
+        true_x: float | None,
+        true_y: float | None,
         predicted_x: float,
         predicted_y: float,
         cumulative_displacement_px: float,
+        timestamp: float | None = None,
     ) -> None:
         """
         Serialize metrics to JSON and produce to the configured topic.
@@ -69,15 +70,15 @@ class AppMetricsPublisher:
             return
 
         payload = {
-            "timestamp": time.time(),
+            "timestamp": timestamp if timestamp is not None else time.time(),
             "frame_number": frame_number,
             "group_id": self.group_id,
             "experiment_phase": experiment_phase,
             "processing_mode": processing_mode,
             "latency_ms": round(latency_ms, 2),
-            "displacement_px": round(displacement_px, 2),
-            "true_x": round(true_x, 2),
-            "true_y": round(true_y, 2),
+            "displacement_px": _round_optional(displacement_px),
+            "true_x": _round_optional(true_x),
+            "true_y": _round_optional(true_y),
             "predicted_x": round(predicted_x, 2),
             "predicted_y": round(predicted_y, 2),
             "cumulative_displacement_px": round(cumulative_displacement_px, 2),
@@ -103,3 +104,8 @@ class AppMetricsPublisher:
         """Log delivery failures."""
         if err:
             logger.error("Kafka delivery failed: %s", err)
+
+
+def _round_optional(value: float | None) -> float | None:
+    """Round a numeric metric while preserving unavailable values."""
+    return round(value, 2) if value is not None else None

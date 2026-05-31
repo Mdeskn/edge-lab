@@ -18,8 +18,8 @@ class SharedState:
         self._lock = threading.Lock()
         self._shutdown_event = threading.Event()
 
-        self._current_gt_x: float = 0.0
-        self._current_gt_y: float = 0.0
+        self._current_gt_x: Optional[float] = None
+        self._current_gt_y: Optional[float] = None
         self._current_frame_number: int = 0
 
         self._processing_mode: str = initial_mode
@@ -50,7 +50,12 @@ class SharedState:
 
     # --- Ground truth ---
 
-    def update_ground_truth(self, frame_number: int, gt_x: float, gt_y: float) -> None:
+    def update_ground_truth(
+        self,
+        frame_number: int,
+        gt_x: Optional[float],
+        gt_y: Optional[float],
+    ) -> None:
         """Update the current ground truth coordinates for a given frame."""
         with self._lock:
             self._current_frame_number = frame_number

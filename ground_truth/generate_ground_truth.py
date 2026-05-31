@@ -1,12 +1,12 @@
 """
-Generate ground truth coordinates from a video using YOLOv10 ONNX.
+Generate ground truth coordinates from a video.
 
 Usage:
     python generate_ground_truth.py \
         --video test_video.mp4 \
         --model yolov10n.onnx \
         --output ground_truth.csv \
-        --conf 0.3
+        --tracker tennis-ball-color
 
 Output:
 frame_number,center_x,center_y,confidence,class_id,class_name
@@ -73,11 +73,12 @@ def preprocess(frame, size=640):
     return np.expand_dims(chw, axis=0)
 
 
-def postprocess(
+def postprocess_yolo(
         output,
         orig_h,
         orig_w,
-        conf_threshold
+        conf_threshold,
+        target_class_id
 ):
 
     boxes = output.squeeze()
@@ -88,22 +89,14 @@ def postprocess(
     if len(boxes) == 0:
         return None,None,0.0,-1
 
-    # ---------- Prefer sports balls ----------
-    sports_ball_boxes = boxes[
-        boxes[:,5].astype(int) == SPORTS_BALL_CLASS
+    if target_class_id is not None:
+        boxes = boxes[boxes[:,5].astype(int) == target_class_id]
+        if len(boxes) == 0:
+            return None,None,0.0,-1
+
+    best = boxes[
+        boxes[:,4].argmax()
     ]
-
-    if len(sports_ball_boxes) > 0:
-
-        best = sports_ball_boxes[
-            sports_ball_boxes[:,4].argmax()
-        ]
-
-    else:
-        # fallback
-        best = boxes[
-            boxes[:,4].argmax()
-        ]
 
     x1,y1,x2,y2,conf,cls_id = best
 
@@ -121,6 +114,57 @@ def postprocess(
     )
 
 
+def track_tennis_ball(frame):
+    """
+    Return the centre of the largest plausible yellow-green tennis-ball region.
+
+    This mode is intended for producing independent ground truth for the lab's
+    tennis-ball video. It does not run in the measured inference pipeline.
+    """
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(
+        hsv,
+        np.array([25, 80, 80], dtype=np.uint8),
+        np.array([50, 255, 255], dtype=np.uint8),
+    )
+    mask = cv2.morphologyEx(
+        mask,
+        cv2.MORPH_OPEN,
+        np.ones((5, 5), dtype=np.uint8),
+    )
+    mask = cv2.morphologyEx(
+        mask,
+        cv2.MORPH_CLOSE,
+        np.ones((11, 11), dtype=np.uint8),
+    )
+
+    contours, _ = cv2.findContours(
+        mask,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE,
+    )
+    candidates = []
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if area < 500:
+            continue
+        x, y, width, height = cv2.boundingRect(contour)
+        aspect_ratio = width / height if height else 0.0
+        if 0.65 <= aspect_ratio <= 1.45:
+            candidates.append((area, x, y, width, height))
+
+    if not candidates:
+        return None,None,0.0,-1
+
+    _, x, y, width, height = max(candidates)
+    return (
+        x + width / 2.0,
+        y + height / 2.0,
+        1.0,
+        SPORTS_BALL_CLASS,
+    )
+
+
 def main():
 
     parser = argparse.ArgumentParser()
@@ -132,7 +176,7 @@ def main():
 
     parser.add_argument(
         "--model",
-        required=True
+        help="Path to the YOLO ONNX model. Required for --tracker yolo."
     )
 
     parser.add_argument(
@@ -146,12 +190,31 @@ def main():
         default=0.3
     )
 
+    parser.add_argument(
+        "--tracker",
+        choices=["yolo", "tennis-ball-color"],
+        default="yolo",
+        help="Ground-truth source. Use tennis-ball-color for the lab tennis-ball video."
+    )
+
+    parser.add_argument(
+        "--target-class-id",
+        type=int,
+        default=None,
+        help="Optional COCO class filter for YOLO mode. Sports ball is class 32."
+    )
+
     args = parser.parse_args()
 
-    session = load_session(args.model)
-
-    input_name = session.get_inputs()[0].name
-    output_name = session.get_outputs()[0].name
+    session = None
+    input_name = None
+    output_name = None
+    if args.tracker == "yolo":
+        if not args.model:
+            parser.error("--model is required for --tracker yolo")
+        session = load_session(args.model)
+        input_name = session.get_inputs()[0].name
+        output_name = session.get_outputs()[0].name
 
     cap = cv2.VideoCapture(args.video)
 
@@ -192,21 +255,22 @@ def main():
 
             frame_num += 1
 
-            h,w = frame.shape[:2]
-
-            inp = preprocess(frame)
-
-            outputs = session.run(
-                [output_name],
-                {input_name: inp}
-            )
-
-            cx,cy,conf,cls_id = postprocess(
-                outputs[0],
-                h,
-                w,
-                args.conf
-            )
+            if args.tracker == "tennis-ball-color":
+                cx,cy,conf,cls_id = track_tennis_ball(frame)
+            else:
+                h,w = frame.shape[:2]
+                inp = preprocess(frame)
+                outputs = session.run(
+                    [output_name],
+                    {input_name: inp}
+                )
+                cx,cy,conf,cls_id = postprocess_yolo(
+                    outputs[0],
+                    h,
+                    w,
+                    args.conf,
+                    args.target_class_id
+                )
 
             if cx is None:
 

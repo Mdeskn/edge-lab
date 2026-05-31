@@ -21,12 +21,24 @@ python generate_ground_truth.py \
     --conf   0.3
 ```
 
+For the lab tennis-ball video, generate independent ball-only ground truth with:
+
+```bash
+python generate_ground_truth.py \
+    --video  /path/to/test_video.mp4 \
+    --output ground_truth.csv \
+    --tracker tennis-ball-color
+```
+
+The color tracker is used only offline to generate the answer key. The measured
+local and remote inference paths still use YOLO.
+
 ## Output format
 
 | Column | Description |
 |--------|-------------|
 | `frame_number` | 1-indexed frame counter |
-| `center_x` | X pixel coordinate of highest-confidence detection centre |
+| `center_x` | X pixel coordinate of the selected target centre |
 | `center_y` | Y pixel coordinate |
 | `confidence` | YOLO confidence score |
 | `class_id` | COCO class index |

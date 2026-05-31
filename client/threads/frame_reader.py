@@ -6,7 +6,7 @@ import csv
 import logging
 import queue
 import time
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -34,9 +34,9 @@ class FrameReader:
         self.shared_state = shared_state
         self.reader_queue = reader_queue
         self.frame_counter: int = 0
-        self._ground_truth: Dict[int, Tuple[float, float]] = {}
+        self._ground_truth: Dict[int, Tuple[Optional[float], Optional[float]]] = {}
 
-    def _load_ground_truth(self) -> Dict[int, Tuple[float, float]]:
+    def _load_ground_truth(self) -> Dict[int, Tuple[Optional[float], Optional[float]]]:
         """
         Load ground_truth.csv into {frame_number: (center_x, center_y)}.
 
@@ -45,7 +45,7 @@ class FrameReader:
         is used as a fallback (linear scan; the lookup dict is kept sorted
         so the nearest key can be found efficiently with min()).
         """
-        gt: Dict[int, Tuple[float, float]] = {}
+        gt: Dict[int, Tuple[Optional[float], Optional[float]]] = {}
         path = self.config.ground_truth_path
 
         try:
@@ -56,8 +56,10 @@ class FrameReader:
                         fn = int(row["frame_number"])
                         cx = float(row["center_x"])
                         cy = float(row["center_y"])
-                        if not (np.isnan(cx) or np.isnan(cy)):
-                            gt[fn] = (cx, cy)
+                        gt[fn] = (
+                            None if np.isnan(cx) else cx,
+                            None if np.isnan(cy) else cy,
+                        )
                     except (ValueError, KeyError):
                         continue
         except FileNotFoundError:
@@ -66,7 +68,7 @@ class FrameReader:
         logger.info("Loaded %d ground truth entries from %s", len(gt), path)
         return gt
 
-    def _lookup_gt(self, frame_number: int) -> Tuple[float, float]:
+    def _lookup_gt(self, frame_number: int) -> Tuple[Optional[float], Optional[float]]:
         """
         Return ground truth coordinates for frame_number.
 

@@ -18,6 +18,8 @@ class RemoteClient:
         triton_url: str,
         model_name: str = "yolov10n",
         conf_threshold: float = 0.3,
+        target_class_id: int | None = None,
+        target_conf_threshold: float | None = None,
         timeout: float = 5.0,
     ):
         """
@@ -28,6 +30,12 @@ class RemoteClient:
         """
         self.model_name = model_name
         self.conf_threshold = conf_threshold
+        self.target_class_id = target_class_id
+        self.target_conf_threshold = (
+            target_conf_threshold
+            if target_conf_threshold is not None
+            else conf_threshold
+        )
         self._timeout = timeout
         self._available = False
 
@@ -78,7 +86,7 @@ class RemoteClient:
 
     def _postprocess(self, output: np.ndarray, orig_h: int, orig_w: int) -> tuple:
         """
-        Parse YOLOv10 output and return the center of the highest-confidence detection.
+        Parse YOLOv10 output and return the center of the best target detection.
 
         YOLOv10 output shape: (1, num_boxes, 6).
         Each box: [x1, y1, x2, y2, confidence, class_id].
@@ -89,12 +97,21 @@ class RemoteClient:
         """
         boxes = output.squeeze(0)  # (num_boxes, 6)
 
-        mask = boxes[:, 4] >= self.conf_threshold
+        threshold = (
+            self.target_conf_threshold
+            if self.target_class_id is not None
+            else self.conf_threshold
+        )
+        mask = boxes[:, 4] >= threshold
+        if self.target_class_id is not None:
+            mask &= boxes[:, 5].astype(int) == self.target_class_id
         filtered = boxes[mask]
 
         if len(filtered) == 0:
-            logger.warning(
-                "Triton: no detection above confidence threshold %.2f", self.conf_threshold
+            logger.debug(
+                "Triton: no target detection for class=%s above confidence threshold %.2f",
+                self.target_class_id if self.target_class_id is not None else "any",
+                threshold,
             )
             return (0.0, 0.0)
 

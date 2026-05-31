@@ -14,7 +14,13 @@ logger = logging.getLogger(__name__)
 class LocalServer:
     """YOLOv10n ONNX inference server using onnxruntime on CPU."""
 
-    def __init__(self, model_path: str, conf_threshold: float = 0.3):
+    def __init__(
+        self,
+        model_path: str,
+        conf_threshold: float = 0.3,
+        target_class_id: int | None = None,
+        target_conf_threshold: float | None = None,
+    ):
         """
         Load ONNX model from model_path.
 
@@ -25,6 +31,12 @@ class LocalServer:
             raise FileNotFoundError(f"ONNX model not found: {model_path}")
 
         self.conf_threshold = conf_threshold
+        self.target_class_id = target_class_id
+        self.target_conf_threshold = (
+            target_conf_threshold
+            if target_conf_threshold is not None
+            else conf_threshold
+        )
 
         opts = ort.SessionOptions()
         opts.intra_op_num_threads = 4
@@ -39,10 +51,11 @@ class LocalServer:
         self._output_name = self._session.get_outputs()[0].name
 
         logger.info(
-            "LocalServer loaded model=%s input=%s output=%s",
+            "LocalServer loaded model=%s input=%s output=%s target_class=%s",
             model_path,
             self._input_name,
             self._output_name,
+            self.target_class_id if self.target_class_id is not None else "any",
         )
 
     def infer(self, preprocessed_frame: np.ndarray, original_shape: tuple) -> tuple:
@@ -61,7 +74,7 @@ class LocalServer:
 
     def _postprocess(self, output: np.ndarray, orig_h: int, orig_w: int) -> tuple:
         """
-        Parse YOLOv10 output and return the center of the highest-confidence detection.
+        Parse YOLOv10 output and return the center of the best target detection.
 
         YOLOv10 output shape: (1, num_boxes, 6).
         Each box: [x1, y1, x2, y2, confidence, class_id].
@@ -72,11 +85,22 @@ class LocalServer:
         """
         boxes = output.squeeze(0)  # (num_boxes, 6)
 
-        mask = boxes[:, 4] >= self.conf_threshold
+        threshold = (
+            self.target_conf_threshold
+            if self.target_class_id is not None
+            else self.conf_threshold
+        )
+        mask = boxes[:, 4] >= threshold
+        if self.target_class_id is not None:
+            mask &= boxes[:, 5].astype(int) == self.target_class_id
         filtered = boxes[mask]
 
         if len(filtered) == 0:
-            logger.warning("No detection above confidence threshold %.2f", self.conf_threshold)
+            logger.debug(
+                "No target detection for class=%s above confidence threshold %.2f",
+                self.target_class_id if self.target_class_id is not None else "any",
+                threshold,
+            )
             return (0.0, 0.0)
 
         best = filtered[filtered[:, 4].argmax()]

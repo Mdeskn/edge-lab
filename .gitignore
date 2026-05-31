@@ -5,13 +5,24 @@
 __pycache__/
 *.pyc
 venv/
+.venv*/
 .env
 
 # Node
 node_modules/
+dist/
 
 # Docker
 *.log
+
+# Local lab assets and generated output
+data/*.mp4
+data/*.onnx
+data/results*.csv
+
+# Personal files
+lab_project_roadmap*.md
+export_project_inventory*.py
 
 # IDE
 .vscode/
@@ -19,4 +30,5 @@ node_modules/
 
 # Secrets
 .env*
+!.env.example
 secrets/

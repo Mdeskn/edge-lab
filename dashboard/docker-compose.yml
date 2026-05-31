@@ -1,0 +1,22 @@
+services:
+  dashboard-backend:
+    build:
+      context: ..
+      dockerfile: dashboard/backend/Dockerfile
+    env_file:
+      - ../.env
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  dashboard-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      VITE_API_URL: ${DASHBOARD_PUBLIC_API_URL:-http://localhost:8080}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - dashboard-backend
+    restart: unless-stopped

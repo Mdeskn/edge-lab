@@ -12,6 +12,7 @@ from config import load_config, Config
 from shared_state import SharedState
 from inference.local_server import LocalServer
 from inference.remote_client import RemoteClient
+from metrics.dashboard_publisher import DashboardPublisher
 from metrics.kafka_publisher import AppMetricsPublisher
 from metrics.telemetry import setup_telemetry
 from threads.frame_reader import FrameReader
@@ -150,8 +151,12 @@ def main() -> None:
     logger.info("  display_output       : %s", config.display_output)
     logger.info("  results_log_path     : %s", config.results_log_path)
     logger.info("  conf_threshold       : %.2f", config.conf_threshold)
+    logger.info("  target_class_id      : %s", config.target_class_id)
+    logger.info("  target_conf_threshold: %.2f", config.target_conf_threshold)
     logger.info("  sp_agent_interval_ms : %d", config.sp_agent_interval_ms)
     logger.info("  auto_stop            : %s", config.auto_stop)
+    logger.info("  dashboard_enabled    : %s", config.dashboard_enabled)
+    logger.info("  dashboard_url        : %s", config.dashboard_url)
     logger.info("=" * 60)
 
     # 4. OpenTelemetry
@@ -164,7 +169,12 @@ def main() -> None:
     shared_state = SharedState(initial_mode=config.initial_processing_mode)
 
     # 6a. LocalServer: fails fast if model is missing
-    local_server = LocalServer(config.model_path, config.conf_threshold)
+    local_server = LocalServer(
+        config.model_path,
+        config.conf_threshold,
+        config.target_class_id,
+        config.target_conf_threshold,
+    )
 
     # 6b. RemoteClient: optional, None when TRITON_URL is empty
     remote_client: RemoteClient | None = None
@@ -173,6 +183,8 @@ def main() -> None:
             config.triton_url,
             config.triton_model_name,
             config.conf_threshold,
+            config.target_class_id,
+            config.target_conf_threshold,
         )
     else:
         logger.warning("TRITON_URL not set: running in local-only mode")
@@ -181,6 +193,7 @@ def main() -> None:
     kafka_publisher = AppMetricsPublisher(
         config.kafka_brokers, config.kafka_app_topic, config.group_id
     )
+    dashboard_publisher = DashboardPublisher(config)
 
     # 8. Results CSV
     results_dir = os.path.dirname(config.results_log_path)
@@ -198,7 +211,14 @@ def main() -> None:
         config, shared_state, local_server, remote_client,
         reader_queue, scorer_queue, tracer,
     )
-    scorer = Scorer(config, shared_state, scorer_queue, kafka_publisher, results_file)
+    scorer = Scorer(
+        config,
+        shared_state,
+        scorer_queue,
+        kafka_publisher,
+        dashboard_publisher,
+        results_file,
+    )
     sp_agent = SPAgent(config, shared_state)
 
     # 11. Phase-aware auto-stop
@@ -239,6 +259,7 @@ def main() -> None:
         t.join(timeout=5.0)
 
     kafka_publisher.flush()
+    dashboard_publisher.close()
     results_file.close()
 
     # 14. Per-phase and overall summary

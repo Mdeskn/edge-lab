@@ -1,0 +1,1 @@
+"""Edge-Lab browser dashboard."""
