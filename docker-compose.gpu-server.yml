@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  triton:
+    image: nvcr.io/nvidia/tritonserver:24.04-py3
+    volumes:
+      - ./triton/model_repository:/models
+    command: tritonserver --model-repository=/models
+    ports:
+      - "8000:8000"   # HTTP
+      - "8001:8001"   # gRPC
+      - "8002:8002"   # Metrics
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  gpu-metrics-publisher:
+    build:
+      context: ./publishers/gpu_metrics
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    network_mode: host
+    depends_on:
+      - triton
+    restart: unless-stopped

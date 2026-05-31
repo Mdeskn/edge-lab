@@ -1,0 +1,68 @@
+"""
+All configuration loaded from environment variables.
+Import Config from here everywhere. Never read os.environ directly elsewhere.
+"""
+import os
+from dataclasses import dataclass
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+@dataclass
+class Config:
+    """Holds all application configuration loaded from environment variables."""
+
+    group_id: str
+    video_path: str
+    ground_truth_path: str
+    model_path: str
+    triton_url: str
+    triton_model_name: str
+    kafka_brokers: str
+    kafka_app_topic: str        # auto-derived: f"/edgelab/app/metrics/group{group_id}"
+    kafka_gpu_topic: str
+    kafka_net_topic: str
+    kafka_phase_topic: str
+    otlp_endpoint: str
+    initial_processing_mode: str
+    frame_interval_ms: int
+    input_width: int
+    input_height: int
+    display_output: bool
+    results_log_path: str
+    queue_max_size: int
+    conf_threshold: float
+    sp_agent_interval_ms: int
+    log_level: str
+    auto_stop: bool
+
+
+def load_config() -> Config:
+    """Load and return a Config instance from environment variables."""
+    group_id = os.environ.get("GROUP_ID", "1")
+    return Config(
+        group_id=group_id,
+        video_path=os.environ["VIDEO_PATH"],
+        ground_truth_path=os.environ["GROUND_TRUTH_PATH"],
+        model_path=os.environ["MODEL_PATH"],
+        triton_url=os.environ.get("TRITON_URL", ""),
+        triton_model_name=os.environ.get("TRITON_MODEL_NAME", "yolov10n"),
+        kafka_brokers=os.environ.get("KAFKA_BROKERS", ""),
+        kafka_app_topic=f"/edgelab/app/metrics/group{group_id}",
+        kafka_gpu_topic=os.environ.get("KAFKA_GPU_TOPIC", "/edgelab/server/metrics"),
+        kafka_net_topic=os.environ.get("KAFKA_NET_TOPIC", "/edgelab/network/metrics"),
+        kafka_phase_topic=os.environ.get("KAFKA_PHASE_TOPIC", "/edgelab/server/events/phase"),
+        otlp_endpoint=os.environ.get("OTLP_ENDPOINT", ""),
+        initial_processing_mode=os.environ.get("INITIAL_PROCESSING_MODE", "local"),
+        frame_interval_ms=int(os.environ.get("FRAME_INTERVAL_MS", "100")),
+        input_width=int(os.environ.get("MODEL_INPUT_WIDTH", "640")),
+        input_height=int(os.environ.get("MODEL_INPUT_HEIGHT", "640")),
+        display_output=os.environ.get("DISPLAY_OUTPUT", "true").lower() == "true",
+        results_log_path=os.environ.get("RESULTS_LOG_PATH", "results.csv"),
+        queue_max_size=int(os.environ.get("QUEUE_MAX_SIZE", "10")),
+        conf_threshold=float(os.environ.get("CONFIDENCE_THRESHOLD", "0.3")),
+        sp_agent_interval_ms=int(os.environ.get("SP_AGENT_INTERVAL_MS", "500")),
+        log_level=os.environ.get("LOG_LEVEL", "INFO"),
+        auto_stop=os.environ.get("AUTO_STOP", "true").lower() == "true",
+    )

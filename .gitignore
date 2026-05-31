@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
+
+# Node
+node_modules/
+
+# Docker
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Secrets
+.env*
+secrets/

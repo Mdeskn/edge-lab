@@ -1,0 +1,43 @@
+# Ground Truth Generator
+
+Generates the reference CSV that the Pi client uses to score inference accuracy.
+
+## Requirements
+
+```
+ultralytics==8.2.0
+opencv-python==4.10.0.84
+numpy==1.26.4
+onnxruntime  (any recent version)
+```
+
+## Usage
+
+```bash
+python generate_ground_truth.py \
+    --video  /path/to/video.mp4 \
+    --model  /path/to/yolov10n.onnx \
+    --output ground_truth.csv \
+    --conf   0.3
+```
+
+## Output format
+
+| Column | Description |
+|--------|-------------|
+| `frame_number` | 1-indexed frame counter |
+| `center_x` | X pixel coordinate of highest-confidence detection centre |
+| `center_y` | Y pixel coordinate |
+| `confidence` | YOLO confidence score |
+| `class_id` | COCO class index |
+| `class_name` | Human-readable class name |
+
+Frames with no detection above the threshold get `NaN` coordinates and
+`class_id = -1`.
+
+## Obtaining the ONNX model
+
+```bash
+pip install ultralytics
+yolo export model=yolov10n.pt format=onnx
+```
