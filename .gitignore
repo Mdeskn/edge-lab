@@ -26,6 +26,7 @@ export_project_inventory*.py
 edgelab_explained_from_zero*.md
 edgelab_roadmap_explained*.md
 Edgelab explained from zero*.pdf
+edge-lab_project_inventory.*md
 
 # IDE
 .vscode/
