@@ -1,17 +1,17 @@
 """
-Sends frames to Triton Inference Server over HTTP.
-Uses tritonclient.http for synchronous inference.
+Sends frames to Triton Inference Server over gRPC.
+Uses tritonclient.grpc for synchronous inference.
 """
 import logging
 
 import numpy as np
-import tritonclient.http as httpclient
+import tritonclient.grpc as grpcclient
 
 logger = logging.getLogger(__name__)
 
 
 class RemoteClient:
-    """HTTP client for NVIDIA Triton Inference Server."""
+    """gRPC client for NVIDIA Triton Inference Server."""
 
     def __init__(
         self,
@@ -23,7 +23,7 @@ class RemoteClient:
         timeout: float = 5.0,
     ):
         """
-        Initialize Triton HTTP client and perform a health check.
+        Initialize Triton gRPC client and perform a health check.
 
         Sets self._available=False (and logs an error) if the health check fails.
         Never raises. The caller determines what to do with is_available().
@@ -40,9 +40,7 @@ class RemoteClient:
         self._available = False
 
         try:
-            self._client = httpclient.InferenceServerClient(
-                url=triton_url, verbose=False
-            )
+            self._client = grpcclient.InferenceServerClient(url=triton_url)
             alive = self._client.is_server_live()
             if alive:
                 self._available = True
@@ -68,16 +66,16 @@ class RemoteClient:
 
         Raises on network timeout or connection error; the Dispatcher handles fallback.
         """
-        inp = httpclient.InferInput("images", [1, 3, 640, 640], "FP32")
+        inp = grpcclient.InferInput("images", [1, 3, 640, 640], "FP32")
         inp.set_data_from_numpy(preprocessed_frame)
 
-        out = httpclient.InferRequestedOutput("output0")
+        out = grpcclient.InferRequestedOutput("output0")
 
         result = self._client.infer(
             self.model_name,
             inputs=[inp],
             outputs=[out],
-            timeout=self._timeout,
+            client_timeout=self._timeout,
         )
 
         output_data = result.as_numpy("output0")  # (1, num_boxes, 6)
