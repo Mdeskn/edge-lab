@@ -21,8 +21,11 @@ data/*.onnx
 data/results*.csv
 
 # Personal files
-lab_project_roadmap*.md
-export_project_inventory*.py
+lab_project_roadmap*.md/
+export_project_inventory*.py/
+edgelab_explained_from_zero*.md/
+edgelab_roadmap_explained*.md/
+Edgelab explained from zero*.pdf/
 
 # IDE
 .vscode/
