@@ -23,6 +23,8 @@ data/results*.csv
 # Personal files
 lab_project_roadmap*.md
 export_project_inventory*.py
+calibrate_selection*.py
+edgelab_full_roadmap*.md
 edgelab_explained_from_zero*.md
 edgelab_roadmap_explained*.md
 Edgelab explained from zero*.pdf
