@@ -1,13 +1,17 @@
 """
-Runs on the Network VM. Parses tc qdisc rules and publishes network conditions
-to Kafka. Publishes every POLL_INTERVAL_SEC (default 2). Also publishes
-immediately on SIGUSR1 (sent by tc_apply.sh / tc_clear.sh after each change).
+Runs on the Network VM (172.22.174.148). Parses tc qdisc rules on interface
+ens18 and publishes network conditions to Kafka every POLL_INTERVAL_SEC seconds.
+Also publishes immediately on SIGUSR1 (sent by tc_control.sh after each change).
 
-Environment variables required:
-    KAFKA_BROKERS, KAFKA_NET_TOPIC, NETWORK_INTERFACE (default: eth0),
-    POLL_INTERVAL_SEC (default: 2), LOG_LEVEL
+Designed to run as a plain Python script on the Network VM without Docker:
+    python network_conditions_publisher.py
 
-Default topic: /edgelab/network/metrics
+Environment variables:
+    KAFKA_BROKERS       required  e.g. 172.22.174.149:9092
+    KAFKA_NET_TOPIC     optional  default: edgelab.network.metrics
+    NETWORK_INTERFACE   optional  default: ens18
+    POLL_INTERVAL_SEC   optional  default: 2
+    LOG_LEVEL           optional  default: INFO
 """
 import json
 import logging
@@ -39,19 +43,30 @@ def _sigusr1_handler(signum, frame) -> None:
 
 def parse_tc_rules(interface: str) -> dict:
     """
-    Read netem qdisc rules from the given interface via 'tc qdisc show'.
+    Read netem and tbf qdisc rules from the given interface via 'tc qdisc show'.
 
     Parses delay, jitter, and packet loss from the netem rule if present.
     Returns a dict:
-        delay_ms (float), jitter_ms (float), packet_loss_pct (float), interface (str)
-    Missing fields default to 0.0. Returns the same structure (all zeros)
-    when no netem rule is found or on error.
+        delay_ms (float), jitter_ms (float),
+        packet_loss_pct (float), packet_loss_percent (float),
+        bandwidth (str), interface (str), raw (str)
+
+    packet_loss_pct and packet_loss_percent carry the same value; both keys
+    are included for compatibility with different consumers.
+
+    Missing fields default to 0.0 / "unknown". Returns the same structure
+    (all zeros) when no netem rule is found or on error.
+
+    TODO: parse tbf rate token (e.g. "rate 10Mbit") for bandwidth field.
     """
     result = {
         "delay_ms": 0.0,
         "jitter_ms": 0.0,
         "packet_loss_pct": 0.0,
+        "packet_loss_percent": 0.0,
+        "bandwidth": "unknown",
         "interface": interface,
+        "raw": "",
     }
 
     try:
@@ -66,6 +81,8 @@ def parse_tc_rules(interface: str) -> dict:
         logger.error("tc qdisc error: %s", exc)
         return result
 
+    result["raw"] = output.strip()
+
     if "netem" not in output:
         return result
 
@@ -77,7 +94,9 @@ def parse_tc_rules(interface: str) -> dict:
 
     loss_match = re.search(r"loss\s+(\d+(?:\.\d+)?)%", output)
     if loss_match:
-        result["packet_loss_pct"] = float(loss_match.group(1))
+        loss = float(loss_match.group(1))
+        result["packet_loss_pct"] = loss
+        result["packet_loss_percent"] = loss
 
     return result
 
@@ -91,8 +110,8 @@ def main() -> None:
     signal.signal(signal.SIGUSR1, _sigusr1_handler)
 
     kafka_brokers = os.environ["KAFKA_BROKERS"]
-    net_topic = os.environ.get("KAFKA_NET_TOPIC", "/edgelab/network/metrics")
-    interface = os.environ.get("NETWORK_INTERFACE", "eth0")
+    net_topic = os.environ.get("KAFKA_NET_TOPIC", "edgelab.network.metrics")
+    interface = os.environ.get("NETWORK_INTERFACE", "ens18")
     poll_interval = float(os.environ.get("POLL_INTERVAL_SEC", "2"))
 
     producer = Producer(
@@ -122,6 +141,7 @@ def main() -> None:
         if should_publish:
             metrics = parse_tc_rules(interface)
             metrics["timestamp"] = time.time()
+            metrics["source"] = "network-vm"
             _sigusr1_event.clear()
             last_publish = time.time()
 

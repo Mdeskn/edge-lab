@@ -1,9 +1,22 @@
 """
 Watch the Network VM phase file and publish experiment phase changes to Kafka.
 
-SeQaM writes the current phase to PHASE_FILE over SSH. The Docker Compose
-service mounts the Network VM host's /tmp directory at /host-tmp so this
-sidecar can observe /tmp/edgelab_phase without running on the host directly.
+Designed to run as a plain Python script directly on the Network VM (172.22.174.148):
+    python tc_controller.py
+
+SeQaM (or a manual operator) writes the current phase name to PHASE_FILE.
+This script detects changes and publishes them to KAFKA_PHASE_TOPIC.
+
+tc_control.sh on the Network VM applies the actual traffic-shaping rules.
+network_conditions_publisher.py reads and publishes the resulting tc state.
+This script only publishes the experiment phase name.
+
+Environment variables:
+    KAFKA_BROKERS           required  e.g. 172.22.174.149:9092
+    KAFKA_PHASE_TOPIC       optional  default: edgelab.phase
+    PHASE_FILE              optional  default: /tmp/edgelab_phase
+    PHASE_POLL_INTERVAL_SEC optional  default: 0.1
+    LOG_LEVEL               optional  default: INFO
 """
 import json
 import logging
@@ -67,8 +80,8 @@ def read_phase(path: Path) -> str | None:
 def main() -> None:
     """Publish each observed phase transition once."""
     kafka_brokers = os.environ["KAFKA_BROKERS"]
-    topic = os.environ.get("KAFKA_PHASE_TOPIC", "/edgelab/server/events/phase")
-    phase_file = Path(os.environ.get("PHASE_FILE", "/host-tmp/edgelab_phase"))
+    topic = os.environ.get("KAFKA_PHASE_TOPIC", "edgelab.phase")
+    phase_file = Path(os.environ.get("PHASE_FILE", "/tmp/edgelab_phase"))
     poll_interval = float(os.environ.get("PHASE_POLL_INTERVAL_SEC", "0.1"))
 
     producer = Producer(

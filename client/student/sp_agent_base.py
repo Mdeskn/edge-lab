@@ -12,32 +12,65 @@ pipeline is writing the processing mode via set_mode().
 METRICS AVAILABLE IN YOUR decide() METHOD:
 
     self.gpu_metrics  (dict):
-        These keys are absent until the first Kafka message arrives.
+        Normalized from Eldiyar's nested server metrics message.
+        Empty until the first Kafka message arrives from KAFKA_GPU_TOPIC.
         Always use .get(key, default) to avoid KeyError.
-        "gpu_utilization_pct"           float  GPU server load (0-100)
-        "gpu_memory_used_mb"            float
-        "gpu_memory_total_mb"           float
-        "gpu_temperature_c"             float
-        "triton_requests_per_sec"       float
-        "triton_queue_duration_ms"      float  how long requests wait in queue
-        "triton_inference_duration_ms"  float  pure GPU inference time
+
+        GPU hardware:
+        "gpu_util_pct"        float  GPU utilization 0-100 %
+        "gpu_freq_mhz"        float  GPU clock frequency in MHz
+        "gpu_temp_c"          float  GPU temperature in Celsius
+        "gpu_mem_used_mb"     float  GPU memory used in MB
+        "gpu_mem_total_mb"    float  GPU memory total in MB
+        "cpu_util_pct"        float  Server CPU utilization 0-100 %
+        "mem_util_pct"        float  Server RAM utilization 0-100 %
+        "power_w"             float  Server power draw in Watts
+
+        Triton aggregate throughput:
+        "total_rps"           float  Total inference requests/sec (all models)
+        "total_success_rps"   float  Successful requests/sec
+        "total_failure_rps"   float  Failed requests/sec
+        "total_pending"       int    Total queued requests
+
+        YOLOv10n model:
+        "yolo_success_rps"    float  Successful requests/sec
+        "yolo_inference_rps"  float  Inference requests/sec
+        "yolo_pending"        int    Queued requests
+        "yolo_queue_ms"       float  Avg time waiting in queue (ms)
+        "yolo_input_ms"       float  Avg input pre-processing time (ms)
+        "yolo_infer_ms"       float  Avg GPU compute time (ms)
+        "yolo_output_ms"      float  Avg output post-processing time (ms)
+
+        ResNet50 model:
+        "resnet_success_rps"  float
+        "resnet_inference_rps" float
+        "resnet_pending"      int
+        "resnet_queue_ms"     float
+        "resnet_infer_ms"     float
+
+        "raw"                 dict   Full original nested message from Kafka
 
     self.net_metrics  (dict):
-        These keys are absent until the first Kafka message arrives.
+        Network conditions on the path between client and GPU server.
+        Defaults to zero delay/loss until the first Kafka message arrives
+        from KAFKA_NET_TOPIC (topic may not exist early in the experiment).
         Always use .get(key, default) to avoid KeyError.
-        "delay_ms"                      float  added network delay
-        "jitter_ms"                     float  variation in delay
-        "packet_loss_pct"               float  percentage of packets dropped
+        "delay_ms"            float  Added one-way delay in ms
+        "jitter_ms"           float  Delay variation in ms
+        "packet_loss_pct"     float  Percentage of packets dropped
+        "packet_loss_percent" float  Same value, alternative key name
+        "bandwidth"           str    Bandwidth limit string (e.g. "1gbit") or "unknown"
 
     self.recent_latencies  (list[float]):
         Last 20 end-to-end latency values in milliseconds, received from
-        the /edgelab/app/metrics/groupN Kafka topic (published by the Scorer after each frame).
+        the APP_METRICS_TOPIC Kafka topic (published by the Scorer after each frame).
 
     self.avg_latency  (float | None):
         Mean of recent_latencies. None if no measurements have arrived yet.
 
     self.experiment_phase  (str):
-        Current load phase: "baseline", "gpu_load", "network_load", "combined".
+        Current load phase. Defaults to "baseline" until a phase message arrives.
+        Valid values: "baseline", "gpu_load", "network_load", "combined".
 
     self.current_mode  (str):
         The processing mode currently active ("local" or "remote").
@@ -58,6 +91,16 @@ from shared_state import SharedState
 
 logger = logging.getLogger(__name__)
 
+_VALID_PHASES = {"baseline", "gpu_load", "network_load", "combined"}
+
+_DEFAULT_NET_METRICS = {
+    "delay_ms": 0.0,
+    "jitter_ms": 0.0,
+    "packet_loss_pct": 0.0,
+    "packet_loss_percent": 0.0,
+    "bandwidth": "unknown",
+}
+
 
 class SPAgentBase:
     """
@@ -76,8 +119,8 @@ class SPAgentBase:
         # read by decide() via properties. Protected by _metrics_lock.
         self._metrics_lock = threading.Lock()
         self._gpu_metrics: dict = {}
-        self._net_metrics: dict = {}
-        self._experiment_phase: str = "unknown"
+        self._net_metrics: dict = dict(_DEFAULT_NET_METRICS)
+        self._experiment_phase: str = "baseline"
         self._recent_latencies: deque = deque(maxlen=20)
 
         self._consumer = None
@@ -126,7 +169,7 @@ class SPAgentBase:
 
     @property
     def gpu_metrics(self) -> dict:
-        """Current GPU server metrics received from Kafka."""
+        """Current GPU server metrics received from Kafka (normalized)."""
         with self._metrics_lock:
             return dict(self._gpu_metrics)
 
@@ -138,13 +181,13 @@ class SPAgentBase:
 
     @property
     def experiment_phase(self) -> str:
-        """Current SeQaM experiment phase (e.g. 'baseline', 'gpu_load')."""
+        """Current experiment phase. Defaults to 'baseline' until a phase message arrives."""
         with self._metrics_lock:
             return self._experiment_phase
 
     @property
     def recent_latencies(self) -> list:
-        """Last 20 end-to-end inference latencies in ms (from app.metrics topic)."""
+        """Last 20 end-to-end inference latencies in ms (from app metrics topic)."""
         with self._metrics_lock:
             return list(self._recent_latencies)
 
@@ -229,11 +272,11 @@ class SPAgentBase:
         """
         Background daemon thread: polls Kafka and updates private metric fields.
 
-        Topic routing:
-          /edgelab/server/metrics        -> _gpu_metrics
-          /edgelab/network/metrics       -> _net_metrics
-          /edgelab/server/events/phase   -> _experiment_phase (also updates SharedState)
-          /edgelab/app/metrics/groupN    -> appends latency_ms to _recent_latencies
+        Topic routing (determined by config env vars):
+          KAFKA_GPU_TOPIC   -> _gpu_metrics (normalized via _normalize_gpu_metrics)
+          KAFKA_NET_TOPIC   -> _net_metrics (normalized via _normalize_net_metrics)
+          KAFKA_PHASE_TOPIC -> _experiment_phase (also updates SharedState)
+          APP_METRICS_TOPIC -> appends latency_ms to _recent_latencies
         """
         if not self._consumer_enabled or self._consumer is None:
             return
@@ -256,19 +299,36 @@ class SPAgentBase:
                 topic = msg.topic()
 
                 if topic == self._config.kafka_gpu_topic:
-                    with self._metrics_lock:
-                        self._gpu_metrics = payload
+                    try:
+                        normalized = self._normalize_gpu_metrics(payload)
+                        with self._metrics_lock:
+                            self._gpu_metrics = normalized
+                    except Exception as exc:
+                        logger.warning(
+                            "Failed to parse GPU metrics message, keeping previous values: %s", exc
+                        )
 
                 elif topic == self._config.kafka_net_topic:
-                    with self._metrics_lock:
-                        self._net_metrics = payload
+                    try:
+                        normalized = self._normalize_net_metrics(payload)
+                        with self._metrics_lock:
+                            self._net_metrics = normalized
+                    except Exception as exc:
+                        logger.warning(
+                            "Failed to parse network metrics message, keeping previous values: %s", exc
+                        )
 
                 elif topic == self._config.kafka_phase_topic:
-                    phase = payload.get("phase", "unknown")
-                    with self._metrics_lock:
-                        self._experiment_phase = phase
-                    # Also update SharedState so the Scorer can read it for display and per-phase scoring
-                    self._shared_state.update_experiment_phase(phase)
+                    try:
+                        phase = payload.get("phase", "baseline")
+                        if phase not in _VALID_PHASES:
+                            logger.warning("Unknown phase value %r, ignoring", phase)
+                            phase = "baseline"
+                        with self._metrics_lock:
+                            self._experiment_phase = phase
+                        self._shared_state.update_experiment_phase(phase)
+                    except Exception as exc:
+                        logger.warning("Failed to parse phase message: %s", exc)
 
                 elif topic == self._config.kafka_app_topic:
                     latency = payload.get("latency_ms")
@@ -283,3 +343,72 @@ class SPAgentBase:
                 self._consumer.close()
             except Exception:
                 pass
+
+    # ------------------------------------------------------------------ #
+    # Metric normalisation helpers                                         #
+    # ------------------------------------------------------------------ #
+
+    def _normalize_gpu_metrics(self, message: dict) -> dict:
+        """
+        Normalize Eldiyar's nested GPU/Triton message into flat student-friendly fields.
+
+        Input: raw message from dnn_partition.server_metrics (nested structure with
+               "server", "totals", and "models" keys).
+        Output: flat dict with consistent snake_case keys. Always includes "raw".
+        """
+        server = message.get("server", {})
+        totals = message.get("totals", {})
+        models = message.get("models", [])
+
+        yolo = next((m for m in models if m.get("model_name") == "yolov10n"), {})
+        resnet = next((m for m in models if m.get("model_name") == "resnet50_full"), {})
+
+        return {
+            "gpu_util_pct": server.get("gpu_util_percent", 0.0),
+            "gpu_freq_mhz": server.get("gpu_freq_mhz", 0.0),
+            "gpu_temp_c": server.get("gpu_temp_c", 0.0),
+            "gpu_mem_used_mb": server.get("gpu_mem_used_mb", 0.0),
+            "gpu_mem_total_mb": server.get("gpu_mem_total_mb", 0.0),
+            "cpu_util_pct": server.get("cpu_util_percent", 0.0),
+            "mem_util_pct": server.get("mem_util_percent", 0.0),
+            "power_w": server.get("power_w", 0.0),
+
+            "total_rps": totals.get("total_rps", 0.0),
+            "total_success_rps": totals.get("total_success_rps", 0.0),
+            "total_failure_rps": totals.get("total_failure_rps", 0.0),
+            "total_pending": totals.get("total_pending_requests", 0),
+
+            "yolo_success_rps": yolo.get("success_rps", 0.0),
+            "yolo_inference_rps": yolo.get("inference_rps", 0.0),
+            "yolo_pending": yolo.get("pending_requests", 0),
+            "yolo_queue_ms": yolo.get("avg_queue_time_ms", 0.0),
+            "yolo_input_ms": yolo.get("avg_compute_input_ms", 0.0),
+            "yolo_infer_ms": yolo.get("avg_compute_infer_ms", 0.0),
+            "yolo_output_ms": yolo.get("avg_compute_output_ms", 0.0),
+
+            "resnet_success_rps": resnet.get("success_rps", 0.0),
+            "resnet_inference_rps": resnet.get("inference_rps", 0.0),
+            "resnet_pending": resnet.get("pending_requests", 0),
+            "resnet_queue_ms": resnet.get("avg_queue_time_ms", 0.0),
+            "resnet_infer_ms": resnet.get("avg_compute_infer_ms", 0.0),
+
+            "raw": message,
+        }
+
+    def _normalize_net_metrics(self, message: dict) -> dict:
+        """
+        Normalize a network conditions message into a safe flat dict.
+
+        Accepts messages from network_conditions_publisher.py. Both
+        packet_loss_pct and packet_loss_percent are populated for compatibility.
+        Missing fields fall back to zero / "unknown".
+        """
+        loss = message.get("packet_loss_pct", message.get("packet_loss_percent", 0.0))
+        return {
+            "delay_ms": float(message.get("delay_ms", 0.0)),
+            "jitter_ms": float(message.get("jitter_ms", 0.0)),
+            "packet_loss_pct": float(loss),
+            "packet_loss_percent": float(loss),
+            "bandwidth": str(message.get("bandwidth", "unknown")),
+            "raw": message,
+        }
