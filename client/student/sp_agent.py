@@ -17,7 +17,8 @@ class SPAgent(SPAgentBase):
 
     Tips:
     - Check self.experiment_phase to know what load is currently running.
-      Valid values: "baseline", "gpu_load", "network_load", "combined".
+      Values from the lab: "baseline", "bandwidth_50", "bandwidth_200",
+      "jitter_light", "gpu_load", "mixed".
       Defaults to "baseline" until the first phase message arrives from Kafka.
     - Check self.avg_latency to see how recent end-to-end performance has been.
     - Use .get() for metric dicts: they may be empty until the first Kafka message arrives.
@@ -55,8 +56,8 @@ class SPAgent(SPAgentBase):
         net_delay = self.net_metrics.get("delay_ms", 0)
         net_jitter = self.net_metrics.get("jitter_ms", 0)
 
-        # During heavy network load, avoid the degraded link.
-        if phase == "network_load":
+        # During bandwidth-limited or jitter phases, avoid the degraded link.
+        if phase in ("bandwidth_50", "jitter_light"):
             return "local"
 
         # If the GPU server is overloaded, fall back to local.

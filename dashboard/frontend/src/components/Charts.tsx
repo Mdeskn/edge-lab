@@ -90,7 +90,7 @@ export function Charts({ state }: Props) {
             return null;
           }),
         }]} />
-        <SparkChart title="GPU utilization" unit="%" min={0} max={100} series={[{ label: "GPU", color: "#26845a", values: infraValues(gpu, "gpu_utilization_pct") }]} />
+        <SparkChart title="GPU utilization" unit="%" min={0} max={100} series={[{ label: "GPU", color: "#26845a", values: infraValues(gpu, "gpu_util_pct") }]} />
         <SparkChart title="Network conditions" unit=" ms" series={[
           { label: "delay", color: "#147d92", values: infraValues(network, "delay_ms") },
           { label: "jitter", color: "#b37916", values: infraValues(network, "jitter_ms") },

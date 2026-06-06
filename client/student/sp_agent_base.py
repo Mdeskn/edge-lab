@@ -70,7 +70,9 @@ METRICS AVAILABLE IN YOUR decide() METHOD:
 
     self.experiment_phase  (str):
         Current load phase. Defaults to "baseline" until a phase message arrives.
-        Valid values: "baseline", "gpu_load", "network_load", "combined".
+        Values from tc_controller.py: "baseline", "bandwidth_50", "bandwidth_200",
+        "jitter_light", "gpu_load", "mixed".
+        Legacy values also accepted: "network_load", "combined".
 
     self.current_mode  (str):
         The processing mode currently active ("local" or "remote").
@@ -91,7 +93,12 @@ from shared_state import SharedState
 
 logger = logging.getLogger(__name__)
 
-_VALID_PHASES = {"baseline", "gpu_load", "network_load", "combined"}
+_VALID_PHASES = {
+    "baseline",
+    "bandwidth_50", "bandwidth_200", "jitter_light",
+    "gpu_load", "mixed",
+    "network_load", "combined",
+}
 
 _DEFAULT_NET_METRICS = {
     "delay_ms": 0.0,
@@ -122,6 +129,9 @@ class SPAgentBase:
         self._net_metrics: dict = dict(_DEFAULT_NET_METRICS)
         self._experiment_phase: str = "baseline"
         self._recent_latencies: deque = deque(maxlen=20)
+
+        self._debug_metrics: bool = getattr(config, "sp_agent_debug_metrics", False)
+        self._last_debug_log: float = 0.0
 
         self._consumer = None
         self._consumer_enabled = False
@@ -303,6 +313,7 @@ class SPAgentBase:
                         normalized = self._normalize_gpu_metrics(payload)
                         with self._metrics_lock:
                             self._gpu_metrics = normalized
+                        self._debug_log_metrics("gpu")
                     except Exception as exc:
                         logger.warning(
                             "Failed to parse GPU metrics message, keeping previous values: %s", exc
@@ -313,6 +324,7 @@ class SPAgentBase:
                         normalized = self._normalize_net_metrics(payload)
                         with self._metrics_lock:
                             self._net_metrics = normalized
+                        self._debug_log_metrics("network")
                     except Exception as exc:
                         logger.warning(
                             "Failed to parse network metrics message, keeping previous values: %s", exc
@@ -327,6 +339,7 @@ class SPAgentBase:
                         with self._metrics_lock:
                             self._experiment_phase = phase
                         self._shared_state.update_experiment_phase(phase)
+                        self._debug_log_metrics("phase")
                     except Exception as exc:
                         logger.warning("Failed to parse phase message: %s", exc)
 
@@ -343,6 +356,34 @@ class SPAgentBase:
                 self._consumer.close()
             except Exception:
                 pass
+
+    # ------------------------------------------------------------------ #
+    # Debug logging (enabled by SP_AGENT_DEBUG_METRICS=true)              #
+    # ------------------------------------------------------------------ #
+
+    def _debug_log_metrics(self, reason: str) -> None:
+        """Log a one-line metrics summary at INFO level (rate-limited to 2 s)."""
+        if not self._debug_metrics:
+            return
+        now = time.time()
+        if now - self._last_debug_log < 2.0:
+            return
+        self._last_debug_log = now
+        with self._metrics_lock:
+            gpu = dict(self._gpu_metrics)
+            net = dict(self._net_metrics)
+            phase = self._experiment_phase
+        logger.info(
+            "[SP-Agent] trigger=%s phase=%s gpu_util=%.1f%% yolo_queue=%.1fms "
+            "net_delay=%.1fms net_jitter=%.1fms bandwidth=%s",
+            reason,
+            phase,
+            gpu.get("gpu_util_pct", 0),
+            gpu.get("yolo_queue_ms", 0),
+            net.get("delay_ms", 0),
+            net.get("jitter_ms", 0),
+            net.get("bandwidth", "unknown"),
+        )
 
     # ------------------------------------------------------------------ #
     # Metric normalisation helpers                                         #

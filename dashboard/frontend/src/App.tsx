@@ -12,8 +12,12 @@ import type { DashboardState } from "./types";
 
 const phaseDescriptions: Record<string, string> = {
   baseline: "No artificial load",
-  network_load: "Network delay, jitter, or packet loss active",
+  bandwidth_200: "Bandwidth capped at 200 mbit",
+  bandwidth_50: "Bandwidth capped at 50 mbit",
+  jitter_light: "Light delay and jitter applied",
   gpu_load: "GPU and Triton server under load",
+  mixed: "50 mbit cap, GPU load may be active",
+  network_load: "Network delay, jitter, or packet loss active",
   combined: "Network and server load active",
   unknown: "Waiting for phase metrics",
 };
@@ -59,7 +63,7 @@ export default function App() {
           <StatusDot connected={socketConnected} label={socketConnected ? "Live" : "Reconnecting"} />
           <div className="phase-block">
             <span className="eyebrow">Experiment phase</span>
-            <strong>{phase.replace("_", " ")}</strong>
+            <strong>{phase.replace(/_/g, " ")}</strong>
             <small>{phaseDescriptions[phase] || phaseDescriptions.unknown}</small>
           </div>
         </div>

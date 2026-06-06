@@ -12,8 +12,8 @@ interface Props {
 export function InfrastructurePanel({ state }: Props) {
   const { gpu, network, kafka, dashboard } = state.infrastructure;
   const memoryPct =
-    typeof gpu.gpu_memory_used_mb === "number" && typeof gpu.gpu_memory_total_mb === "number" && gpu.gpu_memory_total_mb
-      ? gpu.gpu_memory_used_mb / gpu.gpu_memory_total_mb * 100
+    typeof gpu.gpu_mem_used_mb === "number" && typeof gpu.gpu_mem_total_mb === "number" && gpu.gpu_mem_total_mb
+      ? (gpu.gpu_mem_used_mb as number) / (gpu.gpu_mem_total_mb as number) * 100
       : null;
 
   return (
@@ -29,19 +29,21 @@ export function InfrastructurePanel({ state }: Props) {
         <div className="infra-group">
           <h3><Cpu size={17} /> GPU server</h3>
           <dl>
-            <div><dt>GPU utilization</dt><dd>{show(gpu.gpu_utilization_pct, "%")}</dd></div>
+            <div><dt>GPU utilization</dt><dd>{show(gpu.gpu_util_pct, "%")}</dd></div>
+            <div><dt>GPU temp</dt><dd>{show(gpu.gpu_temp_c, " °C")}</dd></div>
             <div><dt>GPU memory</dt><dd>{show(memoryPct, "%")}</dd></div>
-            <div><dt>Triton queue</dt><dd>{show(gpu.triton_queue_duration_ms, " ms")}</dd></div>
-            <div><dt>Requests</dt><dd>{show(gpu.triton_requests_per_sec, " /s")}</dd></div>
+            <div><dt>YOLO queue</dt><dd>{show(gpu.yolo_queue_ms, " ms")}</dd></div>
+            <div><dt>Requests/s</dt><dd>{show(gpu.total_rps, " /s")}</dd></div>
           </dl>
         </div>
         <div className="infra-group">
           <h3><Network size={17} /> Network path</h3>
           <dl>
+            <div><dt>Mode</dt><dd>{show(network.mode)}</dd></div>
+            <div><dt>Bandwidth</dt><dd>{show(network.bandwidth)}</dd></div>
             <div><dt>Delay</dt><dd>{show(network.delay_ms, " ms")}</dd></div>
             <div><dt>Jitter</dt><dd>{show(network.jitter_ms, " ms")}</dd></div>
             <div><dt>Packet loss</dt><dd>{show(network.packet_loss_pct, "%")}</dd></div>
-            <div><dt>Interface</dt><dd>{show(network.interface)}</dd></div>
           </dl>
         </div>
         <div className="infra-group status-group">

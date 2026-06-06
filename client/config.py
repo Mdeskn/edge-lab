@@ -44,6 +44,7 @@ class Config:
     dashboard_fps: float
     dashboard_jpeg_quality: int
     dashboard_frame_width: int
+    sp_agent_debug_metrics: bool
 
 
 def load_config() -> Config:
@@ -86,4 +87,5 @@ def load_config() -> Config:
         dashboard_fps=float(os.environ.get("DASHBOARD_FPS", "5")),
         dashboard_jpeg_quality=int(os.environ.get("DASHBOARD_JPEG_QUALITY", "70")),
         dashboard_frame_width=int(os.environ.get("DASHBOARD_FRAME_WIDTH", "960")),
+        sp_agent_debug_metrics=os.environ.get("SP_AGENT_DEBUG_METRICS", "false").lower() == "true",
     )

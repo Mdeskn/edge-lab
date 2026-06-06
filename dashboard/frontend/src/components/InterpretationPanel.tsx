@@ -7,8 +7,8 @@ function interpretation(state: DashboardState): string {
   const frames = state.history.frames;
   const delay = Number(network.delay_ms || 0);
   const loss = Number(network.packet_loss_pct || 0);
-  const utilization = Number(gpu.gpu_utilization_pct || 0);
-  const queue = Number(gpu.triton_queue_duration_ms || 0);
+  const utilization = Number(gpu.gpu_util_pct || 0);
+  const queue = Number(gpu.yolo_queue_ms || 0);
   const recent = frames.slice(-8).map((frame) => frame.displacement_px).filter((value): value is number => value != null);
 
   if (delay >= 60 || loss >= 2) return "Network conditions are poor. Local processing may be safer until the path improves.";

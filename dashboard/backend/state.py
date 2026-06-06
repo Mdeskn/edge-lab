@@ -149,7 +149,7 @@ class DashboardState:
 
     def update_gpu_metrics(self, metric: dict[str, Any]) -> None:
         with self._lock:
-            clean = deepcopy(metric)
+            clean = self._flatten_gpu_metrics(metric)
             clean.setdefault("timestamp", time.time())
             self._gpu_metrics = clean
             self._gpu_history.append(clean)
@@ -286,6 +286,32 @@ class DashboardState:
             f"{metric.get('group_id')}:{metric.get('frame_number')}:"
             f"{float(metric.get('timestamp', 0.0)):.6f}"
         )
+
+    @staticmethod
+    def _flatten_gpu_metrics(message: dict[str, Any]) -> dict[str, Any]:
+        """Flatten Eldiyar's nested server metrics into the same keys used by SPAgentBase."""
+        server = message.get("server", {})
+        totals = message.get("totals", {})
+        models = message.get("models", [])
+        yolo = next((m for m in models if m.get("model_name") == "yolov10n"), {})
+        return {
+            "gpu_util_pct": server.get("gpu_util_percent", 0.0),
+            "gpu_freq_mhz": server.get("gpu_freq_mhz", 0.0),
+            "gpu_temp_c": server.get("gpu_temp_c", 0.0),
+            "gpu_mem_used_mb": server.get("gpu_mem_used_mb", 0.0),
+            "gpu_mem_total_mb": server.get("gpu_mem_total_mb", 0.0),
+            "cpu_util_pct": server.get("cpu_util_percent", 0.0),
+            "mem_util_pct": server.get("mem_util_percent", 0.0),
+            "power_w": server.get("power_w", 0.0),
+            "total_rps": totals.get("total_rps", 0.0),
+            "total_success_rps": totals.get("total_success_rps", 0.0),
+            "total_failure_rps": totals.get("total_failure_rps", 0.0),
+            "total_pending": totals.get("total_pending_requests", 0),
+            "yolo_pending": yolo.get("pending_requests", 0),
+            "yolo_queue_ms": yolo.get("avg_queue_time_ms", 0.0),
+            "yolo_infer_ms": yolo.get("avg_compute_infer_ms", 0.0),
+            "timestamp": message.get("timestamp", 0.0),
+        }
 
     @staticmethod
     def _summary(group: GroupState) -> dict[str, Any]:
