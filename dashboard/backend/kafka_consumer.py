@@ -22,11 +22,11 @@ class DashboardKafkaConsumer:
         self._group_id = state.group_id
         self._app_topic = (
             os.environ.get("APP_METRICS_TOPIC", "").strip()
-            or f"/edgelab/app/metrics/{self._group_id}"
+            or f"dnn_partition.client_metrics"
         )
-        self._gpu_topic = os.environ.get("KAFKA_GPU_TOPIC", "/edgelab/server/metrics")
-        self._network_topic = os.environ.get("KAFKA_NET_TOPIC", "/edgelab/network/metrics")
-        self._phase_topic = os.environ.get("KAFKA_PHASE_TOPIC", "/edgelab/server/events/phase")
+        self._gpu_topic = os.environ.get("KAFKA_GPU_TOPIC", "dnn_partition.server_metrics")
+        self._network_topic = os.environ.get("KAFKA_NET_TOPIC", "edgelab.network.metrics")
+        self._phase_topic = os.environ.get("KAFKA_PHASE_TOPIC", "edgelab.phase")
 
     def start(self) -> None:
         if not self._brokers:

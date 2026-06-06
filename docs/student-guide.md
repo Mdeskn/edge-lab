@@ -151,10 +151,10 @@ Valid values from the SeQaM scenario:
 
 | Value | Conditions |
 |-------|-----------|
-| `"baseline"` | No load; GPU free, network clean |
+| `"baseline"` | No load; GPU free, network at full speed |
 | `"gpu_load"` | GPU server flooded with 100 concurrent requests |
-| `"network_load"` | 100 ms delay, 20 ms jitter, 2% packet loss on the path |
-| `"combined"` | Both GPU and network stressed simultaneously |
+| `"bandwidth_50"` | Bandwidth capped at 50 mbit by the Router VM |
+| `"mixed"` | 50 mbit cap AND GPU server flooded simultaneously |
 
 The phase changes before the load is actually visible in metrics, so you can react proactively.
 
@@ -219,20 +219,20 @@ if self.current_mode == "remote" and some_bad_condition:
 The SeQaM platform runs a 120-second loop that cycles through four phases:
 
 ```
-0 s          30 s         60 s         90 s         120 s
-  baseline      gpu_load     network_load  combined
-  (clean)      (GPU busy)   (net degraded) (both bad)
+0 s          30 s         60 s          90 s         120 s
+  baseline      gpu_load     bandwidth_50   mixed
+  (clean)      (GPU busy)   (50mbit cap)   (both)
      |               |             |              |
      v               v             v              v
-  no stressors   gpu_stressor   tc netem rules  both active
-                 starts         applied
+  tc cleared     gpu_stressor  tc tbf 50mbit  tc tbf 50mbit
+  (no shaping)   starts        applied        + gpu_stressor
 ```
 
 ### What each stressor does
 
-**GPU load (`gpu_load`, `combined`)**: the GPU stressor fires 100 concurrent YOLOv10n inference requests at the GPU server continuously. The Triton queue fills up. `yolo_queue_ms` rises significantly. Inference still completes but takes longer.
+**GPU load (`gpu_load`, `mixed`)**: the GPU stressor fires 100 concurrent YOLOv10n inference requests at the GPU server continuously. The Triton queue fills up. `yolo_queue_ms` rises significantly. Inference still completes but takes longer.
 
-**Network load (`network_load`, `combined`)**: the Network VM applies `tc netem` rules that add 100 ms one-way delay, 20 ms jitter, and 2% packet loss. Round-trip time to the GPU server is roughly 200-300 ms on top of normal inference time. Some requests time out and fall back to local.
+**Network cap (`bandwidth_50`, `mixed`)**: the Network VM applies a token bucket filter (`tbf`) that caps throughput at 50 mbit. Sending a large inference frame and receiving the result becomes slower; the effective round-trip time rises. Under heavy use, multiple concurrent requests compete for the capped bandwidth.
 
 ### The `"local_fallback"` mode
 
@@ -285,8 +285,8 @@ Experiment complete. Results by phase:
 ------------------------------------------------------------
   baseline          avg displacement:   12.3 px  (300 frames)
   gpu_load          avg displacement:   45.6 px  (300 frames)
-  network_load      avg displacement:   38.9 px  (300 frames)
-  combined          avg displacement:   61.2 px  (300 frames)
+  bandwidth_50      avg displacement:   38.9 px  (300 frames)
+  mixed             avg displacement:   61.2 px  (300 frames)
 ------------------------------------------------------------
   overall           avg displacement:   39.50 px  (1200 frames)
   cumulative        1542.3 px  (your score, lower is better)
@@ -339,12 +339,9 @@ The phase tells you what is coming; the measured signals tell you what is actual
 def decide(self) -> str:
     phase = self.experiment_phase
 
-    # Phase-based prediction
-    if phase in ("network_load", "combined"):
+    # Phase-based prediction: return "local" for any stressful phase
+    if phase in ("gpu_load", "bandwidth_50", "mixed"):
         return "local"
-    if phase == "gpu_load":
-        if self.gpu_metrics.get("yolo_queue_ms", 0) > 20:
-            return "local"
 
     # Measurement-based reaction
     if self.net_metrics.get("delay_ms", 0) > 40:

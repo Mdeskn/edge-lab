@@ -1,17 +1,15 @@
 {
   "experiment_name": "edge-computing-lab-loop",
-  "description": "4-phase loop: baseline (no load) -> GPU load -> network load -> both. Duration: 120s. Loops continuously.",
+  "description": "4-phase loop: baseline (no load) -> GPU load -> 50mbit bandwidth cap -> mixed (both). Duration: 120s. Loops continuously.",
   "execute_immediately": true,
   "eventList": [
     {
-      "command": "ssh src_device_type:router src_device_name:net-vm command:'bash /scripts/tc_clear.sh eth0'",
-      "executionTime": 0
-    },
-    {
+      "comment": "Phase 0: baseline - tc_controller clears tc rules when it sees this name",
       "command": "ssh src_device_type:router src_device_name:net-vm command:'echo baseline > /tmp/edgelab_phase'",
       "executionTime": 0
     },
     {
+      "comment": "Phase 1: gpu_load - tc_controller clears tc rules; GPU stressor provides the load",
       "command": "ssh src_device_type:router src_device_name:net-vm command:'echo gpu_load > /tmp/edgelab_phase'",
       "executionTime": 30000
     },
@@ -20,24 +18,18 @@
       "executionTime": 30000
     },
     {
-      "command": "ssh src_device_type:router src_device_name:net-vm command:'bash /scripts/tc_apply.sh eth0 100 20 2'",
+      "comment": "Phase 2: bandwidth_50 - tc_controller applies 50mbit tbf cap; no GPU stressor",
+      "command": "ssh src_device_type:router src_device_name:net-vm command:'echo bandwidth_50 > /tmp/edgelab_phase'",
       "executionTime": 60000
     },
     {
-      "command": "ssh src_device_type:router src_device_name:net-vm command:'echo network_load > /tmp/edgelab_phase'",
-      "executionTime": 60000
-    },
-    {
-      "command": "ssh src_device_type:router src_device_name:net-vm command:'echo combined > /tmp/edgelab_phase'",
+      "comment": "Phase 3: mixed - tc_controller keeps 50mbit cap; GPU stressor adds server load",
+      "command": "ssh src_device_type:router src_device_name:net-vm command:'echo mixed > /tmp/edgelab_phase'",
       "executionTime": 90000
     },
     {
       "command": "ssh src_device_type:router src_device_name:gpu-server command:'bash /scripts/gpu_stressor.sh yolov10n 100 30'",
       "executionTime": 90000
-    },
-    {
-      "command": "ssh src_device_type:router src_device_name:net-vm command:'bash /scripts/tc_clear.sh eth0'",
-      "executionTime": 119000
     },
     {
       "command": "exit",

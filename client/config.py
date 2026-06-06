@@ -20,7 +20,7 @@ class Config:
     triton_url: str
     triton_model_name: str
     kafka_brokers: str
-    kafka_app_topic: str        # APP_METRICS_TOPIC env var; fallback: f"/edgelab/app/metrics/group{group_id}"
+    kafka_app_topic: str        # APP_METRICS_TOPIC env var; fallback: "dnn_partition.client_metrics"
     kafka_gpu_topic: str
     kafka_net_topic: str
     kafka_phase_topic: str
@@ -61,10 +61,10 @@ def load_config() -> Config:
         triton_model_name=os.environ.get("TRITON_MODEL_NAME", "yolov10n"),
         kafka_brokers=os.environ.get("KAFKA_BROKERS", ""),
         kafka_app_topic=os.environ.get("APP_METRICS_TOPIC", "").strip()
-            or f"/edgelab/app/metrics/group{group_id}",
-        kafka_gpu_topic=os.environ.get("KAFKA_GPU_TOPIC", "/edgelab/server/metrics"),
-        kafka_net_topic=os.environ.get("KAFKA_NET_TOPIC", "/edgelab/network/metrics"),
-        kafka_phase_topic=os.environ.get("KAFKA_PHASE_TOPIC", "/edgelab/server/events/phase"),
+            or "dnn_partition.client_metrics",
+        kafka_gpu_topic=os.environ.get("KAFKA_GPU_TOPIC", "dnn_partition.server_metrics"),
+        kafka_net_topic=os.environ.get("KAFKA_NET_TOPIC", "edgelab.network.metrics"),
+        kafka_phase_topic=os.environ.get("KAFKA_PHASE_TOPIC", "edgelab.phase"),
         otlp_endpoint=os.environ.get("OTLP_ENDPOINT", ""),
         initial_processing_mode=os.environ.get("INITIAL_PROCESSING_MODE", "local"),
         frame_interval_ms=int(os.environ.get("FRAME_INTERVAL_MS", "100")),

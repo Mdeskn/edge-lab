@@ -142,7 +142,7 @@ def main() -> None:
     publishing a JSON record every POLL_INTERVAL_SEC seconds.
     """
     kafka_brokers = os.environ["KAFKA_BROKERS"]
-    gpu_topic = os.environ.get("KAFKA_GPU_TOPIC", "/edgelab/server/metrics")
+    gpu_topic = os.environ.get("KAFKA_GPU_TOPIC", "dnn_partition.server_metrics")
     triton_metrics_url = os.environ.get(
         "TRITON_METRICS_URL", "http://localhost:8002/metrics"
     )

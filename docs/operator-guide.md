@@ -210,7 +210,7 @@ Watch the `edgelab.phase` topic in Kafka UI.
 
 ### Pi clients see only "baseline" phase
 
-tc_controller only publishes phases that appear in its PHASE_MAP. SeQaM's scenario writes "baseline", "gpu_load", "network_load", "combined". Make sure all four are in PHASE_MAP (or use the manual echo approach above to test).
+tc_controller only publishes phases that appear in its PHASE_MAP. `seqam/scenario.json` uses `baseline`, `gpu_load`, `bandwidth_50`, and `mixed`: all four are in PHASE_MAP. If you add a new phase to the scenario, add it to PHASE_MAP too, or use the manual echo approach above to test.
 
 ### GPU server overloaded before experiment starts
 

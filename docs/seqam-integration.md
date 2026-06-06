@@ -12,11 +12,10 @@ SeQaM (172.22.174.149)
    | SSH at t=0s     echo baseline > /tmp/edgelab_phase
    | SSH at t=30s    echo gpu_load > /tmp/edgelab_phase
    |                 + launch gpu_stressor on GPU server
-   | SSH at t=60s    echo network_load > /tmp/edgelab_phase
-   |                 + run tc_apply.sh on Network VM
-   | SSH at t=90s    echo combined > /tmp/edgelab_phase
+   | SSH at t=60s    echo bandwidth_50 > /tmp/edgelab_phase
+   |                 (tc_controller applies 50 Mbit/s cap via PHASE_MAP)
+   | SSH at t=90s    echo mixed > /tmp/edgelab_phase
    |                 + launch gpu_stressor
-   | SSH at t=119s   run tc_clear.sh
    v
 
 Network VM (172.22.174.148) /tmp/edgelab_phase
@@ -42,10 +41,10 @@ self.experiment_phase updated on every Pi
 |------|-------|----------|--------------|
 | 0-30 s | `baseline` | No | No |
 | 30-60 s | `gpu_load` | Yes (100 concurrent requests) | No |
-| 60-90 s | `network_load` | No | Yes (100 ms delay, 20 ms jitter, 2% loss) |
-| 90-120 s | `combined` | Yes | Yes |
+| 60-90 s | `bandwidth_50` | No | Yes (50 Mbit/s tbf cap via tc_controller) |
+| 90-120 s | `mixed` | Yes | Yes (50 Mbit/s cap + GPU flooded) |
 
-At t=119 s, tc rules are cleared so the next loop iteration starts clean.
+At t=120 s the scenario ends; `run_scenario_loop.sh` immediately re-posts it, keeping tc_controller in sync.
 
 The full loop is 120 seconds. `run_scenario_loop.sh` re-posts the scenario after each run to keep it going continuously.
 
@@ -158,8 +157,8 @@ kafka-console-consumer.sh \
 
 ---
 
-## Known integration gap
+## Phase alignment between SeQaM and tc_controller
 
-The `tc_controller.py` PHASE_MAP currently covers `baseline`, `gpu_load`, `bandwidth_50`, `bandwidth_200`, `jitter_light`, and `mixed`. SeQaM's scenario also writes `network_load` and `combined`. If those phase names are not in PHASE_MAP, tc_controller logs a warning and does not publish those phase events to Kafka.
+`seqam/scenario.json` writes only phase names that exist in `tc_controller.py`'s `PHASE_MAP`: `baseline`, `gpu_load`, `bandwidth_50`, and `mixed`. tc_controller sees each write, runs the corresponding `tc_control.sh` command, and publishes the phase to Kafka. Students see exactly these four values in `self.experiment_phase`.
 
-Students would then only see `"baseline"` and `"gpu_load"` in `self.experiment_phase`, not `"network_load"` or `"combined"`. Adding those entries to PHASE_MAP in `tc_controller.py` (with `tc_args: ["passthrough"]` or similar) and updating the apply logic to skip tc execution for them would fix this. See `docs/vm3-network-vm.md` for context.
+If you add a new phase to the scenario, add a matching entry to `PHASE_MAP` in `tc_controller.py` before running the scenario.

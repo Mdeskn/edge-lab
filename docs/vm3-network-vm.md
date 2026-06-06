@@ -102,14 +102,14 @@ sudo /home/mae/network_load/tc_control.sh clear
 
 ## Phase controller vs SeQaM scenario phases
 
-The tc_controller's `PHASE_MAP` defines which `tc_control.sh` command runs for each phase name. The SeQaM scenario (`seqam/scenario.json`) writes the following phase names to the phase file:
+The tc_controller's `PHASE_MAP` defines which `tc_control.sh` command runs for each phase name. `seqam/scenario.json` writes only phase names that are in PHASE_MAP:
 
-- `baseline` (in PHASE_MAP: clears tc rules)
-- `gpu_load` (in PHASE_MAP: clears tc rules; GPU load applied separately)
-- `network_load` (SeQaM also calls `tc_apply.sh` directly for this phase)
-- `combined` (SeQaM calls both the stressor and `tc_apply.sh`)
+- `baseline`: clears tc rules
+- `gpu_load`: clears tc rules; GPU stressor applied separately via SeQaM SSH
+- `bandwidth_50`: applies 50 Mbit/s tbf cap
+- `mixed`: keeps 50 Mbit/s cap; GPU stressor also active
 
-If `network_load` or `combined` are not in the tc_controller's PHASE_MAP, tc_controller will log a warning and not publish those phases to Kafka. Students would then not see those phase values in `self.experiment_phase`. Add them to `PHASE_MAP` in `tc_controller.py` to fix this.
+If you add a new phase to the scenario, add a matching entry to `PHASE_MAP` in `tc_controller.py` or tc_controller will log a warning and skip publishing that phase to Kafka.
 
 ---
 

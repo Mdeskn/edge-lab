@@ -111,9 +111,11 @@ The top bar displays the current experiment phase:
 | Phase | Meaning |
 | --- | --- |
 | `baseline` | No artificial load |
-| `network_load` | Network delay, jitter, or packet loss is active |
-| `gpu_load` | The GPU and Triton server are under load |
-| `combined` | Both network and server load are active |
+| `gpu_load` | GPU server flooded with 100 concurrent requests |
+| `bandwidth_50` | Network path capped at 50 Mbit/s by tc |
+| `mixed` | Both GPU flooded and 50 Mbit/s cap active |
+| `bandwidth_200` | Network path capped at 200 Mbit/s |
+| `jitter_light` | Light jitter added to the network path |
 | `unknown` | No phase message has arrived yet |
 
 Phase values arrive from Kafka. Before the first phase message arrives, the
@@ -393,10 +395,10 @@ When enabled, its background thread subscribes to:
 
 | Environment variable | Default topic | Data |
 | --- | --- | --- |
-| `APP_METRICS_TOPIC` | `/edgelab/app/metrics/group${GROUP_ID}` | This group's per-frame app metrics |
-| `KAFKA_GPU_TOPIC` | `/edgelab/server/metrics` | GPU and Triton metrics |
-| `KAFKA_NET_TOPIC` | `/edgelab/network/metrics` | Delay, jitter, packet loss |
-| `KAFKA_PHASE_TOPIC` | `/edgelab/server/events/phase` | Current experiment phase |
+| `APP_METRICS_TOPIC` | `dnn_partition.client_metrics` | This group's per-frame app metrics |
+| `KAFKA_GPU_TOPIC` | `dnn_partition.server_metrics` | GPU and Triton metrics |
+| `KAFKA_NET_TOPIC` | `edgelab.network.metrics` | Delay, jitter, packet loss |
+| `KAFKA_PHASE_TOPIC` | `edgelab.phase` | Current experiment phase |
 
 Kafka messages update state and schedule a WebSocket broadcast on FastAPI's
 async event loop.

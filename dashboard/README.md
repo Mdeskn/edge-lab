@@ -39,11 +39,11 @@ DASHBOARD_MAX_HISTORY=300
 # Optional override. Leave blank to derive http://<pi-host>:8080 in the browser.
 DASHBOARD_PUBLIC_API_URL=
 KAFKA_BROKERS=
-# Optional override; defaults to /edgelab/app/metrics/group${GROUP_ID}.
+# Optional override; defaults to dnn_partition.client_metrics.
 APP_METRICS_TOPIC=
-KAFKA_GPU_TOPIC=/edgelab/server/metrics
-KAFKA_NET_TOPIC=/edgelab/network/metrics
-KAFKA_PHASE_TOPIC=/edgelab/server/events/phase
+KAFKA_GPU_TOPIC=dnn_partition.server_metrics
+KAFKA_NET_TOPIC=edgelab.network.metrics
+KAFKA_PHASE_TOPIC=edgelab.phase
 ```
 
 Pi client:

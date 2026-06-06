@@ -2,7 +2,7 @@ from dashboard.backend.kafka_consumer import DashboardKafkaConsumer
 from dashboard.backend.state import DashboardState
 
 
-def test_app_metrics_topic_defaults_to_deployed_group(monkeypatch) -> None:
+def test_app_metrics_topic_defaults_to_client_metrics(monkeypatch) -> None:
     monkeypatch.setenv("GROUP_ID", "4")
     monkeypatch.setenv("APP_METRICS_TOPIC", "")
 
@@ -10,4 +10,4 @@ def test_app_metrics_topic_defaults_to_deployed_group(monkeypatch) -> None:
     consumer = DashboardKafkaConsumer(state, lambda: None)
 
     assert consumer._group_id == "group4"
-    assert consumer._app_topic == "/edgelab/app/metrics/group4"
+    assert consumer._app_topic == "dnn_partition.client_metrics"

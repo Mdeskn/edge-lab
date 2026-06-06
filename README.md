@@ -135,8 +135,8 @@ phase = self.experiment_phase   # str, defaults to "baseline"
 |-------|------------------|
 | `"baseline"` | Clean conditions: GPU free, no network impairment |
 | `"gpu_load"` | GPU server is flooded with 100 concurrent requests |
-| `"network_load"` | Network path has added delay, jitter, and packet loss |
-| `"combined"` | Both GPU and network are stressed at the same time |
+| `"bandwidth_50"` | Network path capped at 50 Mbit/s by tc |
+| `"mixed"` | Both GPU server flooded and 50 Mbit/s cap active |
 
 ### GPU server metrics (`self.gpu_metrics`)
 
@@ -182,9 +182,7 @@ def decide(self) -> str:
     phase = self.experiment_phase
 
     # React to known bad conditions immediately
-    if phase in ("network_load", "combined"):
-        return "local"
-    if phase == "gpu_load":
+    if phase in ("gpu_load", "bandwidth_50", "mixed"):
         return "local"
 
     # React to measured bad conditions

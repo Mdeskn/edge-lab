@@ -63,7 +63,7 @@ def monitor_phases(consumer, starting_phase: str, shared_state: SharedState):
 
     Calls shared_state.request_shutdown() when complete.
     """
-    ALL_PHASES = {"baseline", "gpu_load", "network_load", "combined"}
+    ALL_PHASES = {"baseline", "gpu_load", "bandwidth_50", "mixed"}
     phases_seen = {starting_phase}
     current_phase = starting_phase
 
@@ -269,7 +269,7 @@ def main() -> None:
     logger.info("=" * 60)
     logger.info("Experiment complete. Results by phase:")
     logger.info("-" * 60)
-    for phase_name in ["baseline", "gpu_load", "network_load", "combined"]:
+    for phase_name in ["baseline", "gpu_load", "bandwidth_50", "mixed"]:
         ps = phase_summary.get(phase_name, {"total_displacement": 0, "frames": 0})
         frames = ps["frames"]
         total = ps["total_displacement"]

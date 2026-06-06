@@ -308,8 +308,12 @@ class DashboardState:
             "total_failure_rps": totals.get("total_failure_rps", 0.0),
             "total_pending": totals.get("total_pending_requests", 0),
             "yolo_pending": yolo.get("pending_requests", 0),
+            "yolo_success_rps": yolo.get("success_rps", 0.0),
+            "yolo_inference_rps": yolo.get("inference_rps", 0.0),
             "yolo_queue_ms": yolo.get("avg_queue_time_ms", 0.0),
+            "yolo_input_ms": yolo.get("avg_compute_input_ms", 0.0),
             "yolo_infer_ms": yolo.get("avg_compute_infer_ms", 0.0),
+            "yolo_output_ms": yolo.get("avg_compute_output_ms", 0.0),
             "timestamp": message.get("timestamp", 0.0),
         }
 
