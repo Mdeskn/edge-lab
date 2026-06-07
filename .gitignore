@@ -17,8 +17,7 @@ dist/
 *.log
 
 # Local lab assets and generated output
-data/*.mp4
-data/*.onnx
+
 data/results*.csv
 
 # Personal files
