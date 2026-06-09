@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+TargetClassFilter = int | tuple[int, ...] | None
+
 
 @dataclass
 class Config:
@@ -33,7 +35,7 @@ class Config:
     results_log_path: str
     queue_max_size: int
     conf_threshold: float
-    target_class_id: int | None
+    target_class_id: TargetClassFilter
     target_conf_threshold: float
     sp_agent_interval_ms: int
     log_level: str
@@ -74,7 +76,7 @@ def load_config() -> Config:
         results_log_path=os.environ.get("RESULTS_LOG_PATH", "results.csv"),
         queue_max_size=int(os.environ.get("QUEUE_MAX_SIZE", "10")),
         conf_threshold=conf_threshold,
-        target_class_id=int(target_class_value) if target_class_value else None,
+        target_class_id=_parse_target_class_filter(target_class_value),
         target_conf_threshold=float(
             os.environ.get("TARGET_CONFIDENCE_THRESHOLD", str(conf_threshold))
         ),
@@ -89,3 +91,14 @@ def load_config() -> Config:
         dashboard_frame_width=int(os.environ.get("DASHBOARD_FRAME_WIDTH", "960")),
         sp_agent_debug_metrics=os.environ.get("SP_AGENT_DEBUG_METRICS", "false").lower() == "true",
     )
+
+
+def _parse_target_class_filter(value: str) -> TargetClassFilter:
+    """Parse TARGET_CLASS_ID as one class id or a comma-separated class-id list."""
+    if not value:
+        return None
+    parts = [part.strip() for part in value.split(",") if part.strip()]
+    ids = tuple(int(part) for part in parts)
+    if len(ids) == 1:
+        return ids[0]
+    return ids

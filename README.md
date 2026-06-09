@@ -1,6 +1,6 @@
 # EdgeLab
 
-A hands-on edge-computing lab for the IoT and Edge Computing course at FH Dortmund. A Raspberry Pi watches a pre-recorded video, tracks a tennis ball frame by frame, and has to decide for every frame: run YOLO locally on the Pi CPU, or ship the frame over the network to a remote GPU server?
+A hands-on edge-computing lab for the IoT and Edge Computing course at FH Dortmund. A Raspberry Pi watches a pre-recorded video, tracks a cup frame by frame, and has to decide for every frame: run YOLO locally on the Pi CPU, or ship the frame over the network to a remote GPU server?
 
 Your job as a student: write the placement logic (the Service Placement Agent) that adapts to live conditions and keeps the prediction close to the ground truth. Everything else is already wired up.
 
@@ -8,7 +8,7 @@ Your job as a student: write the placement logic (the Service Placement Agent) t
 
 ## What is the goal?
 
-Minimize **cumulative displacement**: the total distance (in pixels) between where your detector predicted the ball and where it actually was, summed over every scored frame. Faster inference means the result arrives before the ball has moved far, which means lower displacement and a better score.
+Minimize **cumulative displacement**: the total distance (in pixels) between where your detector predicted the target object and where it actually was, summed over every scored frame. Faster inference means the result arrives before the target has moved far, which means lower displacement and a better score.
 
 ---
 
@@ -76,6 +76,8 @@ GROUP_ID=1
 VIDEO_PATH=data/video.mp4
 GROUND_TRUTH_PATH=data/ground_truth.csv
 MODEL_PATH=data/yolov10n.onnx
+TARGET_CLASS_ID=41,75  # COCO cup/vase labels for this cup video
+TARGET_CONFIDENCE_THRESHOLD=0.1
 
 # Router VM forwards to the GPU server; always use this address, not the GPU server directly
 TRITON_URL=172.22.174.148:8001
@@ -211,7 +213,7 @@ Each scored frame produces a displacement in pixels:
 displacement = sqrt((predicted_x - true_x)^2 + (predicted_y - true_y)^2)
 ```
 
-Frames where the ball is not on screen are skipped. Frames where the model returns no detection score a fixed `MISS_PENALTY_PX` (default 100 px) instead of distance-from-origin.
+Frames where the target is not on screen are skipped. Frames where the model returns no detection score a fixed `MISS_PENALTY_PX` (default 100 px) instead of distance-from-origin.
 
 Your final score is the sum of all per-frame displacements. **Lower is better.**
 

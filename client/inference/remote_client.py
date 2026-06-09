@@ -7,6 +7,9 @@ import logging
 import numpy as np
 import tritonclient.grpc as grpcclient
 
+from inference.yolo_postprocess import best_detection_center
+from inference.yolo_postprocess import TargetClassFilter
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,7 +21,7 @@ class RemoteClient:
         triton_url: str,
         model_name: str = "yolov10n",
         conf_threshold: float = 0.3,
-        target_class_id: int | None = None,
+        target_class_id: TargetClassFilter = None,
         target_conf_threshold: float | None = None,
         timeout: float = 5.0,
     ):
@@ -60,13 +63,18 @@ class RemoteClient:
         """
         Send a preprocessed frame to Triton and return (center_x, center_y).
 
-        Builds an InferInput named 'images' with shape (1, 3, 640, 640), FP32.
+        Builds an InferInput named 'images' using the preprocessed frame shape, FP32.
         Requests output named 'output0'.
         Scales result coordinates back to original frame dimensions.
 
         Raises on network timeout or connection error; the Dispatcher handles fallback.
         """
-        inp = grpcclient.InferInput("images", [1, 3, 640, 640], "FP32")
+        _, _, input_h, input_w = preprocessed_frame.shape
+        inp = grpcclient.InferInput(
+            "images",
+            list(preprocessed_frame.shape),
+            "FP32",
+        )
         inp.set_data_from_numpy(preprocessed_frame)
 
         out = grpcclient.InferRequestedOutput("output0")
@@ -80,43 +88,44 @@ class RemoteClient:
 
         output_data = result.as_numpy("output0")  # (1, num_boxes, 6)
         orig_h, orig_w = original_shape[:2]
-        return self._postprocess(output_data, orig_h, orig_w)
+        return self._postprocess(output_data, orig_h, orig_w, input_h, input_w)
 
-    def _postprocess(self, output: np.ndarray, orig_h: int, orig_w: int) -> tuple:
+    def _postprocess(
+        self,
+        output: np.ndarray,
+        orig_h: int,
+        orig_w: int,
+        input_h: int,
+        input_w: int,
+    ) -> tuple:
         """
         Parse YOLOv10 output and return the center of the best target detection.
 
         YOLOv10 output shape: (1, num_boxes, 6).
         Each box: [x1, y1, x2, y2, confidence, class_id].
-        Coordinates are in model input space (640×640).
+        Coordinates are in model input space.
 
         Scales the result back to original frame coordinates.
         Returns (0.0, 0.0) when no box passes the confidence threshold.
         """
-        boxes = output.squeeze(0)  # (num_boxes, 6)
-
-        threshold = (
-            self.target_conf_threshold
-            if self.target_class_id is not None
-            else self.conf_threshold
+        center = best_detection_center(
+            output=output,
+            orig_h=orig_h,
+            orig_w=orig_w,
+            input_h=input_h,
+            input_w=input_w,
+            conf_threshold=self.conf_threshold,
+            target_class_id=self.target_class_id,
+            target_conf_threshold=self.target_conf_threshold,
         )
-        mask = boxes[:, 4] >= threshold
-        if self.target_class_id is not None:
-            mask &= boxes[:, 5].astype(int) == self.target_class_id
-        filtered = boxes[mask]
-
-        if len(filtered) == 0:
+        if center == (0.0, 0.0):
             logger.debug(
                 "Triton: no target detection for class=%s above confidence threshold %.2f",
                 self.target_class_id if self.target_class_id is not None else "any",
-                threshold,
+                (
+                    self.target_conf_threshold
+                    if self.target_class_id is not None
+                    else self.conf_threshold
+                ),
             )
-            return (0.0, 0.0)
-
-        best = filtered[filtered[:, 4].argmax()]
-        x1, y1, x2, y2 = best[:4]
-
-        center_x = (x1 + x2) / 2.0 * orig_w / 640.0
-        center_y = (y1 + y2) / 2.0 * orig_h / 640.0
-
-        return (float(center_x), float(center_y))
+        return center

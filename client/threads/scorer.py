@@ -111,7 +111,7 @@ class Scorer:
             elif has_ground_truth:
                 # Detection failure: model returned no result but ball is visible.
                 # Score as a fixed penalty so the cumulative total reflects the
-                # dropout consistently, regardless of where the ball is in the frame.
+                # dropout consistently, regardless of where the target is in the frame.
                 displacement_px = self.config.miss_penalty_px
             else:
                 displacement_px = None  # ball absent in ground truth, skip frame

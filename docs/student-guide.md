@@ -44,8 +44,8 @@ The lab supplies three files. Put them in `data/` at the repo root:
 
 ```
 data/
-  video.mp4          pre-recorded tennis-ball video
-  ground_truth.csv   ball coordinates per frame (the correct answers)
+  video.mp4          pre-recorded cup video
+  ground_truth.csv   cup coordinates per frame (the correct answers)
   yolov10n.onnx      YOLOv10n model in ONNX format
 ```
 
@@ -79,7 +79,7 @@ TRITON_URL=172.22.174.148:8001
 
 KAFKA_BROKERS=172.22.174.149:9092
 
-TARGET_CLASS_ID=32
+TARGET_CLASS_ID=41,75
 TARGET_CONFIDENCE_THRESHOLD=0.1
 DISPLAY_OUTPUT=false
 AUTO_STOP=false
@@ -252,11 +252,11 @@ Three cases:
 
 | Situation | Score |
 |-----------|-------|
-| Ball not on screen (ground truth absent) | Frame excluded from cumulative total |
-| Ball present, model returned a detection | Euclidean distance in pixels |
-| Ball present, model returned no detection | `MISS_PENALTY_PX` (default 100 px) |
+| Target not on screen (ground truth absent) | Frame excluded from cumulative total |
+| Target present, model returned a detection | Euclidean distance in pixels |
+| Target present, model returned no detection | `MISS_PENALTY_PX` (default 100 px) |
 
-The fixed miss penalty matters: without it, a missed detection would be scored as the distance from (0,0) to wherever the ball is, typically 1000-1500 px. That swamps the latency signal the lab is designed to measure.
+The fixed miss penalty matters: without it, a missed detection would be scored as the distance from (0,0) to wherever the target is, typically 1000-1500 px. That swamps the latency signal the lab is designed to measure.
 
 **Final score:**
 
@@ -268,11 +268,11 @@ Lower is better.
 
 ### Why inference speed affects displacement
 
-The video plays at 10 fps. Each frame has a ground truth ball position at the moment it was captured. If inference takes 400 ms (typical local), the result arrives 4 frames late; by then, the ball may have moved 20-40 px. Remote inference at 30 ms means the result arrives nearly in sync.
+The video plays at 10 fps. Each frame has a ground truth target position at the moment it was captured. If inference takes 400 ms (typical local), the result arrives 4 frames late; by then, the target may have moved 20-40 px. Remote inference at 30 ms means the result arrives nearly in sync.
 
 ### Missed frames vs. late frames
 
-Both hurt, differently. A frame that produces no detection scores `MISS_PENALTY_PX`. A frame that produces a detection but the ball moved while the inference ran scores the actual distance. Under high GPU load or network degradation, `local_fallback` frames take longer than clean local frames (you paid the failed remote attempt first).
+Both hurt, differently. A frame that produces no detection scores `MISS_PENALTY_PX`. A frame that produces a detection but the target moved while the inference ran scores the actual distance. Under high GPU load or network degradation, `local_fallback` frames take longer than clean local frames (you paid the failed remote attempt first).
 
 ---
 
@@ -407,7 +407,7 @@ Copy `.env.example` to `.env`. All variables are optional except those marked re
 | `DISPLAY_OUTPUT` | `true` | Show OpenCV window; set `false` on SSH/headless |
 | `AUTO_STOP` | `false` | Wait for first phase, run one full cycle, then stop |
 | `CONFIDENCE_THRESHOLD` | `0.3` | YOLO detection confidence threshold |
-| `TARGET_CLASS_ID` | (not set) | Set to `32` for tennis-ball-only filtering |
+| `TARGET_CLASS_ID` | (not set) | Set to `41,75` for this cup video; YOLO labels most frames as `vase` |
 | `TARGET_CONFIDENCE_THRESHOLD` | `0.1` | Confidence for the target class |
 | `SP_AGENT_INTERVAL_MS` | `500` | How often `decide()` is called |
 | `MISS_PENALTY_PX` | `100.0` | Score penalty for missed detections |
@@ -469,7 +469,7 @@ You are on SSH without X11 forwarding. Either add `-X` to your SSH command or se
 
 ### Very low detection rate
 
-Check `TARGET_CLASS_ID=32` and `TARGET_CONFIDENCE_THRESHOLD=0.1` are set. Also confirm you are using the lab-supplied `yolov10n.onnx` and the matching `ground_truth.csv`.
+Check `TARGET_CLASS_ID=41,75` and `TARGET_CONFIDENCE_THRESHOLD=0.1` are set. Also confirm you are using the lab-supplied `yolov10n.onnx` and the matching `ground_truth.csv`.
 
 ### High cumulative displacement
 

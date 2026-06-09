@@ -1,1218 +1,241 @@
 frame_number,center_x,center_y,confidence,class_id,class_name
-1,NaN,NaN,0.0,-1,none
-2,NaN,NaN,0.0,-1,none
-3,NaN,NaN,0.0,-1,none
-4,NaN,NaN,0.0,-1,none
-5,NaN,NaN,0.0,-1,none
-6,NaN,NaN,0.0,-1,none
-7,NaN,NaN,0.0,-1,none
-8,NaN,NaN,0.0,-1,none
-9,NaN,NaN,0.0,-1,none
-10,NaN,NaN,0.0,-1,none
-11,NaN,NaN,0.0,-1,none
-12,NaN,NaN,0.0,-1,none
-13,NaN,NaN,0.0,-1,none
-14,NaN,NaN,0.0,-1,none
-15,NaN,NaN,0.0,-1,none
-16,NaN,NaN,0.0,-1,none
-17,NaN,NaN,0.0,-1,none
-18,NaN,NaN,0.0,-1,none
-19,NaN,NaN,0.0,-1,none
-20,NaN,NaN,0.0,-1,none
-21,NaN,NaN,0.0,-1,none
-22,NaN,NaN,0.0,-1,none
-23,NaN,NaN,0.0,-1,none
-24,NaN,NaN,0.0,-1,none
-25,NaN,NaN,0.0,-1,none
-26,NaN,NaN,0.0,-1,none
-27,NaN,NaN,0.0,-1,none
-28,NaN,NaN,0.0,-1,none
-29,NaN,NaN,0.0,-1,none
-30,NaN,NaN,0.0,-1,none
-31,NaN,NaN,0.0,-1,none
-32,1174.0,1052.0,1.0,32,sports ball
-33,NaN,NaN,0.0,-1,none
-34,NaN,NaN,0.0,-1,none
-35,NaN,NaN,0.0,-1,none
-36,1158.0,797.0,1.0,32,sports ball
-37,1148.5,727.0,1.0,32,sports ball
-38,1139.0,663.0,1.0,32,sports ball
-39,1133.0,609.0,1.0,32,sports ball
-40,1120.0,558.0,1.0,32,sports ball
-41,1108.0,512.5,1.0,32,sports ball
-42,1102.0,474.0,1.0,32,sports ball
-43,1094.0,444.0,1.0,32,sports ball
-44,1087.0,417.0,1.0,32,sports ball
-45,1082.0,397.0,1.0,32,sports ball
-46,1079.5,383.0,1.0,32,sports ball
-47,1077.0,377.0,1.0,32,sports ball
-48,1073.5,375.0,1.0,32,sports ball
-49,1070.5,375.0,1.0,32,sports ball
-50,1064.0,374.0,1.0,32,sports ball
-51,1054.0,373.0,1.0,32,sports ball
-52,1046.0,373.0,1.0,32,sports ball
-53,1036.0,372.0,1.0,32,sports ball
-54,1022.0,370.0,1.0,32,sports ball
-55,1004.0,366.0,1.0,32,sports ball
-56,984.0,362.0,1.0,32,sports ball
-57,962.0,358.0,1.0,32,sports ball
-58,938.0,354.0,1.0,32,sports ball
-59,911.0,350.0,1.0,32,sports ball
-60,882.0,346.0,1.0,32,sports ball
-61,854.0,341.5,1.0,32,sports ball
-62,826.0,335.0,1.0,32,sports ball
-63,797.0,331.0,1.0,32,sports ball
-64,768.0,328.0,1.0,32,sports ball
-65,739.0,324.0,1.0,32,sports ball
-66,711.0,321.0,1.0,32,sports ball
-67,683.0,317.0,1.0,32,sports ball
-68,656.0,313.0,1.0,32,sports ball
-69,629.0,311.0,1.0,32,sports ball
-70,603.0,309.5,1.0,32,sports ball
-71,577.5,309.5,1.0,32,sports ball
-72,553.0,310.0,1.0,32,sports ball
-73,527.0,313.0,1.0,32,sports ball
-74,506.0,316.0,1.0,32,sports ball
-75,487.0,320.0,1.0,32,sports ball
-76,472.0,322.0,1.0,32,sports ball
-77,460.0,328.0,1.0,32,sports ball
-78,449.5,335.0,1.0,32,sports ball
-79,443.0,341.0,1.0,32,sports ball
-80,438.0,350.0,1.0,32,sports ball
-81,434.0,361.0,1.0,32,sports ball
-82,432.0,376.0,1.0,32,sports ball
-83,432.0,395.0,1.0,32,sports ball
-84,433.0,419.5,1.0,32,sports ball
-85,432.0,449.5,1.0,32,sports ball
-86,432.0,478.5,1.0,32,sports ball
-87,435.0,512.0,1.0,32,sports ball
-88,439.0,547.5,1.0,32,sports ball
-89,442.0,579.0,1.0,32,sports ball
-90,445.0,612.0,1.0,32,sports ball
-91,450.0,642.5,1.0,32,sports ball
-92,454.0,668.0,1.0,32,sports ball
-93,459.5,689.0,1.0,32,sports ball
-94,472.0,709.0,1.0,32,sports ball
-95,485.0,726.0,1.0,32,sports ball
-96,497.0,739.0,1.0,32,sports ball
-97,515.0,749.0,1.0,32,sports ball
-98,537.0,761.0,1.0,32,sports ball
-99,559.0,770.0,1.0,32,sports ball
-100,579.5,778.0,1.0,32,sports ball
-101,606.0,786.0,1.0,32,sports ball
-102,629.0,792.0,1.0,32,sports ball
-103,654.0,796.0,1.0,32,sports ball
-104,672.0,798.0,1.0,32,sports ball
-105,686.5,797.0,1.0,32,sports ball
-106,697.0,793.0,1.0,32,sports ball
-107,703.0,784.0,1.0,32,sports ball
-108,703.0,773.5,1.0,32,sports ball
-109,700.0,759.5,1.0,32,sports ball
-110,693.0,746.0,1.0,32,sports ball
-111,687.0,734.0,1.0,32,sports ball
-112,678.0,720.0,1.0,32,sports ball
-113,667.0,705.5,1.0,32,sports ball
-114,660.0,692.0,1.0,32,sports ball
-115,647.0,676.5,1.0,32,sports ball
-116,636.0,660.5,1.0,32,sports ball
-117,625.0,644.0,1.0,32,sports ball
-118,616.0,628.0,1.0,32,sports ball
-119,606.0,612.0,1.0,32,sports ball
-120,596.0,596.5,1.0,32,sports ball
-121,586.0,582.0,1.0,32,sports ball
-122,575.0,566.5,1.0,32,sports ball
-123,564.0,552.0,1.0,32,sports ball
-124,549.0,541.0,1.0,32,sports ball
-125,532.0,532.0,1.0,32,sports ball
-126,516.0,526.5,1.0,32,sports ball
-127,497.0,527.5,1.0,32,sports ball
-128,471.0,514.0,1.0,32,sports ball
-129,446.0,524.0,1.0,32,sports ball
-130,428.0,531.0,1.0,32,sports ball
-131,415.0,533.0,1.0,32,sports ball
-132,405.0,534.0,1.0,32,sports ball
-133,396.0,535.0,1.0,32,sports ball
-134,388.0,533.0,1.0,32,sports ball
-135,376.0,526.0,1.0,32,sports ball
-136,365.0,524.0,1.0,32,sports ball
-137,361.0,538.0,1.0,32,sports ball
-138,359.0,533.0,1.0,32,sports ball
-139,358.0,533.0,1.0,32,sports ball
-140,371.0,537.0,1.0,32,sports ball
-141,390.0,544.0,1.0,32,sports ball
-142,410.0,552.0,1.0,32,sports ball
-143,431.0,560.0,1.0,32,sports ball
-144,458.0,568.0,1.0,32,sports ball
-145,478.0,582.0,1.0,32,sports ball
-146,499.0,600.0,1.0,32,sports ball
-147,516.0,621.5,1.0,32,sports ball
-148,536.0,652.5,1.0,32,sports ball
-149,549.0,685.0,1.0,32,sports ball
-150,558.0,716.5,1.0,32,sports ball
-151,570.0,760.0,1.0,32,sports ball
-152,577.0,803.0,1.0,32,sports ball
-153,578.0,843.0,1.0,32,sports ball
-154,580.0,881.0,1.0,32,sports ball
-155,579.0,916.0,1.0,32,sports ball
-156,573.0,944.0,1.0,32,sports ball
-157,569.0,970.0,1.0,32,sports ball
-158,561.5,992.0,1.0,32,sports ball
-159,553.0,1006.0,1.0,32,sports ball
-160,543.0,1011.0,1.0,32,sports ball
-161,536.0,1016.0,1.0,32,sports ball
-162,527.0,1020.0,1.0,32,sports ball
-163,523.0,1025.0,1.0,32,sports ball
-164,521.0,1030.0,1.0,32,sports ball
-165,NaN,NaN,0.0,-1,none
-166,NaN,NaN,0.0,-1,none
-167,NaN,NaN,0.0,-1,none
-168,NaN,NaN,0.0,-1,none
-169,NaN,NaN,0.0,-1,none
-170,NaN,NaN,0.0,-1,none
-171,NaN,NaN,0.0,-1,none
-172,NaN,NaN,0.0,-1,none
-173,NaN,NaN,0.0,-1,none
-174,NaN,NaN,0.0,-1,none
-175,NaN,NaN,0.0,-1,none
-176,NaN,NaN,0.0,-1,none
-177,NaN,NaN,0.0,-1,none
-178,NaN,NaN,0.0,-1,none
-179,NaN,NaN,0.0,-1,none
-180,NaN,NaN,0.0,-1,none
-181,NaN,NaN,0.0,-1,none
-182,NaN,NaN,0.0,-1,none
-183,NaN,NaN,0.0,-1,none
-184,NaN,NaN,0.0,-1,none
-185,NaN,NaN,0.0,-1,none
-186,NaN,NaN,0.0,-1,none
-187,NaN,NaN,0.0,-1,none
-188,NaN,NaN,0.0,-1,none
-189,NaN,NaN,0.0,-1,none
-190,NaN,NaN,0.0,-1,none
-191,NaN,NaN,0.0,-1,none
-192,NaN,NaN,0.0,-1,none
-193,NaN,NaN,0.0,-1,none
-194,NaN,NaN,0.0,-1,none
-195,NaN,NaN,0.0,-1,none
-196,NaN,NaN,0.0,-1,none
-197,NaN,NaN,0.0,-1,none
-198,NaN,NaN,0.0,-1,none
-199,NaN,NaN,0.0,-1,none
-200,NaN,NaN,0.0,-1,none
-201,NaN,NaN,0.0,-1,none
-202,NaN,NaN,0.0,-1,none
-203,NaN,NaN,0.0,-1,none
-204,NaN,NaN,0.0,-1,none
-205,NaN,NaN,0.0,-1,none
-206,NaN,NaN,0.0,-1,none
-207,NaN,NaN,0.0,-1,none
-208,NaN,NaN,0.0,-1,none
-209,NaN,NaN,0.0,-1,none
-210,NaN,NaN,0.0,-1,none
-211,NaN,NaN,0.0,-1,none
-212,NaN,NaN,0.0,-1,none
-213,NaN,NaN,0.0,-1,none
-214,NaN,NaN,0.0,-1,none
-215,NaN,NaN,0.0,-1,none
-216,NaN,NaN,0.0,-1,none
-217,NaN,NaN,0.0,-1,none
-218,NaN,NaN,0.0,-1,none
-219,NaN,NaN,0.0,-1,none
-220,NaN,NaN,0.0,-1,none
-221,NaN,NaN,0.0,-1,none
-222,NaN,NaN,0.0,-1,none
-223,NaN,NaN,0.0,-1,none
-224,NaN,NaN,0.0,-1,none
-225,NaN,NaN,0.0,-1,none
-226,NaN,NaN,0.0,-1,none
-227,NaN,NaN,0.0,-1,none
-228,NaN,NaN,0.0,-1,none
-229,NaN,NaN,0.0,-1,none
-230,NaN,NaN,0.0,-1,none
-231,NaN,NaN,0.0,-1,none
-232,NaN,NaN,0.0,-1,none
-233,NaN,NaN,0.0,-1,none
-234,NaN,NaN,0.0,-1,none
-235,NaN,NaN,0.0,-1,none
-236,NaN,NaN,0.0,-1,none
-237,NaN,NaN,0.0,-1,none
-238,NaN,NaN,0.0,-1,none
-239,NaN,NaN,0.0,-1,none
-240,NaN,NaN,0.0,-1,none
-241,NaN,NaN,0.0,-1,none
-242,NaN,NaN,0.0,-1,none
-243,NaN,NaN,0.0,-1,none
-244,NaN,NaN,0.0,-1,none
-245,NaN,NaN,0.0,-1,none
-246,NaN,NaN,0.0,-1,none
-247,NaN,NaN,0.0,-1,none
-248,NaN,NaN,0.0,-1,none
-249,NaN,NaN,0.0,-1,none
-250,NaN,NaN,0.0,-1,none
-251,NaN,NaN,0.0,-1,none
-252,981.0,1019.0,1.0,32,sports ball
-253,1087.0,946.0,1.0,32,sports ball
-254,1215.0,857.0,1.0,32,sports ball
-255,1347.5,760.0,1.0,32,sports ball
-256,1453.0,665.0,1.0,32,sports ball
-257,1549.0,579.5,1.0,32,sports ball
-258,NaN,NaN,0.0,-1,none
-259,NaN,NaN,0.0,-1,none
-260,NaN,NaN,0.0,-1,none
-261,NaN,NaN,0.0,-1,none
-262,NaN,NaN,0.0,-1,none
-263,NaN,NaN,0.0,-1,none
-264,NaN,NaN,0.0,-1,none
-265,NaN,NaN,0.0,-1,none
-266,NaN,NaN,0.0,-1,none
-267,NaN,NaN,0.0,-1,none
-268,NaN,NaN,0.0,-1,none
-269,NaN,NaN,0.0,-1,none
-270,NaN,NaN,0.0,-1,none
-271,NaN,NaN,0.0,-1,none
-272,NaN,NaN,0.0,-1,none
-273,NaN,NaN,0.0,-1,none
-274,NaN,NaN,0.0,-1,none
-275,NaN,NaN,0.0,-1,none
-276,NaN,NaN,0.0,-1,none
-277,NaN,NaN,0.0,-1,none
-278,NaN,NaN,0.0,-1,none
-279,NaN,NaN,0.0,-1,none
-280,NaN,NaN,0.0,-1,none
-281,NaN,NaN,0.0,-1,none
-282,NaN,NaN,0.0,-1,none
-283,NaN,NaN,0.0,-1,none
-284,NaN,NaN,0.0,-1,none
-285,NaN,NaN,0.0,-1,none
-286,1565.0,494.0,1.0,32,sports ball
-287,1409.0,543.0,1.0,32,sports ball
-288,1234.0,591.0,1.0,32,sports ball
-289,1072.0,638.0,1.0,32,sports ball
-290,930.0,681.0,1.0,32,sports ball
-291,809.0,727.0,1.0,32,sports ball
-292,722.5,779.0,1.0,32,sports ball
-293,668.0,822.0,1.0,32,sports ball
-294,641.0,850.0,1.0,32,sports ball
-295,626.0,879.0,1.0,32,sports ball
-296,622.0,894.0,1.0,32,sports ball
-297,628.0,903.0,1.0,32,sports ball
-298,631.0,912.0,1.0,32,sports ball
-299,631.0,919.0,1.0,32,sports ball
-300,631.0,924.0,1.0,32,sports ball
-301,632.0,928.0,1.0,32,sports ball
-302,632.0,928.0,1.0,32,sports ball
-303,634.0,927.0,1.0,32,sports ball
-304,635.0,926.0,1.0,32,sports ball
-305,634.0,923.0,1.0,32,sports ball
-306,613.0,907.0,1.0,32,sports ball
-307,562.0,882.0,1.0,32,sports ball
-308,479.0,853.0,1.0,32,sports ball
-309,374.0,805.0,1.0,32,sports ball
-310,262.0,756.0,1.0,32,sports ball
-311,151.0,716.0,1.0,32,sports ball
-312,48.0,679.0,1.0,32,sports ball
-313,NaN,NaN,0.0,-1,none
-314,NaN,NaN,0.0,-1,none
-315,NaN,NaN,0.0,-1,none
-316,NaN,NaN,0.0,-1,none
-317,NaN,NaN,0.0,-1,none
-318,NaN,NaN,0.0,-1,none
-319,NaN,NaN,0.0,-1,none
-320,NaN,NaN,0.0,-1,none
-321,NaN,NaN,0.0,-1,none
-322,NaN,NaN,0.0,-1,none
-323,NaN,NaN,0.0,-1,none
-324,NaN,NaN,0.0,-1,none
-325,NaN,NaN,0.0,-1,none
-326,NaN,NaN,0.0,-1,none
-327,NaN,NaN,0.0,-1,none
-328,NaN,NaN,0.0,-1,none
-329,NaN,NaN,0.0,-1,none
-330,NaN,NaN,0.0,-1,none
-331,NaN,NaN,0.0,-1,none
-332,NaN,NaN,0.0,-1,none
-333,NaN,NaN,0.0,-1,none
-334,NaN,NaN,0.0,-1,none
-335,33.0,396.0,1.0,32,sports ball
-336,59.0,372.0,1.0,32,sports ball
-337,99.0,337.5,1.0,32,sports ball
-338,150.0,306.0,1.0,32,sports ball
-339,205.0,282.0,1.0,32,sports ball
-340,257.0,262.0,1.0,32,sports ball
-341,311.0,252.0,1.0,32,sports ball
-342,366.0,242.0,1.0,32,sports ball
-343,420.0,239.0,1.0,32,sports ball
-344,469.0,238.5,1.0,32,sports ball
-345,516.0,241.5,1.0,32,sports ball
-346,558.0,250.0,1.0,32,sports ball
-347,598.0,266.5,1.0,32,sports ball
-348,633.5,288.0,1.0,32,sports ball
-349,659.0,314.5,1.0,32,sports ball
-350,679.0,345.0,1.0,32,sports ball
-351,694.5,378.0,1.0,32,sports ball
-352,703.5,412.0,1.0,32,sports ball
-353,708.0,447.0,1.0,32,sports ball
-354,713.0,483.0,1.0,32,sports ball
-355,715.0,518.5,1.0,32,sports ball
-356,716.0,553.0,1.0,32,sports ball
-357,715.5,587.0,1.0,32,sports ball
-358,713.0,619.0,1.0,32,sports ball
-359,714.0,653.0,1.0,32,sports ball
-360,713.5,684.5,1.0,32,sports ball
-361,714.5,711.0,1.0,32,sports ball
-362,715.0,732.0,1.0,32,sports ball
-363,715.5,746.0,1.0,32,sports ball
-364,714.0,752.0,1.0,32,sports ball
-365,713.5,754.0,1.0,32,sports ball
-366,710.0,753.0,1.0,32,sports ball
-367,707.5,752.0,1.0,32,sports ball
-368,706.5,750.0,1.0,32,sports ball
-369,706.0,750.0,1.0,32,sports ball
-370,705.5,747.0,1.0,32,sports ball
-371,700.5,741.0,1.0,32,sports ball
-372,693.5,735.0,1.0,32,sports ball
-373,683.5,728.0,1.0,32,sports ball
-374,668.0,718.0,1.0,32,sports ball
-375,653.5,706.0,1.0,32,sports ball
-376,628.5,692.0,1.0,32,sports ball
-377,601.0,675.0,1.0,32,sports ball
-378,568.0,658.5,1.0,32,sports ball
-379,538.0,644.0,1.0,32,sports ball
-380,507.0,631.0,1.0,32,sports ball
-381,468.0,618.0,1.0,32,sports ball
-382,435.0,603.0,1.0,32,sports ball
-383,390.0,590.0,1.0,32,sports ball
-384,343.0,578.0,1.0,32,sports ball
-385,293.5,570.0,1.0,32,sports ball
-386,259.0,566.0,1.0,32,sports ball
-387,247.0,568.0,1.0,32,sports ball
-388,246.5,568.0,1.0,32,sports ball
-389,265.0,568.0,1.0,32,sports ball
-390,298.0,567.5,1.0,32,sports ball
-391,341.0,568.0,1.0,32,sports ball
-392,397.0,571.0,1.0,32,sports ball
-393,459.0,577.0,1.0,32,sports ball
-394,523.0,581.0,1.0,32,sports ball
-395,589.0,582.0,1.0,32,sports ball
-396,663.0,582.5,1.0,32,sports ball
-397,728.0,582.0,1.0,32,sports ball
-398,797.0,580.0,1.0,32,sports ball
-399,862.0,581.5,1.0,32,sports ball
-400,930.0,579.0,1.0,32,sports ball
-401,994.0,578.5,1.0,32,sports ball
-402,1062.5,583.0,1.0,32,sports ball
-403,1122.0,588.0,1.0,32,sports ball
-404,1171.0,589.0,1.0,32,sports ball
-405,1213.0,590.0,1.0,32,sports ball
-406,1244.0,590.0,1.0,32,sports ball
-407,1270.5,594.0,1.0,32,sports ball
-408,1291.0,600.0,1.0,32,sports ball
-409,1307.0,605.0,1.0,32,sports ball
-410,1312.0,606.0,1.0,32,sports ball
-411,1300.5,599.0,1.0,32,sports ball
-412,1274.0,586.0,1.0,32,sports ball
-413,1238.0,572.0,1.0,32,sports ball
-414,1188.0,561.0,1.0,32,sports ball
-415,1125.5,549.5,1.0,32,sports ball
-416,1056.0,538.0,1.0,32,sports ball
-417,978.0,527.0,1.0,32,sports ball
-418,891.0,519.5,1.0,32,sports ball
-419,811.0,515.0,1.0,32,sports ball
-420,733.0,516.0,1.0,32,sports ball
-421,644.5,515.0,1.0,32,sports ball
-422,557.5,514.0,1.0,32,sports ball
-423,470.0,512.0,1.0,32,sports ball
-424,402.0,515.0,1.0,32,sports ball
-425,351.0,522.5,1.0,32,sports ball
-426,316.5,530.0,1.0,32,sports ball
-427,301.0,538.0,1.0,32,sports ball
-428,307.0,544.0,1.0,32,sports ball
-429,327.0,545.5,1.0,32,sports ball
-430,366.0,542.0,1.0,32,sports ball
-431,418.0,537.0,1.0,32,sports ball
-432,477.0,531.0,1.0,32,sports ball
-433,553.0,524.0,1.0,32,sports ball
-434,632.0,519.5,1.0,32,sports ball
-435,711.0,517.5,1.0,32,sports ball
-436,781.5,516.0,1.0,32,sports ball
-437,840.0,516.0,1.0,32,sports ball
-438,908.0,519.0,1.0,32,sports ball
-439,968.0,523.5,1.0,32,sports ball
-440,1014.5,526.5,1.0,32,sports ball
-441,1044.0,524.0,1.0,32,sports ball
-442,1058.5,522.5,1.0,32,sports ball
-443,1066.0,522.0,1.0,32,sports ball
-444,1063.0,522.0,1.0,32,sports ball
-445,1050.0,523.0,1.0,32,sports ball
-446,1031.0,525.0,1.0,32,sports ball
-447,1012.0,530.0,1.0,32,sports ball
-448,988.0,532.0,1.0,32,sports ball
-449,960.0,530.0,1.0,32,sports ball
-450,934.0,527.0,1.0,32,sports ball
-451,913.0,525.0,1.0,32,sports ball
-452,892.0,520.0,1.0,32,sports ball
-453,878.0,515.0,1.0,32,sports ball
-454,870.0,509.0,1.0,32,sports ball
-455,862.5,502.0,1.0,32,sports ball
-456,854.0,494.0,1.0,32,sports ball
-457,843.0,488.0,1.0,32,sports ball
-458,834.0,484.0,1.0,32,sports ball
-459,826.0,484.0,1.0,32,sports ball
-460,815.0,487.0,1.0,32,sports ball
-461,803.0,490.0,1.0,32,sports ball
-462,793.0,497.0,1.0,32,sports ball
-463,780.0,503.0,1.0,32,sports ball
-464,766.0,505.0,1.0,32,sports ball
-465,752.0,505.5,1.0,32,sports ball
-466,737.0,503.0,1.0,32,sports ball
-467,725.0,499.0,1.0,32,sports ball
-468,710.0,493.0,1.0,32,sports ball
-469,696.0,487.5,1.0,32,sports ball
-470,683.0,482.5,1.0,32,sports ball
-471,672.0,478.0,1.0,32,sports ball
-472,662.0,472.5,1.0,32,sports ball
-473,653.0,469.0,1.0,32,sports ball
-474,643.0,465.0,1.0,32,sports ball
-475,635.0,462.0,1.0,32,sports ball
-476,627.5,459.5,1.0,32,sports ball
-477,621.0,458.5,1.0,32,sports ball
-478,616.0,458.0,1.0,32,sports ball
-479,610.0,458.5,1.0,32,sports ball
-480,605.0,460.0,1.0,32,sports ball
-481,597.0,461.5,1.0,32,sports ball
-482,590.0,464.0,1.0,32,sports ball
-483,583.0,466.5,1.0,32,sports ball
-484,577.0,469.5,1.0,32,sports ball
-485,573.0,473.5,1.0,32,sports ball
-486,571.0,478.0,1.0,32,sports ball
-487,570.0,484.0,1.0,32,sports ball
-488,569.0,488.5,1.0,32,sports ball
-489,568.0,495.5,1.0,32,sports ball
-490,565.0,503.0,1.0,32,sports ball
-491,562.0,510.0,1.0,32,sports ball
-492,561.0,518.0,1.0,32,sports ball
-493,560.0,526.0,1.0,32,sports ball
-494,560.0,533.0,1.0,32,sports ball
-495,561.0,540.0,1.0,32,sports ball
-496,562.0,547.0,1.0,32,sports ball
-497,564.5,553.0,1.0,32,sports ball
-498,564.0,562.0,1.0,32,sports ball
-499,564.0,571.0,1.0,32,sports ball
-500,563.0,581.0,1.0,32,sports ball
-501,562.0,591.5,1.0,32,sports ball
-502,562.0,600.5,1.0,32,sports ball
-503,566.0,609.0,1.0,32,sports ball
-504,571.0,616.0,1.0,32,sports ball
-505,577.0,624.0,1.0,32,sports ball
-506,582.0,629.0,1.0,32,sports ball
-507,587.0,635.0,1.0,32,sports ball
-508,592.0,641.0,1.0,32,sports ball
-509,596.0,645.0,1.0,32,sports ball
-510,600.5,650.0,1.0,32,sports ball
-511,605.0,656.0,1.0,32,sports ball
-512,609.0,660.0,1.0,32,sports ball
-513,611.0,664.0,1.0,32,sports ball
-514,613.0,667.0,1.0,32,sports ball
-515,614.0,671.0,1.0,32,sports ball
-516,613.0,674.5,1.0,32,sports ball
-517,610.5,679.0,1.0,32,sports ball
-518,608.5,683.0,1.0,32,sports ball
-519,605.0,684.0,1.0,32,sports ball
-520,600.0,686.0,1.0,32,sports ball
-521,594.0,687.0,1.0,32,sports ball
-522,588.0,687.0,1.0,32,sports ball
-523,580.0,686.0,1.0,32,sports ball
-524,572.5,687.5,1.0,32,sports ball
-525,566.0,687.0,1.0,32,sports ball
-526,559.5,687.0,1.0,32,sports ball
-527,555.0,688.0,1.0,32,sports ball
-528,550.0,688.0,1.0,32,sports ball
-529,546.0,690.0,1.0,32,sports ball
-530,542.0,690.0,1.0,32,sports ball
-531,540.0,691.0,1.0,32,sports ball
-532,538.5,692.0,1.0,32,sports ball
-533,538.0,692.0,1.0,32,sports ball
-534,538.0,692.0,1.0,32,sports ball
-535,537.0,692.0,1.0,32,sports ball
-536,537.0,693.0,1.0,32,sports ball
-537,538.0,693.0,1.0,32,sports ball
-538,539.0,694.5,1.0,32,sports ball
-539,540.5,694.0,1.0,32,sports ball
-540,542.0,695.0,1.0,32,sports ball
-541,544.0,695.0,1.0,32,sports ball
-542,544.5,698.0,1.0,32,sports ball
-543,546.0,700.0,1.0,32,sports ball
-544,548.0,702.0,1.0,32,sports ball
-545,549.5,704.0,1.0,32,sports ball
-546,551.0,706.5,1.0,32,sports ball
-547,553.5,709.0,1.0,32,sports ball
-548,555.5,710.5,1.0,32,sports ball
-549,557.5,712.0,1.0,32,sports ball
-550,558.0,713.0,1.0,32,sports ball
-551,560.0,714.0,1.0,32,sports ball
-552,561.5,715.0,1.0,32,sports ball
-553,561.0,715.0,1.0,32,sports ball
-554,561.5,713.5,1.0,32,sports ball
-555,558.5,711.0,1.0,32,sports ball
-556,556.0,710.0,1.0,32,sports ball
-557,552.0,707.0,1.0,32,sports ball
-558,548.0,705.0,1.0,32,sports ball
-559,544.0,703.0,1.0,32,sports ball
-560,538.0,703.5,1.0,32,sports ball
-561,533.0,704.0,1.0,32,sports ball
-562,529.0,704.0,1.0,32,sports ball
-563,526.0,705.5,1.0,32,sports ball
-564,524.0,707.0,1.0,32,sports ball
-565,522.5,707.0,1.0,32,sports ball
-566,522.0,706.5,1.0,32,sports ball
-567,520.0,705.0,1.0,32,sports ball
-568,518.0,703.0,1.0,32,sports ball
-569,511.0,700.0,1.0,32,sports ball
-570,504.0,699.0,1.0,32,sports ball
-571,492.0,698.0,1.0,32,sports ball
-572,476.0,700.0,1.0,32,sports ball
-573,457.0,704.0,1.0,32,sports ball
-574,435.0,709.0,1.0,32,sports ball
-575,408.0,717.0,1.0,32,sports ball
-576,379.0,729.5,1.0,32,sports ball
-577,346.5,745.0,1.0,32,sports ball
-578,310.0,766.0,1.0,32,sports ball
-579,271.5,791.5,1.0,32,sports ball
-580,232.5,821.0,1.0,32,sports ball
-581,NaN,NaN,0.0,-1,none
-582,152.5,898.5,1.0,32,sports ball
-583,117.0,954.0,1.0,32,sports ball
-584,87.0,1013.0,1.0,32,sports ball
-585,NaN,NaN,0.0,-1,none
-586,NaN,NaN,0.0,-1,none
-587,NaN,NaN,0.0,-1,none
-588,NaN,NaN,0.0,-1,none
-589,NaN,NaN,0.0,-1,none
-590,NaN,NaN,0.0,-1,none
-591,NaN,NaN,0.0,-1,none
-592,NaN,NaN,0.0,-1,none
-593,NaN,NaN,0.0,-1,none
-594,NaN,NaN,0.0,-1,none
-595,NaN,NaN,0.0,-1,none
-596,NaN,NaN,0.0,-1,none
-597,NaN,NaN,0.0,-1,none
-598,NaN,NaN,0.0,-1,none
-599,NaN,NaN,0.0,-1,none
-600,NaN,NaN,0.0,-1,none
-601,NaN,NaN,0.0,-1,none
-602,NaN,NaN,0.0,-1,none
-603,NaN,NaN,0.0,-1,none
-604,NaN,NaN,0.0,-1,none
-605,NaN,NaN,0.0,-1,none
-606,NaN,NaN,0.0,-1,none
-607,NaN,NaN,0.0,-1,none
-608,NaN,NaN,0.0,-1,none
-609,NaN,NaN,0.0,-1,none
-610,NaN,NaN,0.0,-1,none
-611,NaN,NaN,0.0,-1,none
-612,NaN,NaN,0.0,-1,none
-613,NaN,NaN,0.0,-1,none
-614,NaN,NaN,0.0,-1,none
-615,976.0,936.0,1.0,32,sports ball
-616,959.0,763.0,1.0,32,sports ball
-617,940.0,638.0,1.0,32,sports ball
-618,926.5,523.5,1.0,32,sports ball
-619,913.0,435.5,1.0,32,sports ball
-620,900.0,367.0,1.0,32,sports ball
-621,888.0,316.0,1.0,32,sports ball
-622,877.0,279.5,1.0,32,sports ball
-623,867.5,256.5,1.0,32,sports ball
-624,857.0,246.0,1.0,32,sports ball
-625,849.0,249.0,1.0,32,sports ball
-626,839.0,264.0,1.0,32,sports ball
-627,830.0,291.5,1.0,32,sports ball
-628,821.0,334.0,1.0,32,sports ball
-629,811.0,389.0,1.0,32,sports ball
-630,800.0,462.0,1.0,32,sports ball
-631,789.0,559.0,1.0,32,sports ball
-632,777.0,664.0,1.0,32,sports ball
-633,762.0,803.0,1.0,32,sports ball
-634,748.0,979.0,1.0,32,sports ball
-635,NaN,NaN,0.0,-1,none
-636,NaN,NaN,0.0,-1,none
-637,NaN,NaN,0.0,-1,none
-638,NaN,NaN,0.0,-1,none
-639,NaN,NaN,0.0,-1,none
-640,NaN,NaN,0.0,-1,none
-641,NaN,NaN,0.0,-1,none
-642,NaN,NaN,0.0,-1,none
-643,NaN,NaN,0.0,-1,none
-644,NaN,NaN,0.0,-1,none
-645,NaN,NaN,0.0,-1,none
-646,NaN,NaN,0.0,-1,none
-647,NaN,NaN,0.0,-1,none
-648,NaN,NaN,0.0,-1,none
-649,NaN,NaN,0.0,-1,none
-650,NaN,NaN,0.0,-1,none
-651,NaN,NaN,0.0,-1,none
-652,NaN,NaN,0.0,-1,none
-653,NaN,NaN,0.0,-1,none
-654,NaN,NaN,0.0,-1,none
-655,NaN,NaN,0.0,-1,none
-656,NaN,NaN,0.0,-1,none
-657,771.0,916.0,1.0,32,sports ball
-658,775.5,737.0,1.0,32,sports ball
-659,773.0,587.0,1.0,32,sports ball
-660,770.0,468.0,1.0,32,sports ball
-661,770.0,376.0,1.0,32,sports ball
-662,770.0,301.5,1.0,32,sports ball
-663,770.0,246.0,1.0,32,sports ball
-664,768.5,204.0,1.0,32,sports ball
-665,766.0,176.0,1.0,32,sports ball
-666,765.0,159.0,1.0,32,sports ball
-667,763.0,155.0,1.0,32,sports ball
-668,761.0,160.0,1.0,32,sports ball
-669,759.0,177.0,1.0,32,sports ball
-670,755.0,205.0,1.0,32,sports ball
-671,751.5,242.0,1.0,32,sports ball
-672,749.0,295.0,1.0,32,sports ball
-673,744.5,361.0,1.0,32,sports ball
-674,739.0,442.0,1.0,32,sports ball
-675,735.0,542.0,1.0,32,sports ball
-676,730.0,651.0,1.0,32,sports ball
-677,724.0,789.0,1.0,32,sports ball
-678,729.0,939.0,1.0,32,sports ball
-679,750.0,986.0,1.0,32,sports ball
-680,749.5,1020.0,1.0,32,sports ball
-681,750.5,1058.0,1.0,32,sports ball
-682,NaN,NaN,0.0,-1,none
-683,NaN,NaN,0.0,-1,none
-684,NaN,NaN,0.0,-1,none
-685,NaN,NaN,0.0,-1,none
-686,NaN,NaN,0.0,-1,none
-687,NaN,NaN,0.0,-1,none
-688,NaN,NaN,0.0,-1,none
-689,NaN,NaN,0.0,-1,none
-690,NaN,NaN,0.0,-1,none
-691,NaN,NaN,0.0,-1,none
-692,NaN,NaN,0.0,-1,none
-693,NaN,NaN,0.0,-1,none
-694,NaN,NaN,0.0,-1,none
-695,NaN,NaN,0.0,-1,none
-696,NaN,NaN,0.0,-1,none
-697,NaN,NaN,0.0,-1,none
-698,792.0,891.0,1.0,32,sports ball
-699,795.0,726.0,1.0,32,sports ball
-700,796.0,577.0,1.0,32,sports ball
-701,799.0,461.0,1.0,32,sports ball
-702,800.5,361.0,1.0,32,sports ball
-703,803.0,280.0,1.0,32,sports ball
-704,804.0,214.0,1.0,32,sports ball
-705,806.0,162.5,1.0,32,sports ball
-706,807.0,124.0,1.0,32,sports ball
-707,808.0,98.0,1.0,32,sports ball
-708,809.0,82.5,1.0,32,sports ball
-709,810.0,81.0,1.0,32,sports ball
-710,811.0,84.0,1.0,32,sports ball
-711,810.0,100.0,1.0,32,sports ball
-712,810.0,129.0,1.0,32,sports ball
-713,811.0,171.5,1.0,32,sports ball
-714,810.0,229.0,1.0,32,sports ball
-715,810.0,305.0,1.0,32,sports ball
-716,810.0,400.0,1.0,32,sports ball
-717,808.0,523.0,1.0,32,sports ball
-718,811.0,676.0,1.0,32,sports ball
-719,810.0,862.5,1.0,32,sports ball
-720,822.0,1041.0,1.0,32,sports ball
-721,837.5,1057.0,1.0,32,sports ball
-722,NaN,NaN,0.0,-1,none
-723,NaN,NaN,0.0,-1,none
-724,NaN,NaN,0.0,-1,none
-725,NaN,NaN,0.0,-1,none
-726,NaN,NaN,0.0,-1,none
-727,NaN,NaN,0.0,-1,none
-728,NaN,NaN,0.0,-1,none
-729,NaN,NaN,0.0,-1,none
-730,NaN,NaN,0.0,-1,none
-731,NaN,NaN,0.0,-1,none
-732,NaN,NaN,0.0,-1,none
-733,NaN,NaN,0.0,-1,none
-734,NaN,NaN,0.0,-1,none
-735,NaN,NaN,0.0,-1,none
-736,NaN,NaN,0.0,-1,none
-737,NaN,NaN,0.0,-1,none
-738,NaN,NaN,0.0,-1,none
-739,NaN,NaN,0.0,-1,none
-740,NaN,NaN,0.0,-1,none
-741,NaN,NaN,0.0,-1,none
-742,NaN,NaN,0.0,-1,none
-743,NaN,NaN,0.0,-1,none
-744,NaN,NaN,0.0,-1,none
-745,NaN,NaN,0.0,-1,none
-746,NaN,NaN,0.0,-1,none
-747,824.0,892.0,1.0,32,sports ball
-748,817.0,662.5,1.0,32,sports ball
-749,813.5,461.0,1.0,32,sports ball
-750,810.0,301.0,1.0,32,sports ball
-751,808.0,168.0,1.0,32,sports ball
-752,803.5,55.0,1.0,32,sports ball
-753,NaN,NaN,0.0,-1,none
-754,NaN,NaN,0.0,-1,none
-755,NaN,NaN,0.0,-1,none
-756,NaN,NaN,0.0,-1,none
-757,NaN,NaN,0.0,-1,none
-758,NaN,NaN,0.0,-1,none
-759,NaN,NaN,0.0,-1,none
-760,NaN,NaN,0.0,-1,none
-761,NaN,NaN,0.0,-1,none
-762,NaN,NaN,0.0,-1,none
-763,NaN,NaN,0.0,-1,none
-764,NaN,NaN,0.0,-1,none
-765,NaN,NaN,0.0,-1,none
-766,NaN,NaN,0.0,-1,none
-767,NaN,NaN,0.0,-1,none
-768,NaN,NaN,0.0,-1,none
-769,NaN,NaN,0.0,-1,none
-770,NaN,NaN,0.0,-1,none
-771,NaN,NaN,0.0,-1,none
-772,NaN,NaN,0.0,-1,none
-773,NaN,NaN,0.0,-1,none
-774,710.0,90.0,1.0,32,sports ball
-775,696.0,210.0,1.0,32,sports ball
-776,685.0,356.0,1.0,32,sports ball
-777,672.0,548.5,1.0,32,sports ball
-778,655.0,779.0,1.0,32,sports ball
-779,NaN,NaN,0.0,-1,none
-780,NaN,NaN,0.0,-1,none
-781,NaN,NaN,0.0,-1,none
-782,NaN,NaN,0.0,-1,none
-783,NaN,NaN,0.0,-1,none
-784,NaN,NaN,0.0,-1,none
-785,NaN,NaN,0.0,-1,none
-786,NaN,NaN,0.0,-1,none
-787,NaN,NaN,0.0,-1,none
-788,NaN,NaN,0.0,-1,none
-789,NaN,NaN,0.0,-1,none
-790,NaN,NaN,0.0,-1,none
-791,NaN,NaN,0.0,-1,none
-792,NaN,NaN,0.0,-1,none
-793,NaN,NaN,0.0,-1,none
-794,NaN,NaN,0.0,-1,none
-795,NaN,NaN,0.0,-1,none
-796,NaN,NaN,0.0,-1,none
-797,NaN,NaN,0.0,-1,none
-798,NaN,NaN,0.0,-1,none
-799,NaN,NaN,0.0,-1,none
-800,NaN,NaN,0.0,-1,none
-801,NaN,NaN,0.0,-1,none
-802,NaN,NaN,0.0,-1,none
-803,NaN,NaN,0.0,-1,none
-804,NaN,NaN,0.0,-1,none
-805,NaN,NaN,0.0,-1,none
-806,NaN,NaN,0.0,-1,none
-807,NaN,NaN,0.0,-1,none
-808,NaN,NaN,0.0,-1,none
-809,NaN,NaN,0.0,-1,none
-810,950.0,899.0,1.0,32,sports ball
-811,928.0,680.0,1.0,32,sports ball
-812,907.0,504.0,1.0,32,sports ball
-813,890.0,358.5,1.0,32,sports ball
-814,875.0,240.0,1.0,32,sports ball
-815,861.0,143.0,1.0,32,sports ball
-816,849.0,66.0,1.0,32,sports ball
-817,NaN,NaN,0.0,-1,none
-818,NaN,NaN,0.0,-1,none
-819,NaN,NaN,0.0,-1,none
-820,NaN,NaN,0.0,-1,none
-821,NaN,NaN,0.0,-1,none
-822,NaN,NaN,0.0,-1,none
-823,NaN,NaN,0.0,-1,none
-824,NaN,NaN,0.0,-1,none
-825,NaN,NaN,0.0,-1,none
-826,NaN,NaN,0.0,-1,none
-827,NaN,NaN,0.0,-1,none
-828,NaN,NaN,0.0,-1,none
-829,NaN,NaN,0.0,-1,none
-830,NaN,NaN,0.0,-1,none
-831,712.0,37.0,1.0,32,sports ball
-832,702.0,95.0,1.0,32,sports ball
-833,691.0,161.0,1.0,32,sports ball
-834,678.0,237.5,1.0,32,sports ball
-835,665.0,326.0,1.0,32,sports ball
-836,652.0,427.0,1.0,32,sports ball
-837,635.0,543.5,1.0,32,sports ball
-838,NaN,NaN,0.0,-1,none
-839,657.0,632.0,1.0,32,sports ball
-840,669.0,670.0,1.0,32,sports ball
-841,678.0,713.0,1.0,32,sports ball
-842,684.0,774.0,1.0,32,sports ball
-843,NaN,NaN,0.0,-1,none
-844,668.5,934.0,1.0,32,sports ball
-845,NaN,NaN,0.0,-1,none
-846,NaN,NaN,0.0,-1,none
-847,NaN,NaN,0.0,-1,none
-848,NaN,NaN,0.0,-1,none
-849,NaN,NaN,0.0,-1,none
-850,NaN,NaN,0.0,-1,none
-851,NaN,NaN,0.0,-1,none
-852,NaN,NaN,0.0,-1,none
-853,NaN,NaN,0.0,-1,none
-854,NaN,NaN,0.0,-1,none
-855,NaN,NaN,0.0,-1,none
-856,NaN,NaN,0.0,-1,none
-857,NaN,NaN,0.0,-1,none
-858,NaN,NaN,0.0,-1,none
-859,NaN,NaN,0.0,-1,none
-860,NaN,NaN,0.0,-1,none
-861,NaN,NaN,0.0,-1,none
-862,NaN,NaN,0.0,-1,none
-863,NaN,NaN,0.0,-1,none
-864,1368.5,1018.0,1.0,32,sports ball
-865,1363.5,932.5,1.0,32,sports ball
-866,1346.5,852.5,1.0,32,sports ball
-867,1323.0,785.5,1.0,32,sports ball
-868,1295.0,728.5,1.0,32,sports ball
-869,1266.0,680.5,1.0,32,sports ball
-870,1238.0,642.0,1.0,32,sports ball
-871,1209.0,610.5,1.0,32,sports ball
-872,1179.5,585.0,1.0,32,sports ball
-873,1149.0,565.0,1.0,32,sports ball
-874,1117.0,548.0,1.0,32,sports ball
-875,1088.0,534.0,1.0,32,sports ball
-876,1056.0,524.0,1.0,32,sports ball
-877,1024.0,516.0,1.0,32,sports ball
-878,989.0,512.0,1.0,32,sports ball
-879,957.0,508.5,1.0,32,sports ball
-880,924.0,509.0,1.0,32,sports ball
-881,888.0,510.0,1.0,32,sports ball
-882,856.0,513.0,1.0,32,sports ball
-883,823.0,515.5,1.0,32,sports ball
-884,790.0,520.0,1.0,32,sports ball
-885,753.0,526.0,1.0,32,sports ball
-886,718.0,533.0,1.0,32,sports ball
-887,684.0,541.0,1.0,32,sports ball
-888,649.5,547.5,1.0,32,sports ball
-889,611.5,554.5,1.0,32,sports ball
-890,573.0,564.0,1.0,32,sports ball
-891,543.0,570.5,1.0,32,sports ball
-892,514.0,575.5,1.0,32,sports ball
-893,486.5,580.5,1.0,32,sports ball
-894,466.5,584.5,1.0,32,sports ball
-895,453.0,584.0,1.0,32,sports ball
-896,445.0,581.0,1.0,32,sports ball
-897,447.5,574.0,1.0,32,sports ball
-898,459.0,562.5,1.0,32,sports ball
-899,482.0,550.0,1.0,32,sports ball
-900,513.0,536.0,1.0,32,sports ball
-901,554.0,521.0,1.0,32,sports ball
-902,598.5,508.0,1.0,32,sports ball
-903,651.5,497.0,1.0,32,sports ball
-904,703.0,486.0,1.0,32,sports ball
-905,763.5,479.0,1.0,32,sports ball
-906,826.0,475.5,1.0,32,sports ball
-907,889.0,473.0,1.0,32,sports ball
-908,956.0,473.5,1.0,32,sports ball
-909,1012.0,475.0,1.0,32,sports ball
-910,1070.0,476.0,1.0,32,sports ball
-911,1124.0,479.0,1.0,32,sports ball
-912,1178.0,482.0,1.0,32,sports ball
-913,1227.5,486.0,1.0,32,sports ball
-914,1266.0,491.0,1.0,32,sports ball
-915,1293.0,492.5,1.0,32,sports ball
-916,1303.0,494.0,1.0,32,sports ball
-917,1298.0,494.0,1.0,32,sports ball
-918,1277.0,492.0,1.0,32,sports ball
-919,1249.0,488.0,1.0,32,sports ball
-920,1215.0,484.5,1.0,32,sports ball
-921,1178.0,480.5,1.0,32,sports ball
-922,1140.0,476.0,1.0,32,sports ball
-923,1100.5,471.0,1.0,32,sports ball
-924,1057.0,468.0,1.0,32,sports ball
-925,1012.0,465.0,1.0,32,sports ball
-926,961.0,465.0,1.0,32,sports ball
-927,897.0,466.0,1.0,32,sports ball
-928,831.0,471.0,1.0,32,sports ball
-929,758.0,477.5,1.0,32,sports ball
-930,682.0,486.0,1.0,32,sports ball
-931,613.0,498.0,1.0,32,sports ball
-932,546.0,512.0,1.0,32,sports ball
-933,482.0,528.0,1.0,32,sports ball
-934,424.5,541.0,1.0,32,sports ball
-935,376.0,553.0,1.0,32,sports ball
-936,335.0,564.0,1.0,32,sports ball
-937,305.0,573.0,1.0,32,sports ball
-938,279.5,576.5,1.0,32,sports ball
-939,259.0,582.0,1.0,32,sports ball
-940,243.0,589.0,1.0,32,sports ball
-941,232.0,594.0,1.0,32,sports ball
-942,224.0,595.0,1.0,32,sports ball
-943,218.0,592.0,1.0,32,sports ball
-944,210.5,588.0,1.0,32,sports ball
-945,205.0,580.0,1.0,32,sports ball
-946,179.0,566.0,1.0,32,sports ball
-947,174.5,547.0,1.0,32,sports ball
-948,165.0,529.5,1.0,32,sports ball
-949,149.0,511.5,1.0,32,sports ball
-950,134.5,492.0,1.0,32,sports ball
-951,125.0,473.0,1.0,32,sports ball
-952,115.0,454.5,1.0,32,sports ball
-953,103.5,439.5,1.0,32,sports ball
-954,92.0,421.0,1.0,32,sports ball
-955,80.0,391.0,1.0,32,sports ball
-956,NaN,NaN,0.0,-1,none
-957,NaN,NaN,0.0,-1,none
-958,NaN,NaN,0.0,-1,none
-959,NaN,NaN,0.0,-1,none
-960,NaN,NaN,0.0,-1,none
-961,NaN,NaN,0.0,-1,none
-962,NaN,NaN,0.0,-1,none
-963,NaN,NaN,0.0,-1,none
-964,NaN,NaN,0.0,-1,none
-965,NaN,NaN,0.0,-1,none
-966,94.5,257.5,1.0,32,sports ball
-967,109.0,250.0,1.0,32,sports ball
-968,122.5,253.0,1.0,32,sports ball
-969,138.0,247.0,1.0,32,sports ball
-970,154.0,240.0,1.0,32,sports ball
-971,172.0,236.0,1.0,32,sports ball
-972,202.0,232.0,1.0,32,sports ball
-973,247.0,228.0,1.0,32,sports ball
-974,297.0,231.5,1.0,32,sports ball
-975,348.0,236.5,1.0,32,sports ball
-976,410.5,240.5,1.0,32,sports ball
-977,473.0,246.0,1.0,32,sports ball
-978,535.5,252.5,1.0,32,sports ball
-979,599.5,262.0,1.0,32,sports ball
-980,669.0,271.0,1.0,32,sports ball
-981,741.0,279.0,1.0,32,sports ball
-982,810.0,287.0,1.0,32,sports ball
-983,894.0,292.0,1.0,32,sports ball
-984,978.0,296.0,1.0,32,sports ball
-985,1051.0,302.5,1.0,32,sports ball
-986,1122.0,310.0,1.0,32,sports ball
-987,1188.0,320.0,1.0,32,sports ball
-988,1254.5,332.0,1.0,32,sports ball
-989,1320.0,348.5,1.0,32,sports ball
-990,1380.0,367.0,1.0,32,sports ball
-991,1438.5,385.0,1.0,32,sports ball
-992,1477.0,407.0,1.0,32,sports ball
-993,1506.0,428.0,1.0,32,sports ball
-994,NaN,NaN,0.0,-1,none
-995,NaN,NaN,0.0,-1,none
-996,NaN,NaN,0.0,-1,none
-997,NaN,NaN,0.0,-1,none
-998,NaN,NaN,0.0,-1,none
-999,NaN,NaN,0.0,-1,none
-1000,NaN,NaN,0.0,-1,none
-1001,NaN,NaN,0.0,-1,none
-1002,NaN,NaN,0.0,-1,none
-1003,NaN,NaN,0.0,-1,none
-1004,NaN,NaN,0.0,-1,none
-1005,NaN,NaN,0.0,-1,none
-1006,NaN,NaN,0.0,-1,none
-1007,NaN,NaN,0.0,-1,none
-1008,NaN,NaN,0.0,-1,none
-1009,NaN,NaN,0.0,-1,none
-1010,NaN,NaN,0.0,-1,none
-1011,NaN,NaN,0.0,-1,none
-1012,NaN,NaN,0.0,-1,none
-1013,NaN,NaN,0.0,-1,none
-1014,NaN,NaN,0.0,-1,none
-1015,NaN,NaN,0.0,-1,none
-1016,NaN,NaN,0.0,-1,none
-1017,NaN,NaN,0.0,-1,none
-1018,NaN,NaN,0.0,-1,none
-1019,NaN,NaN,0.0,-1,none
-1020,NaN,NaN,0.0,-1,none
-1021,NaN,NaN,0.0,-1,none
-1022,NaN,NaN,0.0,-1,none
-1023,NaN,NaN,0.0,-1,none
-1024,NaN,NaN,0.0,-1,none
-1025,NaN,NaN,0.0,-1,none
-1026,NaN,NaN,0.0,-1,none
-1027,NaN,NaN,0.0,-1,none
-1028,NaN,NaN,0.0,-1,none
-1029,NaN,NaN,0.0,-1,none
-1030,NaN,NaN,0.0,-1,none
-1031,NaN,NaN,0.0,-1,none
-1032,NaN,NaN,0.0,-1,none
-1033,NaN,NaN,0.0,-1,none
-1034,NaN,NaN,0.0,-1,none
-1035,NaN,NaN,0.0,-1,none
-1036,NaN,NaN,0.0,-1,none
-1037,NaN,NaN,0.0,-1,none
-1038,NaN,NaN,0.0,-1,none
-1039,809.0,113.0,1.0,32,sports ball
-1040,818.0,140.0,1.0,32,sports ball
-1041,822.5,184.0,1.0,32,sports ball
-1042,831.0,244.0,1.0,32,sports ball
-1043,844.0,301.5,1.0,32,sports ball
-1044,850.0,362.0,1.0,32,sports ball
-1045,856.0,422.0,1.0,32,sports ball
-1046,859.0,482.5,1.0,32,sports ball
-1047,865.0,543.0,1.0,32,sports ball
-1048,869.0,602.0,1.0,32,sports ball
-1049,873.0,661.0,1.0,32,sports ball
-1050,879.0,721.0,1.0,32,sports ball
-1051,888.0,778.0,1.0,32,sports ball
-1052,896.0,836.0,1.0,32,sports ball
-1053,903.0,893.0,1.0,32,sports ball
-1054,911.0,925.0,1.0,32,sports ball
-1055,919.0,953.0,1.0,32,sports ball
-1056,NaN,NaN,0.0,-1,none
-1057,NaN,NaN,0.0,-1,none
-1058,NaN,NaN,0.0,-1,none
-1059,NaN,NaN,0.0,-1,none
-1060,NaN,NaN,0.0,-1,none
-1061,NaN,NaN,0.0,-1,none
-1062,NaN,NaN,0.0,-1,none
-1063,NaN,NaN,0.0,-1,none
-1064,NaN,NaN,0.0,-1,none
-1065,NaN,NaN,0.0,-1,none
-1066,NaN,NaN,0.0,-1,none
-1067,NaN,NaN,0.0,-1,none
-1068,NaN,NaN,0.0,-1,none
-1069,NaN,NaN,0.0,-1,none
-1070,NaN,NaN,0.0,-1,none
-1071,NaN,NaN,0.0,-1,none
-1072,NaN,NaN,0.0,-1,none
-1073,NaN,NaN,0.0,-1,none
-1074,NaN,NaN,0.0,-1,none
-1075,NaN,NaN,0.0,-1,none
-1076,NaN,NaN,0.0,-1,none
-1077,NaN,NaN,0.0,-1,none
-1078,NaN,NaN,0.0,-1,none
-1079,NaN,NaN,0.0,-1,none
-1080,NaN,NaN,0.0,-1,none
-1081,NaN,NaN,0.0,-1,none
-1082,NaN,NaN,0.0,-1,none
-1083,NaN,NaN,0.0,-1,none
-1084,NaN,NaN,0.0,-1,none
-1085,NaN,NaN,0.0,-1,none
-1086,NaN,NaN,0.0,-1,none
-1087,NaN,NaN,0.0,-1,none
-1088,NaN,NaN,0.0,-1,none
-1089,NaN,NaN,0.0,-1,none
-1090,NaN,NaN,0.0,-1,none
-1091,NaN,NaN,0.0,-1,none
-1092,NaN,NaN,0.0,-1,none
-1093,NaN,NaN,0.0,-1,none
-1094,NaN,NaN,0.0,-1,none
-1095,NaN,NaN,0.0,-1,none
-1096,NaN,NaN,0.0,-1,none
-1097,NaN,NaN,0.0,-1,none
-1098,NaN,NaN,0.0,-1,none
-1099,NaN,NaN,0.0,-1,none
-1100,NaN,NaN,0.0,-1,none
-1101,NaN,NaN,0.0,-1,none
-1102,NaN,NaN,0.0,-1,none
-1103,NaN,NaN,0.0,-1,none
-1104,NaN,NaN,0.0,-1,none
-1105,NaN,NaN,0.0,-1,none
-1106,NaN,NaN,0.0,-1,none
-1107,NaN,NaN,0.0,-1,none
-1108,NaN,NaN,0.0,-1,none
-1109,NaN,NaN,0.0,-1,none
-1110,NaN,NaN,0.0,-1,none
-1111,NaN,NaN,0.0,-1,none
-1112,470.0,1010.0,1.0,32,sports ball
-1113,497.0,964.0,1.0,32,sports ball
-1114,521.0,899.0,1.0,32,sports ball
-1115,544.0,834.0,1.0,32,sports ball
-1116,570.0,770.0,1.0,32,sports ball
-1117,599.5,711.5,1.0,32,sports ball
-1118,629.0,661.5,1.0,32,sports ball
-1119,654.0,619.5,1.0,32,sports ball
-1120,678.0,587.0,1.0,32,sports ball
-1121,699.0,562.0,1.0,32,sports ball
-1122,715.0,547.0,1.0,32,sports ball
-1123,730.0,538.0,1.0,32,sports ball
-1124,745.0,535.0,1.0,32,sports ball
-1125,757.0,537.0,1.0,32,sports ball
-1126,766.0,541.0,1.0,32,sports ball
-1127,773.0,546.0,1.0,32,sports ball
-1128,776.0,551.0,1.0,32,sports ball
-1129,775.0,554.0,1.0,32,sports ball
-1130,773.0,558.0,1.0,32,sports ball
-1131,772.0,563.0,1.0,32,sports ball
-1132,772.0,569.0,1.0,32,sports ball
-1133,777.0,577.0,1.0,32,sports ball
-1134,783.0,587.0,1.0,32,sports ball
-1135,789.0,598.0,1.0,32,sports ball
-1136,796.0,609.0,1.0,32,sports ball
-1137,808.0,622.5,1.0,32,sports ball
-1138,819.0,641.5,1.0,32,sports ball
-1139,829.0,660.0,1.0,32,sports ball
-1140,839.0,678.0,1.0,32,sports ball
-1141,850.0,681.0,1.0,32,sports ball
-1142,857.0,684.0,1.0,32,sports ball
-1143,866.0,674.0,1.0,32,sports ball
-1144,879.0,652.0,1.0,32,sports ball
-1145,901.0,623.0,1.0,32,sports ball
-1146,932.0,586.0,1.0,32,sports ball
-1147,949.0,546.0,1.0,32,sports ball
-1148,959.0,506.0,1.0,32,sports ball
-1149,973.5,470.0,1.0,32,sports ball
-1150,984.0,437.5,1.0,32,sports ball
-1151,984.0,403.0,1.0,32,sports ball
-1152,996.0,368.0,1.0,32,sports ball
-1153,989.0,340.0,1.0,32,sports ball
-1154,982.5,326.0,1.0,32,sports ball
-1155,975.5,310.0,1.0,32,sports ball
-1156,979.0,289.5,1.0,32,sports ball
-1157,972.0,282.0,1.0,32,sports ball
-1158,964.0,286.0,1.0,32,sports ball
-1159,952.5,288.0,1.0,32,sports ball
-1160,945.5,283.5,1.0,32,sports ball
-1161,942.0,283.0,1.0,32,sports ball
-1162,934.0,281.5,1.0,32,sports ball
-1163,916.5,283.0,1.0,32,sports ball
-1164,908.0,288.5,1.0,32,sports ball
-1165,894.0,288.0,1.0,32,sports ball
-1166,879.0,292.0,1.0,32,sports ball
-1167,872.0,300.0,1.0,32,sports ball
-1168,869.5,307.0,1.0,32,sports ball
-1169,869.5,313.5,1.0,32,sports ball
-1170,870.0,323.0,1.0,32,sports ball
-1171,876.0,335.5,1.0,32,sports ball
-1172,888.0,334.0,1.0,32,sports ball
-1173,897.0,331.5,1.0,32,sports ball
-1174,903.0,336.5,1.0,32,sports ball
-1175,912.0,338.5,1.0,32,sports ball
-1176,921.0,332.5,1.0,32,sports ball
-1177,925.5,330.0,1.0,32,sports ball
-1178,929.0,329.0,1.0,32,sports ball
-1179,932.0,327.5,1.0,32,sports ball
-1180,933.0,324.0,1.0,32,sports ball
-1181,934.0,323.0,1.0,32,sports ball
-1182,936.0,322.0,1.0,32,sports ball
-1183,936.0,322.0,1.0,32,sports ball
-1184,936.0,320.5,1.0,32,sports ball
-1185,936.0,320.5,1.0,32,sports ball
-1186,939.0,319.0,1.0,32,sports ball
-1187,943.0,314.0,1.0,32,sports ball
-1188,944.0,311.0,1.0,32,sports ball
-1189,946.0,312.0,1.0,32,sports ball
-1190,947.0,311.0,1.0,32,sports ball
-1191,946.0,309.0,1.0,32,sports ball
-1192,938.5,314.0,1.0,32,sports ball
-1193,924.0,328.0,1.0,32,sports ball
-1194,903.0,358.0,1.0,32,sports ball
-1195,872.0,406.0,1.0,32,sports ball
-1196,840.5,486.0,1.0,32,sports ball
-1197,821.0,602.0,1.0,32,sports ball
-1198,806.0,754.0,1.0,32,sports ball
-1199,797.0,915.0,1.0,32,sports ball
-1200,781.0,999.0,1.0,32,sports ball
-1201,NaN,NaN,0.0,-1,none
-1202,NaN,NaN,0.0,-1,none
-1203,NaN,NaN,0.0,-1,none
-1204,NaN,NaN,0.0,-1,none
-1205,NaN,NaN,0.0,-1,none
-1206,NaN,NaN,0.0,-1,none
-1207,NaN,NaN,0.0,-1,none
-1208,NaN,NaN,0.0,-1,none
-1209,NaN,NaN,0.0,-1,none
-1210,NaN,NaN,0.0,-1,none
-1211,NaN,NaN,0.0,-1,none
-1212,NaN,NaN,0.0,-1,none
-1213,NaN,NaN,0.0,-1,none
-1214,NaN,NaN,0.0,-1,none
-1215,NaN,NaN,0.0,-1,none
-1216,NaN,NaN,0.0,-1,none
-1217,NaN,NaN,0.0,-1,none
+1,190.93,515.49,0.5362,41,cup
+2,196.8,515.37,0.4653,41,cup
+3,196.77,515.33,0.4861,41,cup
+4,205.62,514.94,0.4913,75,vase
+5,213.57,514.87,0.6292,75,vase
+6,220.64,514.71,0.7454,75,vase
+7,229.9,514.72,0.6877,75,vase
+8,229.86,514.7,0.6831,75,vase
+9,237.33,514.39,0.5919,75,vase
+10,244.42,514.26,0.7156,75,vase
+11,256.48,514.22,0.77,75,vase
+12,270.87,513.71,0.8713,75,vase
+13,270.92,513.68,0.869,75,vase
+14,292.15,513.93,0.8625,75,vase
+15,310.15,514.27,0.8919,75,vase
+16,327.24,513.95,0.9067,75,vase
+17,341.01,513.85,0.9041,75,vase
+18,341.05,513.81,0.9016,75,vase
+19,355.96,514.09,0.9023,75,vase
+20,376.68,513.78,0.8993,75,vase
+21,393.5,514.12,0.9019,75,vase
+22,411.37,514.35,0.9199,75,vase
+23,411.31,514.35,0.9197,75,vase
+24,428.17,513.82,0.8998,75,vase
+25,442.35,513.84,0.9012,75,vase
+26,459.28,514.0,0.8955,75,vase
+27,479.16,513.97,0.8954,75,vase
+28,479.29,513.99,0.8958,75,vase
+29,498.82,514.14,0.9135,75,vase
+30,516.34,513.98,0.9183,75,vase
+31,531.51,513.82,0.9141,75,vase
+32,546.98,513.99,0.907,75,vase
+33,546.97,514.01,0.9081,75,vase
+34,565.32,513.58,0.9195,75,vase
+35,583.76,513.72,0.9148,75,vase
+36,603.37,514.02,0.93,75,vase
+37,621.39,513.64,0.9332,75,vase
+38,621.3,513.68,0.9335,75,vase
+39,633.49,513.88,0.9286,75,vase
+40,652.77,513.68,0.9138,75,vase
+41,672.37,513.55,0.919,75,vase
+42,689.82,513.56,0.9146,75,vase
+43,689.76,513.52,0.9141,75,vase
+44,707.9,513.76,0.921,75,vase
+45,723.89,513.78,0.9279,75,vase
+46,738.28,513.98,0.9196,75,vase
+47,758.62,513.67,0.9207,75,vase
+48,758.69,513.72,0.9207,75,vase
+49,777.47,513.6,0.9213,75,vase
+50,795.7,513.73,0.927,75,vase
+51,812.86,513.63,0.9267,75,vase
+52,826.33,513.73,0.9241,75,vase
+53,826.34,513.77,0.9273,75,vase
+54,843.91,513.78,0.9167,75,vase
+55,862.03,513.29,0.9277,75,vase
+56,881.16,513.43,0.924,75,vase
+57,898.89,513.57,0.9329,75,vase
+58,898.86,513.52,0.9312,75,vase
+59,916.02,513.57,0.9313,75,vase
+60,929.11,513.81,0.9308,75,vase
+61,949.23,513.62,0.9269,75,vase
+62,968.32,513.43,0.9276,75,vase
+63,968.32,513.42,0.9276,75,vase
+64,985.6,513.69,0.9292,75,vase
+65,1003.51,513.79,0.9329,75,vase
+66,1017.92,514.23,0.9295,75,vase
+67,1036.53,514.0,0.9252,75,vase
+68,1036.64,514.06,0.9254,75,vase
+69,1056.56,513.65,0.9262,75,vase
+70,1076.14,513.88,0.9242,75,vase
+71,1092.7,513.95,0.9312,75,vase
+72,1108.06,513.99,0.9284,75,vase
+73,1108.0,513.98,0.9285,75,vase
+74,1120.36,514.09,0.9281,75,vase
+75,1141.31,513.92,0.9184,75,vase
+76,1160.18,513.68,0.9195,75,vase
+77,1178.83,513.92,0.9216,75,vase
+78,1178.91,513.87,0.9219,75,vase
+79,1195.71,513.94,0.9267,75,vase
+80,1209.6,514.1,0.9313,75,vase
+81,1224.89,514.25,0.928,75,vase
+82,1245.58,513.65,0.9226,75,vase
+83,1245.57,513.66,0.9225,75,vase
+84,1264.59,513.71,0.9225,75,vase
+85,1280.45,514.07,0.9295,75,vase
+86,1297.54,514.15,0.9341,75,vase
+87,1309.97,514.34,0.9334,75,vase
+88,1309.97,514.3,0.9339,75,vase
+89,1328.64,514.26,0.9278,75,vase
+90,1346.36,513.72,0.9263,75,vase
+91,1365.08,514.02,0.9219,75,vase
+92,1381.91,514.38,0.935,75,vase
+93,1381.95,514.4,0.9342,75,vase
+94,1396.74,514.35,0.9278,75,vase
+95,1411.14,514.54,0.9224,75,vase
+96,1428.71,514.51,0.9192,75,vase
+97,1448.46,514.29,0.9127,75,vase
+98,1448.5,514.24,0.9147,75,vase
+99,1468.68,514.4,0.9059,75,vase
+100,1485.2,514.81,0.9269,75,vase
+101,1496.03,515.18,0.9005,75,vase
+102,1513.9,514.77,0.9058,75,vase
+103,1513.79,514.74,0.9074,75,vase
+104,1532.26,514.04,0.9142,75,vase
+105,1550.78,514.41,0.9122,75,vase
+106,1570.65,514.44,0.9203,75,vase
+107,1584.55,514.73,0.9241,75,vase
+108,1584.61,514.79,0.9209,75,vase
+109,1600.36,514.56,0.8918,75,vase
+110,1616.21,514.4,0.8911,75,vase
+111,1634.23,514.4,0.9112,75,vase
+112,1649.47,514.62,0.8852,75,vase
+113,1649.5,514.63,0.883,75,vase
+114,1657.92,514.8,0.8545,75,vase
+115,1650.23,514.34,0.8984,75,vase
+116,1636.4,514.07,0.9134,75,vase
+117,1620.01,514.4,0.9017,75,vase
+118,1620.07,514.41,0.8995,75,vase
+119,1607.81,514.7,0.9101,75,vase
+120,1592.92,515.04,0.899,75,vase
+121,1581.31,514.44,0.9122,75,vase
+122,1567.08,514.27,0.8996,75,vase
+123,1567.07,514.28,0.8958,75,vase
+124,1550.01,513.86,0.918,75,vase
+125,1534.83,513.65,0.916,75,vase
+126,1515.85,514.18,0.9094,75,vase
+127,1498.89,514.15,0.9194,75,vase
+128,1498.9,514.12,0.9171,75,vase
+129,1489.45,514.09,0.9217,75,vase
+130,1474.57,513.62,0.9187,75,vase
+131,1459.34,513.69,0.9008,75,vase
+132,1442.28,513.26,0.9138,75,vase
+133,1442.29,513.27,0.9134,75,vase
+134,1424.67,513.89,0.9089,75,vase
+135,1408.51,513.72,0.9005,75,vase
+136,1396.81,513.75,0.9162,75,vase
+137,1383.02,513.61,0.9174,75,vase
+138,1383.06,513.65,0.9219,75,vase
+139,1367.45,513.5,0.9222,75,vase
+140,1350.64,513.08,0.9207,75,vase
+141,1336.59,513.74,0.9294,75,vase
+142,1317.93,513.68,0.928,75,vase
+143,1317.93,513.65,0.9273,75,vase
+144,1305.62,513.78,0.9355,75,vase
+145,1293.3,513.69,0.9368,75,vase
+146,1278.09,513.19,0.9263,75,vase
+147,1264.0,512.9,0.9204,75,vase
+148,1263.96,512.92,0.9204,75,vase
+149,1245.97,513.15,0.9269,75,vase
+150,1230.67,513.72,0.9289,75,vase
+151,1214.23,513.45,0.9254,75,vase
+152,1201.64,513.27,0.9251,75,vase
+153,1201.58,513.26,0.925,75,vase
+154,1188.65,513.21,0.9326,75,vase
+155,1174.95,512.84,0.9163,75,vase
+156,1160.45,512.67,0.9209,75,vase
+157,1144.34,513.14,0.9301,75,vase
+158,1144.25,513.15,0.9308,75,vase
+159,1126.59,513.3,0.9291,75,vase
+160,1114.89,513.06,0.9259,75,vase
+161,1101.55,513.12,0.9332,75,vase
+162,1090.13,512.84,0.9272,75,vase
+163,1090.14,512.85,0.9267,75,vase
+164,1075.72,512.47,0.9183,75,vase
+165,1059.87,512.71,0.9277,75,vase
+166,1046.12,512.86,0.9298,75,vase
+167,1025.77,513.06,0.9304,75,vase
+168,1025.89,513.06,0.9296,75,vase
+169,1016.53,513.13,0.9281,75,vase
+170,1002.6,512.88,0.9326,75,vase
+171,988.94,512.9,0.927,75,vase
+172,975.92,512.51,0.923,75,vase
+173,975.87,512.5,0.9227,75,vase
+174,963.16,512.46,0.9271,75,vase
+175,958.41,512.41,0.9281,75,vase
+176,955.89,510.98,0.928,75,vase
+177,963.82,510.1,0.9237,75,vase
+178,963.79,510.07,0.9234,75,vase
+179,972.4,510.43,0.9208,75,vase
+180,973.12,510.44,0.9229,75,vase
+181,972.58,510.48,0.922,75,vase
+182,972.61,510.48,0.9219,75,vase
+183,972.64,510.48,0.9219,75,vase
+184,972.64,510.48,0.9219,75,vase
+185,972.63,510.49,0.922,75,vase
+186,972.63,510.47,0.9211,75,vase
+187,972.63,510.46,0.9209,75,vase
+188,972.64,510.46,0.9216,75,vase
+189,972.63,510.47,0.9227,75,vase
+190,972.63,510.46,0.9223,75,vase
+191,972.69,510.44,0.9204,75,vase
+192,972.65,510.45,0.9205,75,vase
+193,972.65,510.44,0.9206,75,vase
+194,972.59,510.44,0.9212,75,vase
+195,972.59,510.43,0.9212,75,vase
+196,972.58,510.4,0.9228,75,vase
+197,972.55,510.39,0.9226,75,vase
+198,972.54,510.4,0.9227,75,vase
+199,972.53,510.38,0.9224,75,vase
+200,972.81,510.38,0.9227,75,vase
+201,972.89,510.37,0.9229,75,vase
+202,973.17,510.15,0.9234,75,vase
+203,973.18,510.16,0.9234,75,vase
+204,973.6,510.05,0.9223,75,vase
+205,974.15,510.18,0.9233,75,vase
+206,974.51,510.38,0.9229,75,vase
+207,974.45,510.39,0.9229,75,vase
+208,974.39,510.37,0.9233,75,vase
+209,974.23,510.95,0.9249,75,vase
+210,974.13,511.76,0.926,75,vase
+211,974.92,512.44,0.9277,75,vase
+212,975.17,513.02,0.927,75,vase
+213,975.05,513.0,0.9264,75,vase
+214,975.21,513.96,0.9248,75,vase
+215,975.24,514.82,0.9264,75,vase
+216,975.2,515.47,0.9239,75,vase
+217,975.4,516.0,0.9229,75,vase
+218,975.44,515.97,0.9231,75,vase
+219,974.41,516.88,0.9277,75,vase
+220,974.45,517.91,0.9249,75,vase
+221,973.85,519.25,0.9314,75,vase
+222,974.03,519.92,0.9293,75,vase
+223,974.08,519.93,0.9298,75,vase
+224,973.17,521.55,0.9344,75,vase
+225,973.96,523.42,0.935,75,vase
+226,973.1,525.23,0.9338,75,vase
+227,973.15,526.43,0.9354,75,vase
+228,973.15,526.45,0.9332,75,vase
+229,973.08,526.65,0.9336,75,vase
+230,973.17,527.08,0.9358,75,vase
+231,974.24,527.47,0.9379,75,vase
+232,974.46,527.42,0.9395,75,vase
+233,974.45,527.41,0.9395,75,vase
+234,974.77,527.43,0.9356,75,vase
+235,974.3,527.84,0.9362,75,vase
+236,973.44,529.18,0.9349,75,vase
+237,973.12,530.39,0.9348,75,vase
+238,973.12,530.39,0.9346,75,vase
+239,972.96,530.65,0.9372,75,vase
+240,972.95,530.64,0.9374,75,vase

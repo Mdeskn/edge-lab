@@ -21,7 +21,23 @@ python generate_ground_truth.py \
     --conf   0.3
 ```
 
-For the lab tennis-ball video, generate independent ball-only ground truth with:
+For the cup video, generate cup-only ground truth with YOLO:
+
+```bash
+python generate_ground_truth.py \
+    --video  /path/to/test_video.mp4 \
+    --model  /path/to/yolov10n.onnx \
+    --output ground_truth.csv \
+    --tracker yolo \
+    --target-class-id 41,75 \
+    --conf 0.1
+```
+
+COCO class `41` is `cup` and class `75` is `vase`. The current cup video is
+mostly labelled as `vase` by YOLO, so the measured local and remote inference
+paths use the same combined filter through `TARGET_CLASS_ID=41,75`.
+
+For the original tennis-ball video, the color tracker is still available:
 
 ```bash
 python generate_ground_truth.py \
@@ -29,9 +45,6 @@ python generate_ground_truth.py \
     --output ground_truth.csv \
     --tracker tennis-ball-color
 ```
-
-The color tracker is used only offline to generate the answer key. The measured
-local and remote inference paths still use YOLO.
 
 ## Output format
 

@@ -8,6 +8,9 @@ import os
 import numpy as np
 import onnxruntime as ort
 
+from inference.yolo_postprocess import best_detection_center
+from inference.yolo_postprocess import TargetClassFilter
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,7 +21,7 @@ class LocalServer:
         self,
         model_path: str,
         conf_threshold: float = 0.3,
-        target_class_id: int | None = None,
+        target_class_id: TargetClassFilter = None,
         target_conf_threshold: float | None = None,
     ):
         """
@@ -70,43 +73,45 @@ class LocalServer:
             {self._input_name: preprocessed_frame},
         )
         orig_h, orig_w = original_shape[:2]
-        return self._postprocess(outputs[0], orig_h, orig_w)
+        _, _, input_h, input_w = preprocessed_frame.shape
+        return self._postprocess(outputs[0], orig_h, orig_w, input_h, input_w)
 
-    def _postprocess(self, output: np.ndarray, orig_h: int, orig_w: int) -> tuple:
+    def _postprocess(
+        self,
+        output: np.ndarray,
+        orig_h: int,
+        orig_w: int,
+        input_h: int,
+        input_w: int,
+    ) -> tuple:
         """
         Parse YOLOv10 output and return the center of the best target detection.
 
         YOLOv10 output shape: (1, num_boxes, 6).
         Each box: [x1, y1, x2, y2, confidence, class_id].
-        Coordinates are in model input space (640×640).
+        Coordinates are in model input space.
 
         Scales the result back to original frame coordinates.
         Returns (0.0, 0.0) when no box passes the confidence threshold.
         """
-        boxes = output.squeeze(0)  # (num_boxes, 6)
-
-        threshold = (
-            self.target_conf_threshold
-            if self.target_class_id is not None
-            else self.conf_threshold
+        center = best_detection_center(
+            output=output,
+            orig_h=orig_h,
+            orig_w=orig_w,
+            input_h=input_h,
+            input_w=input_w,
+            conf_threshold=self.conf_threshold,
+            target_class_id=self.target_class_id,
+            target_conf_threshold=self.target_conf_threshold,
         )
-        mask = boxes[:, 4] >= threshold
-        if self.target_class_id is not None:
-            mask &= boxes[:, 5].astype(int) == self.target_class_id
-        filtered = boxes[mask]
-
-        if len(filtered) == 0:
+        if center == (0.0, 0.0):
             logger.debug(
                 "No target detection for class=%s above confidence threshold %.2f",
                 self.target_class_id if self.target_class_id is not None else "any",
-                threshold,
+                (
+                    self.target_conf_threshold
+                    if self.target_class_id is not None
+                    else self.conf_threshold
+                ),
             )
-            return (0.0, 0.0)
-
-        best = filtered[filtered[:, 4].argmax()]
-        x1, y1, x2, y2 = best[:4]
-
-        center_x = (x1 + x2) / 2.0 * orig_w / 640.0
-        center_y = (y1 + y2) / 2.0 * orig_h / 640.0
-
-        return (float(center_x), float(center_y))
+        return center

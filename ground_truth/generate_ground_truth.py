@@ -13,7 +13,7 @@ Optional YOLO mode:
         --model yolov10n.onnx \
         --output ground_truth.csv \
         --tracker yolo \
-        --target-class-id 32
+        --target-class-id 41,75
 
 Output:
 frame_number,center_x,center_y,confidence,class_id,class_name
@@ -47,6 +47,7 @@ COCO_NAMES = [
 ]
 
 SPORTS_BALL_CLASS = 32
+CUP_CLASS = 41
 
 
 def load_session(model_path):
@@ -97,7 +98,11 @@ def postprocess_yolo(
         return None,None,0.0,-1
 
     if target_class_id is not None:
-        boxes = boxes[boxes[:,5].astype(int) == target_class_id]
+        class_ids = boxes[:,5].astype(int)
+        if isinstance(target_class_id, int):
+            boxes = boxes[class_ids == target_class_id]
+        else:
+            boxes = boxes[np.isin(class_ids, target_class_id)]
         if len(boxes) == 0:
             return None,None,0.0,-1
 
@@ -206,9 +211,9 @@ def main():
 
     parser.add_argument(
         "--target-class-id",
-        type=int,
+        type=parse_target_class_filter,
         default=None,
-        help="Optional COCO class filter for YOLO mode. Sports ball is class 32."
+        help="Optional COCO class filter for YOLO mode. Cup is 41; vase is 75. Comma-separated lists are allowed."
     )
 
     args = parser.parse_args()
@@ -317,6 +322,15 @@ def main():
     print(
         f"Output: {args.output}"
     )
+
+
+def parse_target_class_filter(value):
+    """Parse one class id or a comma-separated class-id list."""
+    parts = [part.strip() for part in value.split(",") if part.strip()]
+    ids = tuple(int(part) for part in parts)
+    if len(ids) == 1:
+        return ids[0]
+    return ids
 
 
 if __name__ == "__main__":
