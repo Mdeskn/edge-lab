@@ -1,6 +1,6 @@
 # EdgeLab
 
-A hands-on edge-computing lab for the IoT and Edge Computing course at FH Dortmund. A Raspberry Pi watches a pre-recorded drone-view video, detects objects (people and cars) frame by frame, and has to decide for every frame: run YOLO locally on the Pi CPU, or ship the frame over the network to a remote GPU server?
+A hands-on edge-computing lab for the IoT and Edge Computing course at FH Dortmund. A Raspberry Pi watches a pre-recorded drone-view video, tracks a single car frame by frame, and has to decide for every frame: run YOLO locally on the Pi CPU, or ship the frame over the network to a remote GPU server?
 
 Your job as a student: write the placement logic (the Service Placement Agent) that adapts to live conditions and keeps the prediction close to the ground truth. Everything else is already wired up.
 
@@ -76,8 +76,8 @@ GROUP_ID=1
 VIDEO_PATH=data/video.mp4
 GROUND_TRUTH_PATH=data/ground_truth.csv
 MODEL_PATH=data/yolov10n.onnx
-TARGET_CLASS_ID=0,2    # COCO person and car classes for the drone-view video
-TARGET_CONFIDENCE_THRESHOLD=0.3
+TARGET_CLASS_ID=2,6,67,4,0  # car + drone-view misclassification helpers
+TARGET_CONFIDENCE_THRESHOLD=0.01
 
 # Router VM forwards to the GPU server; always use this address, not the GPU server directly
 TRITON_URL=172.22.174.148:8001

@@ -1,7 +1,7 @@
 # Edge-Lab Dashboard: Features and Architecture
 
 This document explains what the Edge-Lab dashboard shows, why each feature is
-useful in the lab, and how data moves from the tennis-ball video to the browser.
+useful in the lab, and how data moves from the drone-view car video to the browser.
 
 ## 1. Educational Goal
 
@@ -27,8 +27,8 @@ remote
 ```
 
 The dashboard makes the consequences visible. A good decision should keep
-inference latency low and the predicted tennis-ball position close to the
-ground-truth tennis-ball position. The competition score is cumulative
+inference latency low and the predicted car position close to the
+ground-truth car position. The competition score is cumulative
 displacement in pixels. Lower is better.
 
 ## 2. What The Dashboard Shows
@@ -45,21 +45,21 @@ The video panel displays the newest scored video frame.
 
 | Overlay | Color | Meaning |
 | --- | --- | --- |
-| `GT` dot | Green | Ground-truth tennis-ball center |
-| `PRED` dot | Red | YOLO-predicted tennis-ball center |
-| Connecting line | Yellow | Distance between ground truth and prediction |
+| `GT` dot | Green | Ground-truth car center (from MOG2 background subtraction) |
+| `PRED` box | Red | YOLO-predicted car bounding box |
+| Connecting line | Yellow | Distance between ground truth center and predicted center |
 
 The overlay is drawn by the Python client before the JPEG is sent to the
 dashboard. The browser displays the already-annotated image, so browser resizing
-cannot move a marker away from the ball.
+cannot move a marker away from the car.
 
 There are three important cases:
 
-| Situation | Green GT dot | Red PRED dot | Displacement |
+| Situation | Green GT dot | Red PRED box | Displacement |
 | --- | --- | --- | --- |
-| Ball visible and YOLO finds it | Visible | Visible | Distance between dots |
-| Ball visible but YOLO misses it | Visible | Hidden | Penalized as distance from GT to `(0, 0)` |
-| Ball not visible | Hidden | Hidden | `N/A`; frame is not added to the cumulative score |
+| Car visible and YOLO finds it | Visible | Visible | Distance between GT center and predicted center |
+| Car visible but YOLO misses it | Visible | Hidden | Penalized as distance from GT to `(0, 0)` |
+| Car not visible / warmup frame | Hidden | Hidden | `N/A`; frame is not added to the cumulative score |
 
 ### Current Processing Mode
 
@@ -87,7 +87,7 @@ The latency card shows:
 | Maximum | Highest latency in the retained dashboard history |
 | P95 | 95th-percentile latency in the retained dashboard history |
 
-Latency matters because a slow prediction can lag behind a moving ball. Remote
+Latency matters because a slow prediction can lag behind a moving car. Remote
 inference may be fast when the network and GPU server are healthy, but slower
 when the network path or Triton queue is under load.
 
@@ -188,33 +188,33 @@ There is no central dashboard and no browser-side group switcher.
 The top-bar status shows whether the browser WebSocket is live. If disconnected,
 the frontend retries after `1.5` seconds.
 
-## 3. Ball-Only Tracking
+## 3. Single-Car Tracking
 
-The lab tracks only the yellow tennis ball. People and other detected objects
+The lab tracks a single car in a drone-view video. Other detected objects
 must never become the target.
 
 ### Ground Truth
 
-Ground truth is generated offline:
+Ground truth is generated offline using pure OpenCV (MOG2 background subtraction),
+so it is fully independent of the YOLO model being scored:
 
 ```bash
 python ground_truth/generate_ground_truth.py \
   --video data/test_video.mp4 \
-  --output data/ground_truth.csv \
-  --tracker tennis-ball-color
+  --output data/ground_truth.csv
 ```
 
-The offline color tracker:
+The MOG2 motion tracker:
 
-1. Converts each frame from BGR to HSV.
-2. Keeps yellow-green pixels in the configured HSV range.
-3. Removes small noise with morphological open and close operations.
-4. Finds contours.
-5. Keeps plausible ball regions with sufficient area and a roughly square
-   bounding rectangle.
-6. Chooses the largest plausible region.
-7. Writes its center coordinate to `data/ground_truth.csv`.
-8. Writes `NaN` coordinates when the ball is not visible.
+1. Builds a background model over the first 30 frames (warmup, no output).
+2. Subtracts the background from each subsequent frame to get a foreground mask.
+3. Removes shadows (keeps only definite foreground at pixel value 255).
+4. Cleans the mask with morphological open and close operations.
+5. Finds contours in the cleaned mask.
+6. Keeps blobs between 0.05% and 20% of the frame area (filters noise and full-frame clutter).
+7. Chooses the largest qualifying blob as the car.
+8. Writes its center coordinate to `data/ground_truth.csv`.
+9. Writes `NaN` coordinates during warmup or when no qualifying blob is found.
 
 This tracker runs only while generating the answer key. It is not part of the
 measured local or remote inference path. Keeping ground truth independent of
@@ -222,25 +222,27 @@ YOLO means a YOLO miss remains measurable.
 
 ### Predicted Position
 
-Measured inference still uses YOLOv10 ONNX. Both local CPU inference and remote
+Measured inference uses YOLOv10 ONNX. Both local CPU inference and remote
 Triton inference apply:
 
 ```dotenv
-TARGET_CLASS_ID=32
-TARGET_CONFIDENCE_THRESHOLD=0.1
+TARGET_CLASS_ID=2,6,67,4,0
+TARGET_CONFIDENCE_THRESHOLD=0.01
 ```
 
-COCO class `32` is `sports ball`. Each inference path:
+Primary class is `2` (car). The helper classes (train=6, cell phone=67, airplane=4,
+person=0) cover frames where YOLO misclassifies the car from a drone viewpoint — the
+car rooftop viewed from above resembles flat rectangular shapes from the COCO training
+distribution. Each inference path:
 
 1. Runs YOLO.
 2. Removes detections below `TARGET_CONFIDENCE_THRESHOLD`.
-3. Removes every class except `TARGET_CLASS_ID`.
-4. Selects the highest-confidence remaining ball.
-5. Converts its center from model space back to the original video resolution.
-6. Returns `(0.0, 0.0)` when no ball detection remains.
+3. Removes every class except those in `TARGET_CLASS_ID`.
+4. Selects the highest-confidence remaining detection.
+5. Converts its bounding box and center from model space back to the original video resolution.
+6. Returns `(0.0, 0.0)` when no detection remains.
 
-This guarantees that the red prediction marker never jumps to the person in the
-video.
+This maximises detection rate (~99%) while keeping the tracker on the car.
 
 ## 4. Frame-By-Frame Data Flow
 
@@ -465,7 +467,7 @@ Each dashboard JPEG POST contains:
 }
 ```
 
-When the tennis ball is not visible:
+When the car is not visible (or during MOG2 warmup):
 
 ```json
 {
@@ -475,7 +477,7 @@ When the tennis ball is not visible:
 }
 ```
 
-When the tennis ball is visible but YOLO misses it:
+When the car is visible but YOLO misses it:
 
 ```json
 {
@@ -509,8 +511,8 @@ KAFKA_BROKERS=HOST:PORT
 TRITON_URL=GPU_SERVER:8000
 DASHBOARD_ENABLED=true
 DASHBOARD_URL=http://localhost:8080
-TARGET_CLASS_ID=32
-TARGET_CONFIDENCE_THRESHOLD=0.1
+TARGET_CLASS_ID=2,6,67,4,0
+TARGET_CONFIDENCE_THRESHOLD=0.01
 ```
 
 The browser derives the Pi dashboard API address from the hostname used to open
@@ -534,7 +536,7 @@ For every video frame, the SP-Agent returns one of two values:
 | `remote` | Triton on the remote GPU server over the network |
 
 The dispatcher measures the actual frame latency, scores the resulting
-tennis-ball position, and reports the actual processing mode to the dashboard.
+car position, and reports the actual processing mode to the dashboard.
 Students can then see whether their placement decision was appropriate for the
 current GPU and network conditions.
 
@@ -554,17 +556,17 @@ For setup and run commands, follow the root [README.md](../README.md).
 | `DASHBOARD_HOST` | `0.0.0.0` | Backend listen host |
 | `DASHBOARD_PORT` | `8080` | Backend listen port |
 | `DASHBOARD_PUBLIC_API_URL` | empty | Optional browser-facing backend override; otherwise derive `http://<pi-host>:8080` |
-| `TARGET_CLASS_ID` | empty | Optional YOLO COCO class filter; use `32` for ball-only mode |
+| `TARGET_CLASS_ID` | empty | YOLO COCO class filter; use `2,6,67,4,0` for drone-view car tracking |
 | `TARGET_CONFIDENCE_THRESHOLD` | same as `CONFIDENCE_THRESHOLD` | Detection threshold after target filtering |
 
 ## 10. Main Files
 
 | File | Responsibility |
 | --- | --- |
-| `ground_truth/generate_ground_truth.py` | Generates independent tennis-ball answer key |
-| `client/inference/local_server.py` | Runs local ball-only YOLO inference |
-| `client/inference/remote_client.py` | Runs remote Triton ball-only YOLO inference |
-| `client/threads/frame_reader.py` | Reads frames and ball GT coordinates |
+| `ground_truth/generate_ground_truth.py` | Generates independent car answer key via MOG2 |
+| `client/inference/local_server.py` | Runs local car-only YOLO inference |
+| `client/inference/remote_client.py` | Runs remote Triton car-only YOLO inference |
+| `client/threads/frame_reader.py` | Reads frames and car GT coordinates |
 | `client/threads/dispatcher.py` | Applies SP-Agent placement and measures latency |
 | `client/threads/scorer.py` | Scores, annotates, logs, and publishes frames |
 | `client/metrics/dashboard_publisher.py` | Sends throttled JPEG snapshots without blocking inference |
@@ -576,33 +578,33 @@ For setup and run commands, follow the root [README.md](../README.md).
 
 ## 11. Troubleshooting
 
-### The dots follow the person instead of the ball
+### The prediction box follows the wrong object
 
 Confirm:
 
 ```dotenv
-TARGET_CLASS_ID=32
-TARGET_CONFIDENCE_THRESHOLD=0.1
+TARGET_CLASS_ID=2,6,67,4,0
+TARGET_CONFIDENCE_THRESHOLD=0.01
 ```
 
-For instructor setup or maintenance, regenerate ball-only ground truth:
+For instructor setup or maintenance, regenerate car ground truth:
 
 ```bash
 python ground_truth/generate_ground_truth.py \
   --video data/test_video.mp4 \
-  --output data/ground_truth.csv \
-  --tracker tennis-ball-color
+  --output data/ground_truth.csv
 ```
 
-### The green dot appears but the red dot is missing
+### The green dot appears but the red box is missing
 
-The ball is visible, but YOLO did not emit a `sports ball` detection above the
-configured threshold. This is a valid measured miss.
+The car is visible in the ground truth, but YOLO did not emit a `car` detection
+above the configured threshold. This is a valid measured miss.
 
-### Both dots are missing
+### Both the dot and box are missing
 
-The offline ground-truth tracker did not see a tennis ball in that frame. The
-frame is displayed, but it is not added to the cumulative displacement score.
+The MOG2 ground-truth tracker did not detect a moving car in that frame (or the
+frame is within the 30-frame warmup). The frame is displayed, but it is not added
+to the cumulative displacement score.
 
 ### GPU and network values show N/A
 

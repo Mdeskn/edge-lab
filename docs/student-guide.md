@@ -44,8 +44,8 @@ The lab supplies three files. Put them in `data/` at the repo root:
 
 ```
 data/
-  video.mp4          pre-recorded drone-view video
-  ground_truth.csv   target object coordinates per frame (the correct answers)
+  video.mp4          pre-recorded drone-view single-car video
+  ground_truth.csv   car coordinates per frame (the correct answers)
   yolov10n.onnx      YOLOv10n model in ONNX format
 ```
 
@@ -79,8 +79,8 @@ TRITON_URL=172.22.174.148:8001
 
 KAFKA_BROKERS=172.22.174.149:9092
 
-TARGET_CLASS_ID=0,2
-TARGET_CONFIDENCE_THRESHOLD=0.3
+TARGET_CLASS_ID=2,6,67,4,0
+TARGET_CONFIDENCE_THRESHOLD=0.01
 DISPLAY_OUTPUT=false
 AUTO_STOP=false
 ```
@@ -407,7 +407,7 @@ Copy `.env.example` to `.env`. All variables are optional except those marked re
 | `DISPLAY_OUTPUT` | `true` | Show OpenCV window; set `false` on SSH/headless |
 | `AUTO_STOP` | `false` | Wait for first phase, run one full cycle, then stop |
 | `CONFIDENCE_THRESHOLD` | `0.3` | YOLO detection confidence threshold |
-| `TARGET_CLASS_ID` | (not set) | Set to `0,2` for the drone-view video (person and car) |
+| `TARGET_CLASS_ID` | (not set) | Set to `2,6,67,4,0` for the drone-view car video (car + misclassification helpers) |
 | `TARGET_CONFIDENCE_THRESHOLD` | `0.1` | Confidence for the target class |
 | `SP_AGENT_INTERVAL_MS` | `500` | How often `decide()` is called |
 | `MISS_PENALTY_PX` | `100.0` | Score penalty for missed detections |
@@ -469,7 +469,7 @@ You are on SSH without X11 forwarding. Either add `-X` to your SSH command or se
 
 ### Very low detection rate
 
-Check `TARGET_CLASS_ID=0,2` and `TARGET_CONFIDENCE_THRESHOLD=0.3` are set. Also confirm you are using the lab-supplied `yolov10n.onnx` and the matching `ground_truth.csv`.
+Check `TARGET_CLASS_ID=2,6,67,4,0` and `TARGET_CONFIDENCE_THRESHOLD=0.01` are set. Also confirm you are using the lab-supplied `yolov10n.onnx` and the matching `ground_truth.csv`.
 
 ### High cumulative displacement
 
