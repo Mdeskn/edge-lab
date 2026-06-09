@@ -79,8 +79,8 @@ TRITON_URL=172.22.174.148:8001
 
 KAFKA_BROKERS=172.22.174.149:9092
 
-TARGET_CLASS_ID=2,6,67,4,0
-TARGET_CONFIDENCE_THRESHOLD=0.01
+TARGET_CLASS_ID=2,5,7
+TARGET_CONFIDENCE_THRESHOLD=0.1
 DISPLAY_OUTPUT=false
 AUTO_STOP=false
 ```
@@ -469,7 +469,7 @@ You are on SSH without X11 forwarding. Either add `-X` to your SSH command or se
 
 ### Very low detection rate
 
-Check `TARGET_CLASS_ID=2,6,67,4,0` and `TARGET_CONFIDENCE_THRESHOLD=0.01` are set. Also confirm you are using the lab-supplied `yolov10n.onnx` and the matching `ground_truth.csv`.
+Check `TARGET_CLASS_ID=2,5,7` and `TARGET_CONFIDENCE_THRESHOLD=0.1` are set. Also confirm you are using the lab-supplied `yolov10n.onnx` and the matching `ground_truth.csv`.
 
 ### High cumulative displacement
 

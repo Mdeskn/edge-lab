@@ -76,8 +76,8 @@ GROUP_ID=1
 VIDEO_PATH=data/video.mp4
 GROUND_TRUTH_PATH=data/ground_truth.csv
 MODEL_PATH=data/yolov10n.onnx
-TARGET_CLASS_ID=2,6,67,4,0  # car + drone-view misclassification helpers
-TARGET_CONFIDENCE_THRESHOLD=0.01
+TARGET_CLASS_ID=2,5,7  # car + drone-view misclassification helpers
+TARGET_CONFIDENCE_THRESHOLD=0.1
 
 # Router VM forwards to the GPU server; always use this address, not the GPU server directly
 TRITON_URL=172.22.174.148:8001

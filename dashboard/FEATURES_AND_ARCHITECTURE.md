@@ -226,8 +226,8 @@ Measured inference uses YOLOv10 ONNX. Both local CPU inference and remote
 Triton inference apply:
 
 ```dotenv
-TARGET_CLASS_ID=2,6,67,4,0
-TARGET_CONFIDENCE_THRESHOLD=0.01
+TARGET_CLASS_ID=2,5,7
+TARGET_CONFIDENCE_THRESHOLD=0.1
 ```
 
 Primary class is `2` (car). The helper classes (train=6, cell phone=67, airplane=4,
@@ -511,8 +511,8 @@ KAFKA_BROKERS=HOST:PORT
 TRITON_URL=GPU_SERVER:8000
 DASHBOARD_ENABLED=true
 DASHBOARD_URL=http://localhost:8080
-TARGET_CLASS_ID=2,6,67,4,0
-TARGET_CONFIDENCE_THRESHOLD=0.01
+TARGET_CLASS_ID=2,5,7
+TARGET_CONFIDENCE_THRESHOLD=0.1
 ```
 
 The browser derives the Pi dashboard API address from the hostname used to open
@@ -583,8 +583,8 @@ For setup and run commands, follow the root [README.md](../README.md).
 Confirm:
 
 ```dotenv
-TARGET_CLASS_ID=2,6,67,4,0
-TARGET_CONFIDENCE_THRESHOLD=0.01
+TARGET_CLASS_ID=2,5,7
+TARGET_CONFIDENCE_THRESHOLD=0.1
 ```
 
 For instructor setup or maintenance, regenerate car ground truth:
