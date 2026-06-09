@@ -45,7 +45,7 @@ The video panel displays the newest scored video frame.
 
 | Overlay | Color | Meaning |
 | --- | --- | --- |
-| `GT` dot | Green | Ground-truth car center (from MOG2 background subtraction) |
+| `GT` dot | Green | Ground-truth car center (from HSV colour segmentation) |
 | `PRED` box | Red | YOLO-predicted car bounding box |
 | Connecting line | Yellow | Distance between ground truth center and predicted center |
 
@@ -195,8 +195,8 @@ must never become the target.
 
 ### Ground Truth
 
-Ground truth is generated offline using pure OpenCV (MOG2 background subtraction),
-so it is fully independent of the YOLO model being scored:
+Ground truth is generated offline using HSV colour segmentation — no YOLO model
+needed and no background model, so it works correctly with a moving camera (drone):
 
 ```bash
 python ground_truth/generate_ground_truth.py \
@@ -204,17 +204,14 @@ python ground_truth/generate_ground_truth.py \
   --output data/ground_truth.csv
 ```
 
-The MOG2 motion tracker:
+The HSV colour tracker:
 
-1. Builds a background model over the first 30 frames (warmup, no output).
-2. Subtracts the background from each subsequent frame to get a foreground mask.
-3. Removes shadows (keeps only definite foreground at pixel value 255).
-4. Cleans the mask with morphological open and close operations.
-5. Finds contours in the cleaned mask.
-6. Keeps blobs between 0.05% and 20% of the frame area (filters noise and full-frame clutter).
-7. Chooses the largest qualifying blob as the car.
-8. Writes its center coordinate to `data/ground_truth.csv`.
-9. Writes `NaN` coordinates during warmup or when no qualifying blob is found.
+1. Converts each frame from BGR to HSV.
+2. Masks both red hue bands (hue 0–10 and hue 160–179, the two sides of red in OpenCV).
+3. Cleans the mask with morphological open and close operations.
+4. Finds contours and selects the largest red blob within car-sized area bounds.
+5. Writes its bounding-box centre to `data/ground_truth.csv`.
+6. Linearly interpolates any remaining NaN rows between known detections.
 
 This tracker runs only while generating the answer key. It is not part of the
 measured local or remote inference path. Keeping ground truth independent of
@@ -602,9 +599,9 @@ above the configured threshold. This is a valid measured miss.
 
 ### Both the dot and box are missing
 
-The MOG2 ground-truth tracker did not detect a moving car in that frame (or the
-frame is within the 30-frame warmup). The frame is displayed, but it is not added
-to the cumulative displacement score.
+The HSV ground-truth tracker did not find a red blob of car size in that frame
+(car fully out of frame or heavily occluded). The frame is displayed but not
+added to the cumulative displacement score.
 
 ### GPU and network values show N/A
 

@@ -1,7 +1,9 @@
 # Ground Truth Generator
 
 Generates the reference CSV that the Pi client uses to score inference accuracy.
-Uses OpenCV MOG2 background subtraction — no YOLO model required.
+Uses HSV colour segmentation to locate the red car directly — no YOLO model
+required and no background model needed, so it works with moving cameras (drones).
+
 Keeping ground truth independent of YOLO means YOLO misses remain measurable.
 
 ## Requirements
@@ -15,16 +17,18 @@ numpy==1.26.4
 
 ```bash
 python generate_ground_truth.py \
-    --video  /path/to/test_video.mp4 \
-    --output ground_truth.csv
+    --video  data/test_video.mp4 \
+    --output data/ground_truth.csv
 ```
 
-The script runs a two-pass approach:
-1. Pre-pass (first 30 frames): builds the MOG2 background model
-2. Tracking pass (all frames, frozen model): detects the car as the largest moving blob
-3. Linear interpolation fills any remaining gaps
+The script:
+1. Converts each frame to HSV and masks both red hue bands (hue 0–10 and 160–179).
+2. Cleans the mask with morphological open and close operations.
+3. Selects the largest red blob within car-sized area bounds.
+4. Writes its bounding-box centre to the CSV.
+5. Linearly interpolates any remaining NaN rows between known detections.
 
-Result: 100% frame coverage with no YOLO dependency.
+Result: 100% frame coverage, no warmup period, robust to camera motion.
 
 ## Output format
 
@@ -33,7 +37,7 @@ Result: 100% frame coverage with no YOLO dependency.
 | `frame_number` | 1-indexed frame counter |
 | `center_x` | X pixel coordinate of the car centre |
 | `center_y` | Y pixel coordinate |
-| `confidence` | Always `1.0` (MOG2 does not produce confidence scores) |
+| `confidence` | Always `1.0` (colour detection does not produce a confidence score) |
 | `class_id` | Always `2` (COCO car class) |
 | `class_name` | Always `car` |
 
