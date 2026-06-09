@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { MonitorPlay } from "lucide-react";
 import { resolveApiUrl } from "../api";
 import type { DashboardState } from "../types";
@@ -7,7 +8,15 @@ interface Props {
 }
 
 export function VideoPanel({ state }: Props) {
-  const imageUrl = resolveApiUrl(state.frame.url);
+  const nextUrl = resolveApiUrl(state.frame.url);
+  const [displayedUrl, setDisplayedUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!nextUrl) return;
+    const img = new Image();
+    img.onload = () => setDisplayedUrl(nextUrl);
+    img.src = nextUrl;
+  }, [nextUrl]);
 
   return (
     <section className="panel video-panel">
@@ -19,8 +28,8 @@ export function VideoPanel({ state }: Props) {
         <span className="frame-counter">Frame {state.frame.frame_number ?? "N/A"}</span>
       </div>
       <div className="video-stage">
-        {imageUrl ? (
-          <img key={state.frame.sequence} src={imageUrl} alt="Live annotated Edge-Lab frame" />
+        {displayedUrl ? (
+          <img src={displayedUrl} alt="Live annotated Edge-Lab frame" />
         ) : (
           <div className="video-empty">
             <MonitorPlay size={42} strokeWidth={1.5} />
