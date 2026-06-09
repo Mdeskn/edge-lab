@@ -21,7 +21,7 @@ python generate_ground_truth.py \
     --conf   0.3
 ```
 
-For the cup video, generate cup-only ground truth with YOLO:
+For the drone-view video, generate ground truth filtered to person and car:
 
 ```bash
 python generate_ground_truth.py \
@@ -29,13 +29,13 @@ python generate_ground_truth.py \
     --model  /path/to/yolov10n.onnx \
     --output ground_truth.csv \
     --tracker yolo \
-    --target-class-id 41,75 \
-    --conf 0.1
+    --target-class-id 0,2 \
+    --conf 0.3
 ```
 
-COCO class `41` is `cup` and class `75` is `vase`. The current cup video is
-mostly labelled as `vase` by YOLO, so the measured local and remote inference
-paths use the same combined filter through `TARGET_CLASS_ID=41,75`.
+COCO class `0` is `person` and class `2` is `car`. These are the primary targets
+in the drone-view video. Note: trees are not a COCO class and cannot be detected
+with the standard YOLOv10n model.
 
 For the original tennis-ball video, the color tracker is still available:
 

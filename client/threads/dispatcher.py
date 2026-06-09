@@ -91,7 +91,7 @@ class Dispatcher:
                             )
                             ri_span.set_attribute("model.name", self.config.triton_model_name)
                             try:
-                                pred_x, pred_y = self.remote_client.infer(
+                                pred_x, pred_y, pred_x1, pred_y1, pred_x2, pred_y2 = self.remote_client.infer(
                                     preprocessed, frame.shape
                                 )
                             except Exception as exc:
@@ -102,14 +102,14 @@ class Dispatcher:
                                     "local_inference_fallback"
                                 ) as fb_span:
                                     fb_span.set_attribute("model.name", "yolov10n")
-                                    pred_x, pred_y = self.local_server.infer(
+                                    pred_x, pred_y, pred_x1, pred_y1, pred_x2, pred_y2 = self.local_server.infer(
                                         preprocessed, frame.shape
                                     )
                                 result_mode = "local_fallback"
                     else:
                         with self.tracer.start_as_current_span("local_inference") as li_span:
                             li_span.set_attribute("model.name", "yolov10n")
-                            pred_x, pred_y = self.local_server.infer(
+                            pred_x, pred_y, pred_x1, pred_y1, pred_x2, pred_y2 = self.local_server.infer(
                                 preprocessed, frame.shape
                             )
 
@@ -131,6 +131,10 @@ class Dispatcher:
                         gt_y,
                         pred_x,
                         pred_y,
+                        pred_x1,
+                        pred_y1,
+                        pred_x2,
+                        pred_y2,
                         latency_ms,
                         result_mode,
                         time.time(),

@@ -8,7 +8,7 @@ import os
 import numpy as np
 import onnxruntime as ort
 
-from inference.yolo_postprocess import best_detection_center
+from inference.yolo_postprocess import best_detection_box
 from inference.yolo_postprocess import TargetClassFilter
 
 logger = logging.getLogger(__name__)
@@ -65,8 +65,8 @@ class LocalServer:
         """
         Run inference on a preprocessed frame (shape: 1, 3, H, W, float32).
 
-        Returns (center_x, center_y) in original frame pixel coordinates.
-        Returns (0.0, 0.0) and logs a WARNING if no detection is above threshold.
+        Returns (cx, cy, x1, y1, x2, y2) in original frame pixel coordinates.
+        Returns (0.0, 0.0, 0.0, 0.0, 0.0, 0.0) when no detection is above threshold.
         """
         outputs = self._session.run(
             [self._output_name],
@@ -85,16 +85,15 @@ class LocalServer:
         input_w: int,
     ) -> tuple:
         """
-        Parse YOLOv10 output and return the center of the best target detection.
+        Parse YOLOv10 output and return (cx, cy, x1, y1, x2, y2) for the best detection.
 
         YOLOv10 output shape: (1, num_boxes, 6).
         Each box: [x1, y1, x2, y2, confidence, class_id].
-        Coordinates are in model input space.
+        Coordinates are in model input space; scaled back to original frame coordinates.
 
-        Scales the result back to original frame coordinates.
-        Returns (0.0, 0.0) when no box passes the confidence threshold.
+        Returns (0.0, 0.0, 0.0, 0.0, 0.0, 0.0) when no box passes the confidence threshold.
         """
-        center = best_detection_center(
+        result = best_detection_box(
             output=output,
             orig_h=orig_h,
             orig_w=orig_w,
@@ -104,7 +103,7 @@ class LocalServer:
             target_class_id=self.target_class_id,
             target_conf_threshold=self.target_conf_threshold,
         )
-        if center == (0.0, 0.0):
+        if result[0] == 0.0 and result[1] == 0.0:
             logger.debug(
                 "No target detection for class=%s above confidence threshold %.2f",
                 self.target_class_id if self.target_class_id is not None else "any",
@@ -114,4 +113,4 @@ class LocalServer:
                     else self.conf_threshold
                 ),
             )
-        return center
+        return result

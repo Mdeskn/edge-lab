@@ -89,6 +89,10 @@ class Scorer:
                     gt_y,
                     pred_x,
                     pred_y,
+                    pred_x1,
+                    pred_y1,
+                    pred_x2,
+                    pred_y2,
                     latency_ms,
                     mode,
                     result_time,
@@ -122,7 +126,7 @@ class Scorer:
             score_summary = self.shared_state.get_score_summary()
 
             self._draw_overlay(
-                frame, gt_x, gt_y, pred_x, pred_y,
+                frame, gt_x, gt_y, pred_x, pred_y, pred_x1, pred_y1, pred_x2, pred_y2,
                 displacement_px, has_prediction, avg_display_latency, mode, current_phase, score_summary,
             )
 
@@ -206,6 +210,10 @@ class Scorer:
         gt_y: float | None,
         pred_x: float,
         pred_y: float,
+        pred_x1: float,
+        pred_y1: float,
+        pred_x2: float,
+        pred_y2: float,
         displacement_px: float | None,
         has_prediction: bool,
         avg_display_latency: float,
@@ -213,14 +221,14 @@ class Scorer:
         current_phase: str,
         score_summary: dict,
     ) -> None:
-        """Draw ground truth, prediction, connecting line, and HUD text onto frame."""
+        """Draw ground truth, prediction box, connecting line, and HUD text onto frame."""
         has_ground_truth = gt_x is not None and gt_y is not None
         if has_ground_truth:
             cv2.circle(frame, (int(gt_x), int(gt_y)), 8, _GREEN, -1)
             cv2.putText(frame, "GT", (int(gt_x) + 10, int(gt_y) - 8), _FONT, 0.5, _GREEN, 1)
         if has_prediction:
-            cv2.circle(frame, (int(pred_x), int(pred_y)), 8, _RED, -1)
-            cv2.putText(frame, "PRED", (int(pred_x) + 10, int(pred_y) - 8), _FONT, 0.5, _RED, 1)
+            cv2.rectangle(frame, (int(pred_x1), int(pred_y1)), (int(pred_x2), int(pred_y2)), _RED, 2)
+            cv2.putText(frame, "PRED", (int(pred_x1), int(pred_y1) - 6), _FONT, 0.5, _RED, 1)
         if has_ground_truth and has_prediction:
             cv2.line(
                 frame,

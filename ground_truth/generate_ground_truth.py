@@ -13,7 +13,7 @@ Optional YOLO mode:
         --model yolov10n.onnx \
         --output ground_truth.csv \
         --tracker yolo \
-        --target-class-id 41,75
+        --target-class-id 0,2
 
 Output:
 frame_number,center_x,center_y,confidence,class_id,class_name
@@ -47,7 +47,8 @@ COCO_NAMES = [
 ]
 
 SPORTS_BALL_CLASS = 32
-CUP_CLASS = 41
+PERSON_CLASS = 0
+CAR_CLASS = 2
 
 
 def load_session(model_path):
@@ -213,7 +214,7 @@ def main():
         "--target-class-id",
         type=parse_target_class_filter,
         default=None,
-        help="Optional COCO class filter for YOLO mode. Cup is 41; vase is 75. Comma-separated lists are allowed."
+        help="Optional COCO class filter for YOLO mode. Person is 0; car is 2. Comma-separated lists are allowed."
     )
 
     args = parser.parse_args()
