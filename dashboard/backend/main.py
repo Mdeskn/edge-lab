@@ -159,8 +159,8 @@ def get_frame() -> Response:
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     await socket_manager.connect(websocket)
-    await websocket.send_json(dashboard_state.snapshot())
     try:
+        await websocket.send_json(dashboard_state.snapshot())
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
