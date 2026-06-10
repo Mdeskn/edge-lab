@@ -70,9 +70,9 @@ METRICS AVAILABLE IN YOUR decide() METHOD:
 
     self.experiment_phase  (str):
         Current load phase. Defaults to "baseline" until a phase message arrives.
-        Values from tc_controller.py: "baseline", "bandwidth_50", "bandwidth_200",
-        "jitter_light", "gpu_load", "mixed".
-        Legacy values also accepted: "network_load", "combined".
+        Common values from tc_controller.py include "baseline", "bandwidth_50",
+        "bandwidth_200", "jitter_light", "gpu_load", and "mixed". Custom
+        phases such as "bandwidth_5" are passed through unchanged.
 
     self.current_mode  (str):
         The processing mode currently active ("local" or "remote").
@@ -93,13 +93,6 @@ from shared_state import SharedState
 
 logger = logging.getLogger(__name__)
 
-_VALID_PHASES = {
-    "baseline",
-    "bandwidth_50", "bandwidth_200", "jitter_light",
-    "gpu_load", "mixed",
-    "network_load", "combined",
-}
-
 _DEFAULT_NET_METRICS = {
     "delay_ms": 0.0,
     "jitter_ms": 0.0,
@@ -107,6 +100,14 @@ _DEFAULT_NET_METRICS = {
     "packet_loss_percent": 0.0,
     "bandwidth": "unknown",
 }
+
+
+def _normalize_phase_value(value) -> str:
+    """Return a usable experiment phase string from a Kafka payload value."""
+    if not isinstance(value, str):
+        return "baseline"
+    phase = value.strip()
+    return phase or "baseline"
 
 
 class SPAgentBase:
@@ -332,10 +333,7 @@ class SPAgentBase:
 
                 elif topic == self._config.kafka_phase_topic:
                     try:
-                        phase = payload.get("phase", "baseline")
-                        if phase not in _VALID_PHASES:
-                            logger.warning("Unknown phase value %r, ignoring", phase)
-                            phase = "baseline"
+                        phase = _normalize_phase_value(payload.get("phase", "baseline"))
                         with self._metrics_lock:
                             self._experiment_phase = phase
                         self._shared_state.update_experiment_phase(phase)
