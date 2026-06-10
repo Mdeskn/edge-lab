@@ -35,6 +35,26 @@ def test_missing_infrastructure_metrics_are_empty() -> None:
     assert snapshot["frame"]["url"] is None
 
 
+def test_app_metrics_do_not_overwrite_phase_topic() -> None:
+    state = DashboardState(max_history=10, group_id="1")
+    state.update_phase("bandwidth_5")
+
+    state.update_app_metric(metric())
+
+    snapshot = state.snapshot()
+    assert snapshot["experiment_phase"] == "bandwidth_5"
+    assert snapshot["latest"]["experiment_phase"] == "baseline"
+
+
+def test_app_metrics_do_not_set_dashboard_phase_before_phase_topic() -> None:
+    state = DashboardState(max_history=10, group_id="1")
+
+    state.update_app_metric(metric())
+
+    snapshot = state.snapshot()
+    assert snapshot["experiment_phase"] == "unknown"
+
+
 def test_reset_preserves_latest_frame_but_clears_summary() -> None:
     state = DashboardState(max_history=10, group_id="3")
     state.update_frame(metric(), b"jpeg")

@@ -14,6 +14,7 @@ const phaseDescriptions: Record<string, string> = {
   baseline: "No artificial load",
   bandwidth_200: "Bandwidth capped at 200 mbit",
   bandwidth_50: "Bandwidth capped at 50 mbit",
+  bandwidth_5: "Bandwidth capped at 5 mbit",
   jitter_light: "Light delay and jitter applied",
   gpu_load: "GPU and Triton server under load",
   mixed: "50 mbit cap, GPU load may be active",
@@ -21,6 +22,30 @@ const phaseDescriptions: Record<string, string> = {
   combined: "Network and server load active",
   unknown: "Waiting for phase metrics",
 };
+
+function formatPhaseName(phase: string): string {
+  if (!phase || phase === "unknown") {
+    return "UNKNOWN";
+  }
+  return phase.replace(/_/g, " ").toUpperCase();
+}
+
+function describePhase(phase: string): string {
+  if (!phase || phase === "unknown") {
+    return phaseDescriptions.unknown;
+  }
+
+  if (phaseDescriptions[phase]) {
+    return phaseDescriptions[phase];
+  }
+
+  const bandwidthMatch = phase.match(/^bandwidth_(\d+)$/);
+  if (bandwidthMatch) {
+    return `Bandwidth capped at ${bandwidthMatch[1]} mbit`;
+  }
+
+  return "Custom experiment phase";
+}
 
 export default function App() {
   const [state, setState] = useState<DashboardState | null>(null);
@@ -63,8 +88,8 @@ export default function App() {
           <StatusDot connected={socketConnected} label={socketConnected ? "Live" : "Reconnecting"} />
           <div className="phase-block">
             <span className="eyebrow">Experiment phase</span>
-            <strong>{phase.replace(/_/g, " ")}</strong>
-            <small>{phaseDescriptions[phase] || phaseDescriptions.unknown}</small>
+            <strong>{formatPhaseName(phase)}</strong>
+            <small>{describePhase(phase)}</small>
           </div>
         </div>
       </header>

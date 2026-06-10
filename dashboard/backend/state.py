@@ -87,8 +87,6 @@ class DashboardState:
             group = self._group
             clean = self._normalize_app_metric(metric)
             group.latest_metric = clean
-            if clean.get("experiment_phase"):
-                self._phase = clean["experiment_phase"]
 
             sample_key = self._sample_key(clean)
             if sample_key in group.seen_sample_set:
