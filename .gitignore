@@ -32,6 +32,7 @@ edge-lab_project_inventory.*md
 EdgeLab machines*.md
 edgelab_startup_instructions_with_troubleshooting*.md
 Documentation and testing/
+scripts/
 
 # IDE
 .vscode/
