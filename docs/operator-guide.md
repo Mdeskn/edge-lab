@@ -13,7 +13,7 @@ This guide covers what the tutor/operator needs to do before, during, and after 
 | Network / Router VM | `172.22.174.148` | Routes client traffic, applies tc rules, publishes network metrics and phase events |
 | Raspberry Pi (per group) | group-assigned IP | Pi client app, group dashboard |
 
-Clients connect to Triton via the Router VM (`172.22.174.148:8001`), not directly to the GPU server. This is what allows network impairments to affect the inference path.
+Clients connect to the remote inference API via the Router VM (`172.22.174.148:8100`), not directly to the GPU server. This is what allows network impairments to affect the inference path.
 
 ---
 
@@ -29,16 +29,16 @@ Open Kafka UI to confirm topics exist: `http://172.22.174.149:8080`
 
 Expected topics: `dnn_partition.server_metrics`, `dnn_partition.client_metrics`, `edgelab.network.metrics`, `edgelab.phase`
 
-### 2. Verify Triton is running (GPU server)
+### 2. Verify remote inference is running (GPU server)
 
 ```bash
-curl http://172.22.174.145:8001/v2/health/live
+curl http://172.22.174.145:8100/health
 ```
 
 Also check via the Router VM (the path clients actually use):
 
 ```bash
-curl http://172.22.174.148:8001/v2/health/live
+curl http://172.22.174.148:8100/health
 ```
 
 Both should return HTTP 200.
@@ -220,9 +220,9 @@ Check that no leftover stressor processes are running on the GPU server. Kill th
 ssh mae@172.22.174.145 "pkill -f gpu_stressor"
 ```
 
-### Student Pi cannot reach Triton
+### Student Pi cannot reach remote inference
 
-The Pi must use `172.22.174.148:8001`, not `172.22.174.145:8001`. Verify the student's `.env` has `TRITON_URL=172.22.174.148:8001`.
+The Pi must use `http://172.22.174.148:8100`, not `http://172.22.174.145:8100`. Verify the student's `.env` has `REMOTE_INFERENCE_URL=http://172.22.174.148:8100`.
 
 ---
 

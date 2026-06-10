@@ -1,8 +1,8 @@
 """
-Benchmark inference latency for local Pi CPU and/or remote Triton GPU.
+Benchmark inference latency for local Pi CPU and/or remote GPU inference.
 
 Use --mode local to test only the Pi (no Triton needed).
-Use --mode remote to test only Triton (requires --triton-url).
+Use --mode remote to test the JPEG remote inference API (preferred) or legacy Triton.
 Use --mode both to test both and get a comparison recommendation.
 
 Run this as the first step before the experiment. The reasoning:
@@ -16,11 +16,12 @@ Usage examples:
         --model /data/yolov10n.onnx --video /data/video.mp4
 
     python scripts/benchmark_inference.py --mode remote \\
-        --model /data/yolov10n.onnx --triton-url 192.168.1.100:8000
+        --model /data/yolov10n.onnx \\
+        --remote-inference-url http://172.22.174.148:8100
 
     python scripts/benchmark_inference.py --mode both \\
         --model /data/yolov10n.onnx --video /data/video.mp4 \\
-        --triton-url 192.168.1.100:8000 --runs 100 --warmup 10
+        --remote-inference-url http://172.22.174.148:8100 --runs 100 --warmup 10
 
 If --video is omitted, random noise frames are used (valid for latency
 measurement; detections will all be empty, which is expected).
@@ -33,6 +34,7 @@ import time
 
 import cv2
 import numpy as np
+import requests
 
 # ------------------------------------------------------------------ #
 # Preprocessing (mirrors Dispatcher._preprocess exactly)              #
@@ -133,9 +135,70 @@ def benchmark_local(model_path: str, frames: list, warmup: int, threads: int = 4
 # Remote benchmark                                                     #
 # ------------------------------------------------------------------ #
 
-def benchmark_remote(
+def benchmark_remote_jpeg(
+    remote_inference_url: str,
+    frames: list,
+    warmup: int,
+    timeout: float,
+    jpeg_quality: int,
+) -> list:
+    """Benchmark the VM2 JPEG remote inference API."""
+    base_url = remote_inference_url.rstrip("/")
+    try:
+        resp = requests.get(f"{base_url}/health", timeout=timeout)
+        resp.raise_for_status()
+    except Exception as exc:
+        print(
+            f"ERROR: Cannot connect to remote inference API at {base_url}: {exc}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    print(f"Connected to remote inference API at {base_url}.")
+
+    quality = min(max(jpeg_quality, 1), 100)
+    encode_params = [cv2.IMWRITE_JPEG_QUALITY, quality]
+
+    print(f"Warming up remote JPEG inference ({warmup} runs)...", end=" ", flush=True)
+    for i in range(warmup):
+        ok, jpeg = cv2.imencode(".jpg", frames[i % len(frames)], encode_params)
+        if not ok:
+            print("\nERROR: Could not encode warmup frame as JPEG.", file=sys.stderr)
+            sys.exit(1)
+        resp = requests.post(
+            f"{base_url}/infer",
+            data=jpeg.tobytes(),
+            headers={"Content-Type": "image/jpeg"},
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+    print("done.")
+
+    print(f"Benchmarking remote JPEG inference ({len(frames)} runs)...", end=" ", flush=True)
+    latencies = []
+    for frame in frames:
+        t0 = time.perf_counter()
+        ok, jpeg = cv2.imencode(".jpg", frame, encode_params)
+        if not ok:
+            print("\nERROR: Could not encode frame as JPEG.", file=sys.stderr)
+            sys.exit(1)
+        resp = requests.post(
+            f"{base_url}/infer",
+            data=jpeg.tobytes(),
+            headers={"Content-Type": "image/jpeg"},
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        latencies.append((time.perf_counter() - t0) * 1000.0)
+    print("done.")
+
+    return latencies
+
+
+def benchmark_remote_triton(
     triton_url: str, model_name: str, frames: list, warmup: int, timeout: float
 ) -> list:
+    """Benchmark the legacy direct Triton HTTP path with preprocessed FP32 tensors."""
     try:
         import tritonclient.http as httpclient
     except ImportError:
@@ -180,6 +243,29 @@ def benchmark_remote(
     print("done.")
 
     return latencies
+
+
+def benchmark_remote(
+    args: argparse.Namespace,
+    frames: list,
+) -> tuple[str, list]:
+    """Benchmark the configured remote endpoint and return (label, latencies)."""
+    if args.remote_inference_url:
+        label = f"Remote inference (JPEG API at {args.remote_inference_url})"
+        latencies = benchmark_remote_jpeg(
+            args.remote_inference_url,
+            frames,
+            args.warmup,
+            args.timeout,
+            args.remote_jpeg_quality,
+        )
+        return label, latencies
+
+    label = f"Remote inference (legacy Triton at {args.triton_url})"
+    latencies = benchmark_remote_triton(
+        args.triton_url, args.model_name, frames, args.warmup, args.timeout
+    )
+    return label, latencies
 
 
 # ------------------------------------------------------------------ #
@@ -302,7 +388,7 @@ def print_local_interpretation(stats: dict) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Benchmark YOLOv10n inference latency on Pi CPU and/or Triton GPU."
+        description="Benchmark YOLOv10n inference latency on Pi CPU and/or remote GPU."
     )
     parser.add_argument(
         "--mode",
@@ -311,8 +397,8 @@ def main() -> None:
         help=(
             "What to benchmark. "
             "'local': Pi CPU only, no Triton needed. "
-            "'remote': Triton only, requires --triton-url. "
-            "'both': run both and print a comparison recommendation, requires --triton-url."
+            "'remote': remote GPU only, requires --remote-inference-url or --triton-url. "
+            "'both': run both and print a comparison recommendation."
         ),
     )
     parser.add_argument("--model", required=True, help="Path to yolov10n.onnx")
@@ -322,9 +408,26 @@ def main() -> None:
         help="Path to video file (optional; random noise frames used if omitted)",
     )
     parser.add_argument(
+        "--remote-inference-url",
+        default=None,
+        help=(
+            "Preferred JPEG remote inference API URL, "
+            "e.g. http://172.22.174.148:8100"
+        ),
+    )
+    parser.add_argument(
+        "--remote-jpeg-quality",
+        type=int,
+        default=80,
+        help="JPEG quality for --remote-inference-url requests (default: 80)",
+    )
+    parser.add_argument(
         "--triton-url",
         default=None,
-        help="Triton server address, e.g. 192.168.1.100:8000 (required for --mode remote and --mode both)",
+        help=(
+            "Legacy direct Triton HTTP address, e.g. 192.168.1.100:8000. "
+            "Used only when --remote-inference-url is omitted."
+        ),
     )
     parser.add_argument(
         "--model-name", default="yolov10n", help="Triton model name (default: yolov10n)"
@@ -353,10 +456,10 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.mode in ("remote", "both") and not args.triton_url:
+    if args.mode in ("remote", "both") and not (args.remote_inference_url or args.triton_url):
         print(
-            f"ERROR: --mode {args.mode} requires --triton-url.\n"
-            "Provide the Triton server address (e.g. --triton-url 192.168.1.100:8000)\n"
+            f"ERROR: --mode {args.mode} requires --remote-inference-url or --triton-url.\n"
+            "Prefer the JPEG API (e.g. --remote-inference-url http://172.22.174.148:8100)\n"
             "or use --mode local to benchmark only the Pi CPU.",
             file=sys.stderr,
         )
@@ -369,7 +472,11 @@ def main() -> None:
     print(f"  model      : {args.model}")
     print(f"  video      : {args.video or '(random noise)'}")
     if args.mode in ("remote", "both"):
-        print(f"  triton_url : {args.triton_url}")
+        if args.remote_inference_url:
+            print(f"  remote_url : {args.remote_inference_url}")
+            print(f"  jpeg_quality: {args.remote_jpeg_quality}")
+        else:
+            print(f"  triton_url : {args.triton_url}")
     if args.mode in ("local", "both"):
         print(f"  threads    : {args.threads}")
     print(f"  runs       : {args.runs}")
@@ -394,22 +501,18 @@ def main() -> None:
         print_local_interpretation(local_stats)
 
     elif args.mode == "remote":
-        remote_latencies = benchmark_remote(
-            args.triton_url, args.model_name, frames, args.warmup, args.timeout
-        )
+        remote_label, remote_latencies = benchmark_remote(args, frames)
         remote_stats = compute_stats(remote_latencies)
-        print_stats(f"Remote inference (Triton at {args.triton_url})", remote_stats)
+        print_stats(remote_label, remote_stats)
 
     else:  # both
         local_latencies = benchmark_local(args.model, frames, args.warmup, args.threads)
         local_stats = compute_stats(local_latencies)
         print()
-        remote_latencies = benchmark_remote(
-            args.triton_url, args.model_name, frames, args.warmup, args.timeout
-        )
+        remote_label, remote_latencies = benchmark_remote(args, frames)
         remote_stats = compute_stats(remote_latencies)
         print_stats("Local inference (Pi CPU / onnxruntime)", local_stats)
-        print_stats(f"Remote inference (Triton at {args.triton_url})", remote_stats)
+        print_stats(remote_label, remote_stats)
         print_recommendation(local_stats, remote_stats)
 
     print()

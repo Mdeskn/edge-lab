@@ -1,10 +1,9 @@
-"""
-Sends frames to Triton Inference Server over gRPC.
-Uses tritonclient.grpc for synchronous inference.
-"""
+"""Remote inference clients used by the Pi."""
 import logging
 
+import cv2
 import numpy as np
+import requests
 import tritonclient.grpc as grpcclient
 
 from inference.yolo_postprocess import best_detection_box
@@ -14,7 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 class RemoteClient:
-    """gRPC client for NVIDIA Triton Inference Server."""
+    """
+    Remote inference client.
+
+    Preferred mode sends a compressed JPEG to the VM2 remote inference API. If
+    REMOTE_INFERENCE_URL is not configured, this falls back to the legacy direct
+    Triton gRPC path, which sends a preprocessed FP32 tensor over the network.
+    """
 
     def __init__(
         self,
@@ -24,9 +29,11 @@ class RemoteClient:
         target_class_id: TargetClassFilter = None,
         target_conf_threshold: float | None = None,
         timeout: float = 5.0,
+        remote_inference_url: str = "",
+        jpeg_quality: int = 80,
     ):
         """
-        Initialize Triton gRPC client and perform a health check.
+        Initialize the selected remote client and perform a health check.
 
         Sets self._available=False (and logs an error) if the health check fails.
         Never raises. The caller determines what to do with is_available().
@@ -40,8 +47,56 @@ class RemoteClient:
             else conf_threshold
         )
         self._timeout = timeout
+        self._remote_inference_url = remote_inference_url.rstrip("/")
+        self._jpeg_quality = min(max(jpeg_quality, 1), 100)
+        self._mode = "http_jpeg" if self._remote_inference_url else "triton_grpc"
         self._available = False
+        self._client = None
 
+        if self._mode == "http_jpeg":
+            self._connect_http_gateway()
+        else:
+            self._connect_triton_grpc(triton_url)
+
+    def is_available(self) -> bool:
+        """Return True if the configured remote endpoint was reachable at startup."""
+        return self._available
+
+    def sends_raw_frames(self) -> bool:
+        """Return True when the client should pass raw BGR frames instead of tensors."""
+        return self._mode == "http_jpeg"
+
+    def infer(self, frame_or_tensor: np.ndarray, original_shape: tuple | None = None) -> tuple:
+        """Run inference with the selected remote transport."""
+        if self._mode == "http_jpeg":
+            return self._infer_http_jpeg(frame_or_tensor)
+
+        if original_shape is None:
+            raise ValueError("original_shape is required for legacy Triton gRPC inference")
+        return self._infer_triton_grpc(frame_or_tensor, original_shape)
+
+    def _connect_http_gateway(self) -> None:
+        """Connect to the VM2 JPEG inference API."""
+        try:
+            resp = requests.get(
+                f"{self._remote_inference_url}/health",
+                timeout=self._timeout,
+            )
+            resp.raise_for_status()
+            self._available = True
+            logger.info(
+                "RemoteClient connected to JPEG inference API at %s",
+                self._remote_inference_url,
+            )
+        except Exception as exc:
+            logger.error(
+                "RemoteClient failed to connect to JPEG inference API at %s: %s",
+                self._remote_inference_url,
+                exc,
+            )
+
+    def _connect_triton_grpc(self, triton_url: str) -> None:
+        """Connect to Triton directly using the legacy FP32 tensor transport."""
         try:
             self._client = grpcclient.InferenceServerClient(url=triton_url)
             alive = self._client.is_server_live()
@@ -55,11 +110,41 @@ class RemoteClient:
         except Exception as exc:
             logger.error("RemoteClient failed to connect to Triton at %s: %s", triton_url, exc)
 
-    def is_available(self) -> bool:
-        """Return True if the Triton server was reachable at startup."""
-        return self._available
+    def _infer_http_jpeg(self, frame: np.ndarray) -> tuple:
+        """
+        JPEG-compress a raw BGR frame and send it to the VM2 inference API.
 
-    def infer(self, preprocessed_frame: np.ndarray, original_shape: tuple) -> tuple:
+        Returns (cx, cy, x1, y1, x2, y2) in original frame pixel coordinates.
+        Raises on encode, HTTP, timeout, or response errors; the Dispatcher handles
+        local fallback.
+        """
+        ok, jpeg = cv2.imencode(
+            ".jpg",
+            frame,
+            [cv2.IMWRITE_JPEG_QUALITY, self._jpeg_quality],
+        )
+        if not ok:
+            raise RuntimeError("Could not encode frame as JPEG")
+
+        resp = requests.post(
+            f"{self._remote_inference_url}/infer",
+            data=jpeg.tobytes(),
+            headers={"Content-Type": "image/jpeg"},
+            timeout=self._timeout,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        prediction = payload.get("prediction", payload)
+        return (
+            float(prediction.get("cx", 0.0)),
+            float(prediction.get("cy", 0.0)),
+            float(prediction.get("x1", 0.0)),
+            float(prediction.get("y1", 0.0)),
+            float(prediction.get("x2", 0.0)),
+            float(prediction.get("y2", 0.0)),
+        )
+
+    def _infer_triton_grpc(self, preprocessed_frame: np.ndarray, original_shape: tuple) -> tuple:
         """
         Send a preprocessed frame to Triton and return (cx, cy, x1, y1, x2, y2).
 
@@ -69,6 +154,9 @@ class RemoteClient:
 
         Raises on network timeout or connection error; the Dispatcher handles fallback.
         """
+        if self._client is None:
+            raise RuntimeError("Triton gRPC client is not initialized")
+
         _, _, input_h, input_w = preprocessed_frame.shape
         inp = grpcclient.InferInput(
             "images",

@@ -73,9 +73,15 @@ class Dispatcher:
                     span.set_attribute("processing.mode", requested_mode)
                     span.set_attribute("processing.requested_mode", requested_mode)
 
-                    with self.tracer.start_as_current_span("preprocess") as pre_span:
-                        preprocessed = self._preprocess(frame)
-                        pre_span.set_attribute("input.shape", str(frame.shape))
+                    preprocessed = None
+
+                    def preprocess_once(span_name: str = "preprocess") -> np.ndarray:
+                        nonlocal preprocessed
+                        if preprocessed is None:
+                            with self.tracer.start_as_current_span(span_name) as pre_span:
+                                preprocessed = self._preprocess(frame)
+                                pre_span.set_attribute("input.shape", str(frame.shape))
+                        return preprocessed
 
                     result_mode = requested_mode
                     remote_ok = (
@@ -87,13 +93,22 @@ class Dispatcher:
                     if remote_ok:
                         with self.tracer.start_as_current_span("remote_inference") as ri_span:
                             ri_span.set_attribute(
-                                "triton.url", self.config.triton_url
+                                "remote.url",
+                                self.config.remote_inference_url or self.config.triton_url,
                             )
                             ri_span.set_attribute("model.name", self.config.triton_model_name)
                             try:
-                                pred_x, pred_y, pred_x1, pred_y1, pred_x2, pred_y2 = self.remote_client.infer(
-                                    preprocessed, frame.shape
-                                )
+                                if self.remote_client.sends_raw_frames():
+                                    ri_span.set_attribute("payload.kind", "jpeg")
+                                    pred_x, pred_y, pred_x1, pred_y1, pred_x2, pred_y2 = self.remote_client.infer(
+                                        frame
+                                    )
+                                else:
+                                    ri_span.set_attribute("payload.kind", "fp32_tensor")
+                                    tensor = preprocess_once()
+                                    pred_x, pred_y, pred_x1, pred_y1, pred_x2, pred_y2 = self.remote_client.infer(
+                                        tensor, frame.shape
+                                    )
                             except Exception as exc:
                                 logger.warning(
                                     "Remote inference failed: %s, falling back to local", exc
@@ -102,15 +117,17 @@ class Dispatcher:
                                     "local_inference_fallback"
                                 ) as fb_span:
                                     fb_span.set_attribute("model.name", "yolov10n")
+                                    tensor = preprocess_once("preprocess_fallback")
                                     pred_x, pred_y, pred_x1, pred_y1, pred_x2, pred_y2 = self.local_server.infer(
-                                        preprocessed, frame.shape
+                                        tensor, frame.shape
                                     )
                                 result_mode = "local_fallback"
                     else:
+                        tensor = preprocess_once()
                         with self.tracer.start_as_current_span("local_inference") as li_span:
                             li_span.set_attribute("model.name", "yolov10n")
                             pred_x, pred_y, pred_x1, pred_y1, pred_x2, pred_y2 = self.local_server.infer(
-                                preprocessed, frame.shape
+                                tensor, frame.shape
                             )
 
                     span.set_attribute("processing.result_mode", result_mode)

@@ -4,7 +4,7 @@
 
 This machine has two roles:
 
-1. **Router**: forwards client traffic from `172.22.174.148:8001` to the GPU server at `172.22.174.145:8001`. All Pi clients connect via this address so that network impairments affect the inference path.
+1. **Router**: forwards client traffic from `172.22.174.148:8100` to the GPU server remote inference API at `172.22.174.145:8100`. All Pi clients connect via this address so that network impairments affect the inference path. Port `8001` may still be forwarded for legacy direct Triton debugging.
 2. **Network controller**: applies `tc` traffic shaping rules and publishes live network conditions and experiment phase events to Kafka.
 
 ---
@@ -16,7 +16,8 @@ This machine has two roles:
 | Network conditions publisher | `network_conditions_publisher.py` | `edgelab.network.metrics` |
 | Phase controller | `tc_controller.py` | `edgelab.phase` |
 | tc_control.sh | `/home/mae/network_load/tc_control.sh` | (called by tc_controller) |
-| Port forward: 8001 to GPU | `iptables` / kernel routing | (not Kafka) |
+| Port forward: 8100 to GPU API | `iptables` / kernel routing | (not Kafka) |
+| Optional port forward: 8001 to Triton | `iptables` / kernel routing | Legacy/debug only |
 
 ---
 

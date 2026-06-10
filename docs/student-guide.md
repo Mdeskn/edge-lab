@@ -74,7 +74,11 @@ VIDEO_PATH=data/video.mp4
 GROUND_TRUTH_PATH=data/ground_truth.csv
 MODEL_PATH=data/yolov10n.onnx
 
-# Always use the Router VM address, not the GPU server directly
+# Always use the Router VM address, not the GPU server directly.
+REMOTE_INFERENCE_URL=http://172.22.174.148:8100
+REMOTE_JPEG_QUALITY=80
+
+# Legacy direct Triton fallback, used only when REMOTE_INFERENCE_URL is blank.
 TRITON_URL=172.22.174.148:8001
 
 KAFKA_BROKERS=172.22.174.149:9092
@@ -123,16 +127,16 @@ python scripts/benchmark_inference.py --mode local \
     --model data/yolov10n.onnx \
     --video data/video.mp4
 
-# Test remote Triton inference
+# Test remote JPEG inference through the GPU-server API
 python scripts/benchmark_inference.py --mode remote \
     --model data/yolov10n.onnx \
-    --triton-url 172.22.174.148:8001
+    --remote-inference-url http://172.22.174.148:8100
 
 # Compare both
 python scripts/benchmark_inference.py --mode both \
     --model data/yolov10n.onnx \
     --video data/video.mp4 \
-    --triton-url 172.22.174.148:8001
+    --remote-inference-url http://172.22.174.148:8100
 ```
 
 The output shows mean, min, max, p95, and p99 latencies for both backends and prints a plain-language recommendation. Knowing these numbers tells you roughly when remote is worth it and when it is not.
@@ -385,7 +389,10 @@ Copy `.env.example` to `.env`. All variables are optional except those marked re
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TRITON_URL` | (empty) | Router VM address: `172.22.174.148:8001`. Leave blank for local-only mode. |
+| `REMOTE_INFERENCE_URL` | (empty) | Preferred Router VM URL for compressed JPEG inference: `http://172.22.174.148:8100`. Leave blank for local-only or legacy direct Triton mode. |
+| `REMOTE_JPEG_QUALITY` | `80` | JPEG quality for remote inference requests. Higher is larger and more accurate; lower is smaller and faster on bandwidth-limited links. |
+| `REMOTE_INFERENCE_TIMEOUT_SEC` | `5.0` | Timeout for the remote inference API request. |
+| `TRITON_URL` | (empty) | Legacy direct Triton gRPC address: `172.22.174.148:8001`. Used only when `REMOTE_INFERENCE_URL` is blank. |
 | `TRITON_MODEL_NAME` | `yolov10n` | Model name in Triton |
 
 ### Kafka
@@ -443,15 +450,17 @@ The model or video file path is wrong. Check `MODEL_PATH` and `VIDEO_PATH` in `.
 
 `VIDEO_PATH` is wrong or the file does not exist.
 
-### Triton not reachable
+### Remote inference not reachable
 
-You will see `"Triton health check failed"` in the log. The app continues in local-only mode.
+You will see a remote-client connection error in the log. The app continues in local-only mode.
 
-Check that `TRITON_URL` is `172.22.174.148:8001` (Router VM, not the GPU server directly). Test manually:
+Check that `REMOTE_INFERENCE_URL` is `http://172.22.174.148:8100` (Router VM, not the GPU server directly). Test manually:
 
 ```bash
-curl http://172.22.174.148:8001/v2/health/live
+curl http://172.22.174.148:8100/health
 ```
+
+If you intentionally use the legacy direct Triton path, check `TRITON_URL=172.22.174.148:8001`.
 
 ### Kafka not reachable
 

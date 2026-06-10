@@ -142,7 +142,9 @@ def main() -> None:
     logger.info("  video_path           : %s", config.video_path)
     logger.info("  ground_truth_path    : %s", config.ground_truth_path)
     logger.info("  model_path           : %s", config.model_path)
-    logger.info("  triton_url           : %s", config.triton_url or "(not set)")
+    logger.info("  remote_inference_url : %s", config.remote_inference_url or "(not set)")
+    logger.info("  remote_jpeg_quality  : %d", config.remote_jpeg_quality)
+    logger.info("  triton_url           : %s", config.triton_url or "(not set, legacy only)")
     logger.info("  kafka_brokers        : %s", config.kafka_brokers or "(not set)")
     logger.info("  otlp_endpoint        : %s", config.otlp_endpoint or "(not set)")
     logger.info("  initial_mode         : %s", config.initial_processing_mode)
@@ -176,18 +178,21 @@ def main() -> None:
         config.target_conf_threshold,
     )
 
-    # 6b. RemoteClient: optional, None when TRITON_URL is empty
+    # 6b. RemoteClient: optional, None when both remote endpoints are empty
     remote_client: RemoteClient | None = None
-    if config.triton_url:
+    if config.remote_inference_url or config.triton_url:
         remote_client = RemoteClient(
             config.triton_url,
             config.triton_model_name,
             config.conf_threshold,
             config.target_class_id,
             config.target_conf_threshold,
+            timeout=config.remote_inference_timeout,
+            remote_inference_url=config.remote_inference_url,
+            jpeg_quality=config.remote_jpeg_quality,
         )
     else:
-        logger.warning("TRITON_URL not set: running in local-only mode")
+        logger.warning("REMOTE_INFERENCE_URL/TRITON_URL not set: running in local-only mode")
 
     # 7. Kafka publisher
     kafka_publisher = AppMetricsPublisher(

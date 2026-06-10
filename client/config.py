@@ -21,6 +21,9 @@ class Config:
     model_path: str
     triton_url: str
     triton_model_name: str
+    remote_inference_url: str
+    remote_jpeg_quality: int
+    remote_inference_timeout: float
     kafka_brokers: str
     kafka_app_topic: str        # APP_METRICS_TOPIC env var; fallback: "dnn_partition.client_metrics"
     kafka_gpu_topic: str
@@ -61,6 +64,9 @@ def load_config() -> Config:
         model_path=os.environ["MODEL_PATH"],
         triton_url=os.environ.get("TRITON_URL", ""),
         triton_model_name=os.environ.get("TRITON_MODEL_NAME", "yolov10n"),
+        remote_inference_url=os.environ.get("REMOTE_INFERENCE_URL", "").strip(),
+        remote_jpeg_quality=int(os.environ.get("REMOTE_JPEG_QUALITY", "80")),
+        remote_inference_timeout=float(os.environ.get("REMOTE_INFERENCE_TIMEOUT_SEC", "5.0")),
         kafka_brokers=os.environ.get("KAFKA_BROKERS", ""),
         kafka_app_topic=os.environ.get("APP_METRICS_TOPIC", "").strip()
             or "dnn_partition.client_metrics",

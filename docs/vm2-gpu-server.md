@@ -2,7 +2,7 @@
 
 **IP:** `172.22.174.145`
 
-This machine runs the Triton Inference Server and Eldiyar's GPU metrics publisher. Students never connect to it directly; all traffic goes via the Router VM (VM 3) at `172.22.174.148:8001`.
+This machine runs the remote inference API, Triton Inference Server, and Eldiyar's GPU metrics publisher. Students never connect to it directly; all traffic goes via the Router VM (VM 3) at `172.22.174.148:8100`.
 
 ---
 
@@ -10,8 +10,9 @@ This machine runs the Triton Inference Server and Eldiyar's GPU metrics publishe
 
 | Service | Port | Notes |
 |---------|------|-------|
+| Remote inference API | 8100 | Receives JPEG frames, decodes/preprocesses locally, calls Triton |
 | Triton HTTP | 8000 | Internal only; students use the router |
-| Triton gRPC | 8001 | Proxied by the Router VM at `172.22.174.148:8001` |
+| Triton gRPC | 8001 | Internal/API use; can be proxied as a legacy fallback |
 | Triton Prometheus metrics | 8002 | Read by Eldiyar's publisher |
 | GPU metrics publisher | (no port) | Background process; publishes to Kafka |
 
@@ -30,9 +31,9 @@ The model repository is at `/path/to/triton/model_repository/` on the GPU server
 
 ## Why students use the Router VM address
 
-During network experiments, the Network VM (Router VM, `172.22.174.148`) applies `tc` traffic shaping rules on the path between the Pi and the GPU server. For those rules to affect the inference traffic, the Pi must route through the Router VM. A direct connection to `172.22.174.145:8001` bypasses all network impairments.
+During network experiments, the Network VM (Router VM, `172.22.174.148`) applies `tc` traffic shaping rules on the path between the Pi and the GPU server. For those rules to affect inference traffic, the Pi must route through the Router VM. A direct connection to `172.22.174.145:8100` bypasses all network impairments.
 
-**Always set `TRITON_URL=172.22.174.148:8001` in `.env`, not `172.22.174.145:8001`.**
+**Always set `REMOTE_INFERENCE_URL=http://172.22.174.148:8100` in `.env`, not `http://172.22.174.145:8100`.**
 
 ---
 
@@ -41,11 +42,11 @@ During network experiments, the Network VM (Router VM, `172.22.174.148`) applies
 From any machine:
 
 ```bash
-curl http://172.22.174.148:8001/v2/health/live   # via Router VM (correct path)
-curl http://172.22.174.145:8001/v2/health/live   # direct (bypass check only)
+curl http://172.22.174.148:8100/health   # via Router VM (correct path)
+curl http://172.22.174.145:8100/health   # direct (bypass check only)
 ```
 
-List loaded models:
+For Triton-only debugging on the GPU server, list loaded models:
 
 ```bash
 curl http://172.22.174.145:8000/v2/models
@@ -111,3 +112,32 @@ The model configuration for `yolov10n` is in `triton/model_repository/yolov10n/c
 - Dynamic batching enabled
 
 The model file (`model.onnx`) must be placed at `triton/model_repository/yolov10n/1/model.onnx` on the GPU server. Copy it from `yolov10n.onnx` in this repo.
+
+---
+
+## Remote inference API
+
+The `remote-inference-api` service receives a raw `image/jpeg` request body at
+`POST /infer`, decodes and preprocesses the frame on VM2, calls Triton over the
+local Docker network, and returns prediction JSON:
+
+```json
+{
+  "prediction": {
+    "cx": 640.0,
+    "cy": 360.0,
+    "x1": 600.0,
+    "y1": 320.0,
+    "x2": 680.0,
+    "y2": 400.0
+  },
+  "jpeg_bytes": 94123,
+  "latency_ms": 12.4
+}
+```
+
+Start it with the GPU stack:
+
+```bash
+docker compose -f docker-compose.gpu-server.yml up -d --build
+```

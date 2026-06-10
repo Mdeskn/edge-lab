@@ -47,6 +47,7 @@ services:
       VIDEO_PATH: /data/test_video.mp4
       GROUND_TRUTH_PATH: /data/ground_truth.csv
       MODEL_PATH: /data/yolov10n.onnx
+      REMOTE_INFERENCE_URL: ""
       TRITON_URL: ""
       KAFKA_BROKERS: ""
       AUTO_STOP: "false"

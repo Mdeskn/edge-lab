@@ -18,6 +18,25 @@ services:
               count: all
               capabilities: [gpu]
 
+  remote-inference-api:
+    build:
+      context: .
+      dockerfile: remote_inference/Dockerfile
+    env_file:
+      - .env
+    environment:
+      TRITON_URL: triton:8001
+    ports:
+      - "8100:8100"   # JPEG HTTP inference API
+    depends_on:
+      - triton
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health', timeout=2).read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
   gpu-metrics-publisher:
     build:
       context: ./publishers/gpu_metrics

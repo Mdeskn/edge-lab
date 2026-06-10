@@ -29,7 +29,8 @@ Grafana: `http://172.22.174.149:3000`
 Client traffic path during experiments:
 
 ```
-Raspberry Pi -> 172.22.174.148:8001 -> 172.22.174.145:8001 (Triton)
+Raspberry Pi -> 172.22.174.148:8100 -> 172.22.174.145:8100 (remote inference API)
+                                                 -> Triton on the GPU server
 ```
 
 ---

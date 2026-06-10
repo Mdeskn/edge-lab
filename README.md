@@ -19,10 +19,13 @@ Raspberry Pi app
    |
    +-- LOCAL: YOLOv10n on Pi CPU (onnxruntime)
    |
-   +-- REMOTE: 172.22.174.148:8001 (Network/Router VM)
+   +-- REMOTE: JPEG HTTP to 172.22.174.148:8100 (Network/Router VM)
                        |
                        v
-               172.22.174.145:8001 (Triton GPU server)
+               172.22.174.145:8100 (remote inference API)
+                       |
+                       v
+               Triton gRPC on the GPU server
 
 Metrics and phase data:
 
@@ -33,7 +36,7 @@ Metrics and phase data:
 
 The Pi reads GPU utilization, network conditions, and experiment phase from Kafka. It writes its per-frame results back to Kafka. The live dashboard reads all of that.
 
-**Important:** the Pi must connect via the Router VM (`172.22.174.148:8001`), not directly to the GPU server. The router is the node that applies network impairments during experiments.
+**Important:** the Pi must connect via the Router VM (`172.22.174.148:8100` for the JPEG inference API), not directly to the GPU server. The router is the node that applies network impairments during experiments.
 
 ---
 
@@ -80,6 +83,10 @@ TARGET_CLASS_ID=2,5,7  # car + drone-view misclassification helpers
 TARGET_CONFIDENCE_THRESHOLD=0.1
 
 # Router VM forwards to the GPU server; always use this address, not the GPU server directly
+REMOTE_INFERENCE_URL=http://172.22.174.148:8100
+REMOTE_JPEG_QUALITY=80
+
+# Legacy direct Triton fallback, used only when REMOTE_INFERENCE_URL is blank
 TRITON_URL=172.22.174.148:8001
 
 KAFKA_BROKERS=172.22.174.149:9092
