@@ -122,7 +122,12 @@ class Scorer:
 
             if displacement_px is not None:
                 self.shared_state.add_displacement(displacement_px)
-                self.shared_state.add_phase_displacement(current_phase, displacement_px)
+                self.shared_state.add_phase_result(
+                    current_phase,
+                    displacement_px,
+                    latency_ms,
+                    mode,
+                )
             score_summary = self.shared_state.get_score_summary()
 
             self._draw_overlay(

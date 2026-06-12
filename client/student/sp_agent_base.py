@@ -70,9 +70,8 @@ METRICS AVAILABLE IN YOUR decide() METHOD:
 
     self.experiment_phase  (str):
         Current load phase. Defaults to "baseline" until a phase message arrives.
-        Common values from tc_controller.py include "baseline", "bandwidth_50",
-        "bandwidth_200", "jitter_light", "gpu_load", and "mixed". Custom
-        phases such as "bandwidth_5" are passed through unchanged.
+        Values from the current SeQaM scenario are "baseline", "gpu_load",
+        "jitter_light", "bandwidth_5", and "mixed".
 
     self.current_mode  (str):
         The processing mode currently active ("local" or "remote").

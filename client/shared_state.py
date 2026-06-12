@@ -35,7 +35,19 @@ class SharedState:
         self._experiment_phase: str = "unknown"
 
         self._phase_scores: dict = {}
-        # Structure: {"baseline": {"total_displacement": 0.0, "frames": 0}, ...}
+        # Structure:
+        # {
+        #   "baseline": {
+        #       "total_displacement": 0.0,
+        #       "frames": 0,
+        #       "total_latency_ms": 0.0,
+        #       "latency_frames": 0,
+        #       "local_frames": 0,
+        #       "remote_frames": 0,
+        #       "local_fallback_frames": 0,
+        #   },
+        #   ...
+        # }
 
     # --- Processing mode ---
 
@@ -141,10 +153,47 @@ class SharedState:
     def add_phase_displacement(self, phase: str, displacement_px: float) -> None:
         """Record a displacement measurement for a specific experiment phase."""
         with self._lock:
-            if phase not in self._phase_scores:
-                self._phase_scores[phase] = {"total_displacement": 0.0, "frames": 0}
+            self._ensure_phase_stats(phase)
             self._phase_scores[phase]["total_displacement"] += displacement_px
             self._phase_scores[phase]["frames"] += 1
+
+    def add_phase_result(
+        self,
+        phase: str,
+        displacement_px: float | None,
+        latency_ms: float,
+        processing_mode: str,
+    ) -> None:
+        """Record scored per-phase latency, displacement, and placement split."""
+        if displacement_px is None:
+            return
+
+        with self._lock:
+            self._ensure_phase_stats(phase)
+            stats = self._phase_scores[phase]
+            stats["total_displacement"] += displacement_px
+            stats["frames"] += 1
+            stats["total_latency_ms"] += latency_ms
+            stats["latency_frames"] += 1
+            if processing_mode == "remote":
+                stats["remote_frames"] += 1
+            elif processing_mode == "local_fallback":
+                stats["local_fallback_frames"] += 1
+            else:
+                stats["local_frames"] += 1
+
+    def _ensure_phase_stats(self, phase: str) -> None:
+        """Initialise per-phase counters when a phase appears for the first time."""
+        if phase not in self._phase_scores:
+            self._phase_scores[phase] = {
+                "total_displacement": 0.0,
+                "frames": 0,
+                "total_latency_ms": 0.0,
+                "latency_frames": 0,
+                "local_frames": 0,
+                "remote_frames": 0,
+                "local_fallback_frames": 0,
+            }
 
     def get_phase_summary(self) -> dict:
         """

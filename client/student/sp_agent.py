@@ -17,8 +17,8 @@ class SPAgent(SPAgentBase):
 
     Tips:
     - Check self.experiment_phase to know what load is currently running.
-      Values from the lab include "baseline", "bandwidth_50",
-      "bandwidth_200", "bandwidth_5", "jitter_light", "gpu_load", "mixed".
+      Values from the current SeQaM scenario are "baseline", "gpu_load",
+      "jitter_light", "bandwidth_5", and "mixed".
       Defaults to "baseline" until the first phase message arrives from Kafka.
     - Check self.avg_latency to see how recent end-to-end performance has been.
     - Use .get() for metric dicts: they may be empty until the first Kafka message arrives.
@@ -47,8 +47,8 @@ class SPAgent(SPAgentBase):
         Implement your placement strategy here.
         Return "local" or "remote".
 
-        The example below shows how to read each available metric.
-        Replace this logic with your own strategy.
+        This is a working example, not the final answer. Replace it with your
+        own strategy after you understand how each signal behaves.
         """
         phase = self.experiment_phase
         gpu_util = self.gpu_metrics.get("gpu_util_pct", 0)
@@ -68,5 +68,5 @@ class SPAgent(SPAgentBase):
         if net_delay > 30 or net_jitter > 10:
             return "local"
 
-        # TODO: Replace with your logic
-        return "local"
+        # Conditions look healthy: use the faster remote GPU path.
+        return "remote"

@@ -1,11 +1,13 @@
 """
 Entry point. Wires all components together and starts all threads.
 """
+import csv
 import json
 import logging
 import os
 import queue
 import threading
+import time
 
 from config import load_config, Config
 from shared_state import SharedState
@@ -20,6 +22,8 @@ from threads.scorer import Scorer
 from student.sp_agent import SPAgent
 
 logger = logging.getLogger(__name__)
+
+EXPERIMENT_PHASES = ["baseline", "gpu_load", "jitter_light", "bandwidth_5", "mixed"]
 
 
 def wait_for_first_phase(config: Config) -> tuple:
@@ -55,24 +59,41 @@ def wait_for_first_phase(config: Config) -> tuple:
             continue
 
 
-def monitor_phases(consumer, starting_phase: str, shared_state: SharedState):
+def monitor_phases(
+    consumer,
+    starting_phase: str,
+    shared_state: SharedState,
+    timeout_sec: float,
+):
     """
     Monitor phase transitions until one full cycle completes.
-    A full cycle means all four phases have been observed and the
+    A full cycle means all configured phases have been observed and the
     current phase transitions back to the starting phase.
 
     Calls shared_state.request_shutdown() when complete.
     """
-    ALL_PHASES = {"baseline", "gpu_load", "bandwidth_50", "mixed"}
+    all_phases = set(EXPERIMENT_PHASES)
     phases_seen = {starting_phase}
     current_phase = starting_phase
 
     logger.info(
-        "Monitoring phases. Will stop after one full cycle (started on: %s).",
+        "Monitoring phases. Will stop after one full cycle (started on: %s, timeout: %.0fs).",
         starting_phase,
+        timeout_sec,
     )
 
+    start_time = time.monotonic()
+
     while not shared_state.is_shutdown_requested():
+        if timeout_sec > 0 and time.monotonic() - start_time >= timeout_sec:
+            logger.warning(
+                "Phase monitor timed out after %.0fs before a full cycle completed. "
+                "Requesting graceful shutdown.",
+                timeout_sec,
+            )
+            shared_state.request_shutdown()
+            break
+
         msg = consumer.poll(timeout=1.0)
         if msg is None:
             continue
@@ -90,8 +111,8 @@ def monitor_phases(consumer, starting_phase: str, shared_state: SharedState):
             current_phase = new_phase
 
             # Check if we completed a full cycle:
-            # All 4 phases seen AND we returned to the starting phase
-            if current_phase == starting_phase and phases_seen >= ALL_PHASES:
+            # all configured phases seen AND we returned to the starting phase.
+            if current_phase == starting_phase and phases_seen >= all_phases:
                 logger.info(
                     "Full cycle complete (all phases observed, returned to %s). "
                     "Stopping experiment.",
@@ -106,6 +127,70 @@ def monitor_phases(consumer, starting_phase: str, shared_state: SharedState):
         consumer.close()
     except Exception:
         pass
+
+
+def write_phase_summary_csv(
+    config: Config,
+    shared_state: SharedState,
+    phase_names: list[str],
+) -> None:
+    """Write per-phase aggregate results to a separate CSV file."""
+    phase_summary = shared_state.get_phase_summary()
+    ordered_phases = list(phase_names)
+    ordered_phases.extend(
+        phase for phase in sorted(phase_summary)
+        if phase not in set(ordered_phases)
+    )
+
+    results_dir = os.path.dirname(config.results_by_phase_path)
+    if results_dir:
+        os.makedirs(results_dir, exist_ok=True)
+
+    with open(config.results_by_phase_path, "w", newline="") as phase_file:
+        writer = csv.writer(phase_file)
+        writer.writerow(
+            [
+                "phase",
+                "frames_scored",
+                "mean_latency_ms",
+                "mean_displacement_px",
+                "cumulative_displacement_px",
+                "local_frames",
+                "remote_frames",
+                "local_fallback_frames",
+                "local_total_frames",
+                "remote_pct",
+            ]
+        )
+        for phase in ordered_phases:
+            stats = phase_summary.get(phase, {})
+            frames = int(stats.get("frames", 0))
+            latency_frames = int(stats.get("latency_frames", 0))
+            total_displacement = float(stats.get("total_displacement", 0.0))
+            total_latency = float(stats.get("total_latency_ms", 0.0))
+            local_frames = int(stats.get("local_frames", 0))
+            remote_frames = int(stats.get("remote_frames", 0))
+            local_fallback_frames = int(stats.get("local_fallback_frames", 0))
+            local_total_frames = local_frames + local_fallback_frames
+            mean_latency = total_latency / latency_frames if latency_frames else 0.0
+            mean_displacement = total_displacement / frames if frames else 0.0
+            remote_pct = (remote_frames / frames * 100.0) if frames else 0.0
+            writer.writerow(
+                [
+                    phase,
+                    frames,
+                    round(mean_latency, 2),
+                    round(mean_displacement, 2),
+                    round(total_displacement, 2),
+                    local_frames,
+                    remote_frames,
+                    local_fallback_frames,
+                    local_total_frames,
+                    round(remote_pct, 2),
+                ]
+            )
+
+    logger.info("Wrote per-phase summary CSV: %s", config.results_by_phase_path)
 
 
 def main() -> None:
@@ -151,11 +236,13 @@ def main() -> None:
     logger.info("  frame_interval_ms    : %d", config.frame_interval_ms)
     logger.info("  display_output       : %s", config.display_output)
     logger.info("  results_log_path     : %s", config.results_log_path)
+    logger.info("  results_by_phase_path: %s", config.results_by_phase_path)
     logger.info("  conf_threshold       : %.2f", config.conf_threshold)
     logger.info("  target_class_id      : %s", config.target_class_id)
     logger.info("  target_conf_threshold: %.2f", config.target_conf_threshold)
     logger.info("  sp_agent_interval_ms : %d", config.sp_agent_interval_ms)
     logger.info("  auto_stop            : %s", config.auto_stop)
+    logger.info("  phase_timeout_sec    : %.0f", config.phase_timeout_sec)
     logger.info("  miss_penalty_px      : %.1f", config.miss_penalty_px)
     logger.info("  dashboard_enabled    : %s", config.dashboard_enabled)
     logger.info("  dashboard_url        : %s", config.dashboard_url)
@@ -252,7 +339,12 @@ def main() -> None:
     # 13. Wait for completion
     try:
         if phase_consumer and starting_phase:
-            monitor_phases(phase_consumer, starting_phase, shared_state)
+            monitor_phases(
+                phase_consumer,
+                starting_phase,
+                shared_state,
+                config.phase_timeout_sec,
+            )
         else:
             for t in threads:
                 t.join()
@@ -266,6 +358,7 @@ def main() -> None:
     kafka_publisher.flush()
     dashboard_publisher.close()
     results_file.close()
+    write_phase_summary_csv(config, shared_state, EXPERIMENT_PHASES)
 
     # 14. Per-phase and overall summary
     phase_summary = shared_state.get_phase_summary()
@@ -274,7 +367,7 @@ def main() -> None:
     logger.info("=" * 60)
     logger.info("Experiment complete. Results by phase:")
     logger.info("-" * 60)
-    for phase_name in ["baseline", "gpu_load", "bandwidth_50", "mixed"]:
+    for phase_name in EXPERIMENT_PHASES:
         ps = phase_summary.get(phase_name, {"total_displacement": 0, "frames": 0})
         frames = ps["frames"]
         total = ps["total_displacement"]

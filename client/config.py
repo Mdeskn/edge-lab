@@ -36,6 +36,7 @@ class Config:
     input_height: int
     display_output: bool
     results_log_path: str
+    results_by_phase_path: str
     queue_max_size: int
     conf_threshold: float
     target_class_id: TargetClassFilter
@@ -43,6 +44,7 @@ class Config:
     sp_agent_interval_ms: int
     log_level: str
     auto_stop: bool
+    phase_timeout_sec: float
     miss_penalty_px: float
     dashboard_enabled: bool
     dashboard_url: str
@@ -57,6 +59,12 @@ def load_config() -> Config:
     group_id = os.environ.get("GROUP_ID", "1")
     target_class_value = os.environ.get("TARGET_CLASS_ID", "").strip()
     conf_threshold = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.3"))
+    results_log_path = os.environ.get("RESULTS_LOG_PATH", "results.csv")
+    results_by_phase_path = os.environ.get("RESULTS_BY_PHASE_PATH", "").strip()
+    if not results_by_phase_path:
+        base, ext = os.path.splitext(results_log_path)
+        results_by_phase_path = f"{base}_by_phase{ext or '.csv'}"
+
     return Config(
         group_id=group_id,
         video_path=os.environ["VIDEO_PATH"],
@@ -79,7 +87,8 @@ def load_config() -> Config:
         input_width=int(os.environ.get("MODEL_INPUT_WIDTH", "640")),
         input_height=int(os.environ.get("MODEL_INPUT_HEIGHT", "640")),
         display_output=os.environ.get("DISPLAY_OUTPUT", "true").lower() == "true",
-        results_log_path=os.environ.get("RESULTS_LOG_PATH", "results.csv"),
+        results_log_path=results_log_path,
+        results_by_phase_path=results_by_phase_path,
         queue_max_size=int(os.environ.get("QUEUE_MAX_SIZE", "10")),
         conf_threshold=conf_threshold,
         target_class_id=_parse_target_class_filter(target_class_value),
@@ -89,6 +98,7 @@ def load_config() -> Config:
         sp_agent_interval_ms=int(os.environ.get("SP_AGENT_INTERVAL_MS", "500")),
         log_level=os.environ.get("LOG_LEVEL", "INFO"),
         auto_stop=os.environ.get("AUTO_STOP", "true").lower() == "true",
+        phase_timeout_sec=float(os.environ.get("PHASE_TIMEOUT_SEC", "300")),
         miss_penalty_px=float(os.environ.get("MISS_PENALTY_PX", "100.0")),
         dashboard_enabled=os.environ.get("DASHBOARD_ENABLED", "false").lower() == "true",
         dashboard_url=os.environ.get("DASHBOARD_URL", "http://localhost:8080"),

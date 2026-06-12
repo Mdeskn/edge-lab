@@ -243,7 +243,7 @@ Example strategy:
 def decide(self) -> str:
     phase = self.experiment_phase
 
-    if phase in ("gpu_load", "bandwidth_50", "mixed"):
+    if phase in ("gpu_load", "jitter_light", "bandwidth_5", "mixed"):
         return "local"
 
     if self.gpu_metrics.get("yolo_queue_ms", 0) > 50:
@@ -298,24 +298,22 @@ dispatcher paid that cost and ran local inference.
 
 ## Experiment Phases
 
-`tc_controller.py` currently recognizes these phase names:
+The current SeQaM scenario emits these phase names:
 
 | Phase | Index | Network action | GPU load |
 | --- | ---: | --- | --- |
 | `baseline` | 0 | clear | no |
-| `bandwidth_200` | 1 | `tbf 200mbit 2mbit 50ms` | no |
-| `bandwidth_50` | 2 | `tbf 50mbit 2mbit 50ms` | no |
-| `jitter_light` | 3 | `netem_tbf 0.1ms 0.4ms 1gbit 2mbit 50ms` | no |
 | `gpu_load` | 4 | clear | yes, triggered externally |
-| `mixed` | 5 | `tbf 50mbit 2mbit 50ms` | yes, triggered externally |
+| `jitter_light` | 3 | `netem_tbf 0.1ms 0.4ms 1gbit 2mbit 50ms` | no |
+| `bandwidth_5` | 6 | `tbf 5mbit 256kb 50ms` | no |
+| `mixed` | 5 | `tbf 5mbit 256kb 50ms` | yes, triggered externally |
 
 Phase rules stay active until the next phase. Do not pass a duration to
 `tc_control.sh` from automated phase control; SeQaM controls timing.
 
-Important consistency check: the current `seqam/scenario.json` uses
-`bandwidth_5`, but `tc_controller.py` does not currently define that phase. Add
-`bandwidth_5` to `PHASE_MAP` or change the scenario back to an existing phase
-before running that scenario.
+`tc_controller.py` also accepts legacy operator phases such as `bandwidth_200`
+and `bandwidth_50`, but they are not emitted by the current SeQaM scenario.
+Student-facing examples should use only the current scenario phases above.
 
 The current checked-in SeQaM scenario is a short heavy-load cycle:
 
@@ -329,9 +327,8 @@ The current checked-in SeQaM scenario is a short heavy-load cycle:
 | 70 s | Stop GPU load; set `baseline` |
 | 75 s | Exit |
 
-Older drafts used a 120-second four-phase cycle:
-`baseline -> gpu_load -> bandwidth_50 -> mixed`. If you return to that schedule,
-keep the phase names aligned with `PHASE_MAP`.
+If the SeQaM scenario changes, update `client/student/sp_agent.py`,
+`client/student/sp_agent_base.py`, and `client/main.py` at the same time.
 
 ## Dashboard
 
@@ -844,8 +841,8 @@ Then compare with `PHASE_MAP` in:
 publishers/network_conditions/tc_controller.py
 ```
 
-The current `seqam/scenario.json` contains `bandwidth_5`, which must be added to
-`PHASE_MAP` or replaced with an existing phase.
+Every phase emitted by `seqam/scenario.json` must be accepted by VM3
+`set_phase.sh` and defined in `PHASE_MAP`.
 
 ### Network publisher always reports clear
 
