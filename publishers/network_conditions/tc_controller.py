@@ -29,6 +29,7 @@ Designed to run as a plain Python script directly on the Network VM:
         echo baseline      > /tmp/edgelab_phase
         echo bandwidth_200 > /tmp/edgelab_phase
         echo bandwidth_50  > /tmp/edgelab_phase
+        echo bandwidth_5   > /tmp/edgelab_phase
         echo jitter_light  > /tmp/edgelab_phase
         echo gpu_load      > /tmp/edgelab_phase
         echo mixed         > /tmp/edgelab_phase
@@ -50,6 +51,7 @@ Designed to run as a plain Python script directly on the Network VM:
         PHASE_POLL_INTERVAL_SEC default: 1.0
         TC_SCRIPT               default: /home/mae/network_load/tc_control.sh
         COMMAND_TIMEOUT_SEC     default: 10
+        PHASE_REPUBLISH_SEC     default: 5
         LOG_LEVEL               default: INFO
 
 Phase timing:
@@ -66,8 +68,8 @@ Published Kafka message structure:
     {
         "timestamp":      float   Unix timestamp
         "source":         str     "network-vm"
-        "phase":          str     e.g. "bandwidth_50"
-        "phase_index":    int     numeric index (0-5)
+        "phase":          str     e.g. "bandwidth_5"
+        "phase_index":    int     numeric index (0-6)
         "description":    str     human-readable description
         "tc_command":     str     full sudo command that was (or would be) run
         "tc_parameters":  dict    mode, bandwidth, burst, tbf_latency, delay_ms,
@@ -141,12 +143,27 @@ PHASE_MAP: dict[str, dict] = {
     },
     "bandwidth_50": {
         "index": 2,
-        "description": "Limit bandwidth to 50mbit.",
+        "description": "Legacy bandwidth phase: limit bandwidth to 50mbit.",
         "tc_args": ["tbf", "50mbit", "2mbit", "50ms"],
         "tc_parameters": {
             "mode": "tbf",
             "bandwidth": "50mbit",
             "burst": "2mbit",
+            "tbf_latency": "50ms",
+            "delay_ms": 0.0,
+            "jitter_ms": 0.0,
+            "packet_loss_percent": 0.0,
+            "duration_seconds": None,
+        },
+    },
+    "bandwidth_5": {
+        "index": 6,
+        "description": "Limit bandwidth to 5mbit for the JPEG remote inference path.",
+        "tc_args": ["tbf", "5mbit", "256kb", "50ms"],
+        "tc_parameters": {
+            "mode": "tbf",
+            "bandwidth": "5mbit",
+            "burst": "256kb",
             "tbf_latency": "50ms",
             "delay_ms": 0.0,
             "jitter_ms": 0.0,
@@ -185,12 +202,12 @@ PHASE_MAP: dict[str, dict] = {
     },
     "mixed": {
         "index": 5,
-        "description": "Mixed phase placeholder. Apply 50mbit network shaping; GPU load may be triggered externally.",
-        "tc_args": ["tbf", "50mbit", "2mbit", "50ms"],
+        "description": "Mixed phase placeholder. Apply 5mbit network shaping; GPU load may be triggered externally.",
+        "tc_args": ["tbf", "5mbit", "256kb", "50ms"],
         "tc_parameters": {
             "mode": "tbf",
-            "bandwidth": "50mbit",
-            "burst": "2mbit",
+            "bandwidth": "5mbit",
+            "burst": "256kb",
             "tbf_latency": "50ms",
             "delay_ms": 0.0,
             "jitter_ms": 0.0,
@@ -376,6 +393,13 @@ def _parse_args() -> argparse.Namespace:
         help="Timeout in seconds for each tc_control.sh subprocess call",
     )
     p.add_argument(
+        "--republish-interval-s",
+        type=float,
+        default=float(os.environ.get("PHASE_REPUBLISH_SEC", "5")),
+        metavar="SECONDS",
+        help="Republish the current phase to Kafka at this interval, even when it has not changed",
+    )
+    p.add_argument(
         "--dry-run",
         action="store_true",
         default=False,
@@ -396,6 +420,7 @@ def main() -> None:
     tc_script = args.tc_script
     poll_interval = args.poll_interval_s
     command_timeout_s = args.command_timeout_s
+    republish_interval_s = args.republish_interval_s
     dry_run = args.dry_run
     kafka_brokers = args.kafka_bootstrap_servers
     topic = args.topic
@@ -413,6 +438,7 @@ def main() -> None:
     logger.info("  Kafka      : %s -> %s", kafka_brokers, topic)
     logger.info("  poll       : %.2fs", poll_interval)
     logger.info("  cmd timeout: %.0fs", command_timeout_s)
+    logger.info("  republish : %.0fs", republish_interval_s)
     if dry_run:
         logger.info("  mode       : DRY RUN (sudo/tc commands will NOT be executed)")
 
@@ -421,6 +447,8 @@ def main() -> None:
             logger.error("Kafka delivery failed: %s", err)
 
     last_phase: str | None = None
+    last_phase_publish_time = 0.0
+    last_phase_payload: dict | None = None
     phase_file_warned = False
 
     while True:
@@ -434,7 +462,33 @@ def main() -> None:
         phase_file_warned = False
         phase = read_phase(phase_file)
 
-        if phase is None or phase == last_phase:
+        if phase is None:
+            time.sleep(poll_interval)
+            continue
+
+        now = time.time()
+
+        if phase == last_phase:
+            # Republish current phase periodically so dashboards that start late
+            # still learn the active experiment phase.
+            if last_phase_payload is not None and now - last_phase_publish_time >= republish_interval_s:
+                try:
+                    producer.produce(
+                        topic,
+                        key="phase",
+                        value=json.dumps(last_phase_payload).encode("utf-8"),
+                        callback=_delivery_report,
+                    )
+                    producer.poll(0)
+                    last_phase_publish_time = now
+                    logger.info(
+                        "Republished phase %r (index=%d) to %s",
+                        phase,
+                        last_phase_payload["phase_index"],
+                        topic,
+                    )
+                except Exception as exc:
+                    logger.error("Kafka republish error: %s", exc)
             time.sleep(poll_interval)
             continue
 
@@ -465,6 +519,8 @@ def main() -> None:
                 callback=_delivery_report,
             )
             producer.poll(0)
+            last_phase_payload = payload
+            last_phase_publish_time = time.time()
             logger.info(
                 "Published phase %r (index=%d, status=%s) to %s",
                 phase,
