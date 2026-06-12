@@ -1,20 +1,27 @@
 {
   "distributed": {
+    "ue": [],
+    "server": [],
     "router": [
       {
         "name": "net-vm",
-        "description": "Static SSH target for the Edge Lab network VM",
-        "host": "172.22.174.141",
-        "component_type": "distributed_event_manager",
+        "description": "Network VM - traffic controller (tc)",
+        "host": "172.22.174.148",
         "ssh_user": "mae",
         "ssh_port": 22
       },
       {
         "name": "gpu-server",
-        "description": "Static SSH target for the Edge Lab GPU server",
-        "host": "172.22.174.139",
-        "component_type": "distributed_event_manager",
+        "description": "GPU Server - Triton inference",
+        "host": "172.22.174.145",
         "ssh_user": "mae",
+        "ssh_port": 22
+      },
+      {
+        "name": "load-vm",
+        "description": "GPU load client VM",
+        "host": "172.22.232.19",
+        "ssh_user": "lc1",
         "ssh_port": 22
       }
     ]

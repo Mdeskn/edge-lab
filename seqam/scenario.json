@@ -1,39 +1,107 @@
 {
-  "experiment_name": "edge-computing-lab-loop",
-  "description": "4-phase loop: baseline (no load) -> GPU load -> 50mbit bandwidth cap -> mixed (both). Duration: 120s. Loops continuously.",
+
+  "experiment_name": "edgelab-jpeg-gateway-heavy-load",
+
   "execute_immediately": true,
+
   "eventList": [
+
     {
-      "comment": "Phase 0: baseline - tc_controller clears tc rules when it sees this name",
-      "command": "ssh src_device_type:router src_device_name:net-vm command:'echo baseline > /tmp/edgelab_phase'",
+
+      "command": "ssh router load-vm bash /home/lc1/edgelab-load-client/run_gpu_load.sh stop",
+
       "executionTime": 0
+
     },
+
     {
-      "comment": "Phase 1: gpu_load - tc_controller clears tc rules; GPU stressor provides the load",
-      "command": "ssh src_device_type:router src_device_name:net-vm command:'echo gpu_load > /tmp/edgelab_phase'",
-      "executionTime": 30000
+
+      "command": "ssh router net-vm bash /home/mae/network_load/set_phase.sh baseline",
+
+      "executionTime": 0
+
     },
+
     {
-      "command": "ssh src_device_type:router src_device_name:gpu-server command:'bash /scripts/gpu_stressor.sh yolov10n 100 30'",
-      "executionTime": 30000
+
+      "command": "ssh router net-vm bash /home/mae/network_load/set_phase.sh gpu_load",
+
+      "executionTime": 10000
+
     },
+
     {
-      "comment": "Phase 2: bandwidth_50 - tc_controller applies 50mbit tbf cap; no GPU stressor",
-      "command": "ssh src_device_type:router src_device_name:net-vm command:'echo bandwidth_50 > /tmp/edgelab_phase'",
-      "executionTime": 60000
+
+      "command": "ssh router load-vm bash /home/lc1/edgelab-load-client/run_gpu_load.sh start 32 0",
+
+      "executionTime": 10000
+
     },
+
     {
-      "comment": "Phase 3: mixed - tc_controller keeps 50mbit cap; GPU stressor adds server load",
-      "command": "ssh src_device_type:router src_device_name:net-vm command:'echo mixed > /tmp/edgelab_phase'",
-      "executionTime": 90000
+
+      "command": "ssh router load-vm bash /home/lc1/edgelab-load-client/run_gpu_load.sh stop",
+
+      "executionTime": 25000
+
     },
+
     {
-      "command": "ssh src_device_type:router src_device_name:gpu-server command:'bash /scripts/gpu_stressor.sh yolov10n 100 30'",
-      "executionTime": 90000
+
+      "command": "ssh router net-vm bash /home/mae/network_load/set_phase.sh jitter_light",
+
+      "executionTime": 25000
+
     },
+
     {
+
+      "command": "ssh router net-vm bash /home/mae/network_load/set_phase.sh bandwidth_5",
+
+      "executionTime": 40000
+
+    },
+
+    {
+
+      "command": "ssh router net-vm bash /home/mae/network_load/set_phase.sh mixed",
+
+      "executionTime": 55000
+
+    },
+
+    {
+
+      "command": "ssh router load-vm bash /home/lc1/edgelab-load-client/run_gpu_load.sh start 32 0",
+
+      "executionTime": 55000
+
+    },
+
+    {
+
+      "command": "ssh router load-vm bash /home/lc1/edgelab-load-client/run_gpu_load.sh stop",
+
+      "executionTime": 70000
+
+    },
+
+    {
+
+      "command": "ssh router net-vm bash /home/mae/network_load/set_phase.sh baseline",
+
+      "executionTime": 70000
+
+    },
+
+    {
+
       "command": "exit",
-      "executionTime": 120000
+
+      "executionTime": 75000
+
     }
+
   ]
+
 }

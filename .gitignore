@@ -15,10 +15,26 @@ dist/
 
 # Docker
 *.log
+nohup.out
 
 # Local lab assets and generated output
-
 data/results*.csv
+
+# Runtime artifacts copied from deployed VMs
+scripts/net-vm/network_conditions_publisher.log
+scripts/net-vm/tc_controller.log
+scripts/net-vm/nohup.out
+scripts/gpu-server/server/nohup.out
+scripts/gpu-load-lc1/gpu_load.log
+
+# Unused compose files
+docker-compose.dev*.yml
+docker-compose.prod*.yml
+docker-compose.test*.yml
+docker-compose.gpu-server*.yml
+docker-compose.local.*yml
+docker-compose.netvm.*yml
+dashboard/docker-compose.*yml
 
 # Personal files
 lab_project_roadmap*.md
@@ -32,7 +48,15 @@ edge-lab_project_inventory.*md
 EdgeLab machines*.md
 edgelab_startup_instructions_with_troubleshooting*.md
 Documentation and testing/
+docs/edgelab_starter_instructions*.md
 scripts/
+docs/
+!docs/
+docs/*
+!docs/archive/
+!docs/archive/**
+docs/archive/markdown-sources/root/edge-lab_project_inventory.md
+benchmark_inference*.py
 
 # IDE
 .vscode/

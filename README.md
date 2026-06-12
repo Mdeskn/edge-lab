@@ -1,77 +1,116 @@
 # EdgeLab
 
-A hands-on edge-computing lab for the IoT and Edge Computing course at FH Dortmund. A Raspberry Pi watches a pre-recorded drone-view video, tracks a single car frame by frame, and has to decide for every frame: run YOLO locally on the Pi CPU, or ship the frame over the network to a remote GPU server?
+EdgeLab is a hands-on edge-computing lab for the IoT and Edge Computing course
+at FH Dortmund. A Raspberry Pi processes a pre-recorded drone-view video and
+tracks one target car frame by frame. For every frame, the student service
+placement agent decides whether to run YOLO locally on the Pi CPU or send the
+frame through the network to a remote GPU server.
 
-Your job as a student: write the placement logic (the Service Placement Agent) that adapts to live conditions and keeps the prediction close to the ground truth. Everything else is already wired up.
+The student task is intentionally small:
 
----
-
-## What is the goal?
-
-Minimize **cumulative displacement**: the total distance (in pixels) between where your detector predicted the target object and where it actually was, summed over every scored frame. Faster inference means the result arrives before the target has moved far, which means lower displacement and a better score.
-
----
-
-## System architecture
-
-```
-Raspberry Pi app
-   |
-   +-- LOCAL: YOLOv10n on Pi CPU (onnxruntime)
-   |
-   +-- REMOTE: JPEG HTTP to 172.22.174.148:8100 (Network/Router VM)
-                       |
-                       v
-               172.22.174.145:8100 (remote inference API)
-                       |
-                       v
-               Triton gRPC on the GPU server
-
-Metrics and phase data:
-
-  GPU server  (172.22.174.145)  ---> Kafka  172.22.174.149:9092
-  Network VM  (172.22.174.148)  ---> Kafka  172.22.174.149:9092
-  Pi client   (your Raspberry Pi) -> Kafka  172.22.174.149:9092
+```python
+# client/student/sp_agent.py
+def decide(self) -> str:
+    return "local"  # or "remote"
 ```
 
-The Pi reads GPU utilization, network conditions, and experiment phase from Kafka. It writes its per-frame results back to Kafka. The live dashboard reads all of that.
+Everything else in the pipeline is already wired: video reading, local and
+remote inference, Kafka metrics, scoring, phase updates, and the live dashboard.
 
-**Important:** the Pi must connect via the Router VM (`172.22.174.148:8100` for the JPEG inference API), not directly to the GPU server. The router is the node that applies network impairments during experiments.
+## Goal
 
----
+Minimize cumulative displacement: the total pixel distance between the predicted
+target center and the ground-truth target center over all scored frames. Lower
+is better.
 
-## Key files
+Fast inference matters because the car is moving. A late prediction can be
+technically correct for the frame that was processed, but stale by the time the
+result arrives. The lab teaches when remote GPU inference is worth the network
+trip, and when local edge inference is safer.
 
-| File | What it is |
-|------|-----------|
-| `client/student/sp_agent.py` | The only file you edit |
-| `client/student/sp_agent_base.py` | Base class that provides live metrics; read but do not edit |
-| `client/main.py` | Starts the full pipeline |
-| `client/config.py` | All configuration loaded from `.env` |
-| `publishers/network_conditions/` | Scripts that run on the Network VM |
-| `dashboard/` | Live browser dashboard (FastAPI backend + React frontend) |
+## System Map
 
----
+| Machine | IP / host | Main role |
+| --- | --- | --- |
+| VM1 | `172.22.174.149` | Kafka broker, Kafka UI, Grafana/Prometheus, SeQaM API when enabled |
+| VM2 | `172.22.174.145` | GPU server, Triton, JPEG inference API, GPU metrics publisher |
+| VM3 | `172.22.174.148` | Network/router VM, traffic shaping, network metrics, phase controller |
+| LC1 | `172.22.232.19` | External GPU load client |
+| Raspberry Pi | group-assigned | Student client app, local inference, dashboard |
 
-## Quick start for students
+Primary inference path:
 
-**Step 1: Clone and prepare data**
+```text
+Raspberry Pi
+  -> VM3 Router API endpoint 172.22.174.148:8100
+  -> VM2 remote inference API 172.22.174.145:8100
+  -> Triton gRPC on VM2
+```
+
+Legacy fallback path:
+
+```text
+Raspberry Pi
+  -> VM3 Router Triton endpoint 172.22.174.148:8001
+  -> VM2 Triton gRPC 172.22.174.145:8001
+```
+
+Always route student inference traffic through VM3. Direct Pi traffic to
+`172.22.174.145` bypasses network impairment and invalidates the network part of
+the experiment.
+
+Metrics and phase data flow through Kafka on VM1:
+
+```text
+VM2 GPU metrics      -> dnn_partition.server_metrics
+VM3 network metrics  -> edgelab.network.metrics
+VM3 phase events     -> edgelab.phase
+Pi frame results     -> dnn_partition.client_metrics
+```
+
+## Repository Layout
+
+| Path | Purpose |
+| --- | --- |
+| `client/` | Raspberry Pi app: frame reader, dispatcher, scorer, SP agent, local/remote inference |
+| `client/student/sp_agent.py` | The only file students edit |
+| `client/student/sp_agent_base.py` | Base class exposing Kafka metrics and latency history |
+| `dashboard/` | Per-group FastAPI + React live dashboard |
+| `ground_truth/` | HSV-based ground-truth CSV generator |
+| `publishers/network_conditions/` | VM3 network metrics publisher and phase controller |
+| `remote_inference/` | VM2 JPEG-to-Triton gateway API |
+| `seqam/` | SeQaM scenario and SSH target configuration |
+| `scripts/` | Benchmarking and deployment/helper scripts |
+| `docker-compose.*.yml` | Compose files for Pi, GPU server, Network VM, and local runs |
+
+## Student Quick Start
+
+1. Clone the repository and prepare lab data:
 
 ```bash
 git clone <repo-url> edge-lab
 cd edge-lab
 mkdir -p data
-# Copy the three lab-supplied files into data/:
-#   video.mp4, ground_truth.csv, yolov10n.onnx
 ```
 
-**Step 2: Configure `.env`**
+Copy the supplied files into `data/`:
+
+```text
+data/video.mp4
+data/ground_truth.csv
+data/yolov10n.onnx
+```
+
+Some older notes refer to `data/test_video.mp4`; the current default
+configuration uses `data/video.mp4`. Use whatever file name is set in `.env`.
+
+2. Configure the environment:
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and fill in at minimum:
+Minimum student settings:
 
 ```dotenv
 GROUP_ID=1
@@ -79,165 +118,878 @@ GROUP_ID=1
 VIDEO_PATH=data/video.mp4
 GROUND_TRUTH_PATH=data/ground_truth.csv
 MODEL_PATH=data/yolov10n.onnx
-TARGET_CLASS_ID=2,5,7  # car + drone-view misclassification helpers
-TARGET_CONFIDENCE_THRESHOLD=0.1
 
-# Router VM forwards to the GPU server; always use this address, not the GPU server directly
 REMOTE_INFERENCE_URL=http://172.22.174.148:8100
 REMOTE_JPEG_QUALITY=80
-
-# Legacy direct Triton fallback, used only when REMOTE_INFERENCE_URL is blank
 TRITON_URL=172.22.174.148:8001
 
 KAFKA_BROKERS=172.22.174.149:9092
+KAFKA_GPU_TOPIC=dnn_partition.server_metrics
+KAFKA_NET_TOPIC=edgelab.network.metrics
+KAFKA_PHASE_TOPIC=edgelab.phase
+APP_METRICS_TOPIC=dnn_partition.client_metrics
 
-DISPLAY_OUTPUT=false   # set true if you have a local display
-AUTO_STOP=false        # set true during the real experiment run
+TARGET_CLASS_ID=2,5,7
+TARGET_CONFIDENCE_THRESHOLD=0.1
+
+DISPLAY_OUTPUT=false
+AUTO_STOP=false
 ```
 
-**Step 3: Install dependencies**
+Use `DISPLAY_OUTPUT=true` only when a display is attached. Use
+`AUTO_STOP=true` for the real experiment run so the app waits for the first
+phase message, runs one full phase cycle, then stops.
+
+3. Install and run locally:
 
 ```bash
 python3 -m venv .venv-client
 source .venv-client/bin/activate
 pip install -r client/requirements.txt
-```
 
-**Step 4: Run the app**
-
-```bash
 cd client
 python main.py
 ```
 
-**Step 5: Edit your agent and iterate**
+4. Edit the placement logic:
 
-Open `client/student/sp_agent.py` in your editor. Implement `decide()`. Restart the app. Read `data/results.csv` to see how you did.
-
----
-
-## The file you edit: `client/student/sp_agent.py`
-
-Implement `decide()` to return `"local"` or `"remote"`. The base class calls it every 500 ms and applies the result.
-
-```python
-def decide(self) -> str:
-    # Read any signal from self, then return "local" or "remote"
-    return "local"
+```text
+client/student/sp_agent.py
 ```
 
-You can use `self` to store state between calls. You can call any method on `self`. The only constraint: return one of the two strings.
+Restart the app after each change and inspect `data/results.csv` or
+`results.csv`, depending on `RESULTS_LOG_PATH`.
 
----
+## Docker On The Pi
 
-## Signals available in decide()
+The Pi can run the client and dashboard together:
 
-All of these are kept up to date automatically by the background Kafka consumer in the base class. Use `.get(key, default)` for dict values so you get a safe zero when the first message has not arrived yet.
-
-### Experiment phase
-
-```python
-phase = self.experiment_phase   # str, defaults to "baseline"
+```bash
+docker compose -f docker-compose.pi.yml up --build
 ```
 
-| Phase | What is happening |
-|-------|------------------|
-| `"baseline"` | Clean conditions: GPU free, no network impairment |
-| `"gpu_load"` | GPU server is flooded with 100 concurrent requests |
-| `"bandwidth_50"` | Network path capped at 50 Mbit/s by tc |
-| `"mixed"` | Both GPU server flooded and 50 Mbit/s cap active |
+Open the dashboard frontend at:
 
-### GPU server metrics (`self.gpu_metrics`)
-
-```python
-gpu_util   = self.gpu_metrics.get("gpu_util_pct", 0)    # GPU busy 0-100 %
-gpu_temp   = self.gpu_metrics.get("gpu_temp_c", 0)      # temperature in Celsius
-yolo_queue = self.gpu_metrics.get("yolo_queue_ms", 0)   # time waiting in Triton queue
-yolo_infer = self.gpu_metrics.get("yolo_infer_ms", 0)   # GPU compute time
-total_rps  = self.gpu_metrics.get("total_rps", 0)       # total requests per second
-mem_used   = self.gpu_metrics.get("gpu_mem_used_mb", 0) # GPU memory used in MB
+```text
+http://<pi-ip>:5173
 ```
 
-High `yolo_queue_ms` is the strongest signal that the GPU server is overloaded and remote inference will be slow.
+The dashboard backend health endpoint is:
 
-### Network metrics (`self.net_metrics`)
-
-```python
-delay     = self.net_metrics.get("delay_ms", 0)           # one-way delay added in ms
-jitter    = self.net_metrics.get("jitter_ms", 0)          # delay variation in ms
-loss      = self.net_metrics.get("packet_loss_pct", 0)    # percentage of packets dropped
-bandwidth = self.net_metrics.get("bandwidth", "unlimited") # e.g. "50Mbit" or "unlimited"
+```text
+http://<pi-ip>:8080/health
 ```
 
-### Own latency history
+The client and dashboard backend run on the same Pi, so keep:
 
-```python
-avg_lat  = self.avg_latency        # float or None; mean of last 20 frames
-all_lats = self.recent_latencies   # list[float]; last 20 end-to-end times in ms
+```dotenv
+DASHBOARD_ENABLED=true
+DASHBOARD_URL=http://localhost:8080
 ```
 
-### Current mode
+## Placement Agent API
+
+`SPAgentBase` keeps the following values updated from Kafka and local app
+history. Inside `decide()`, always use `.get(key, default)` when reading metric
+dictionaries so the first missing Kafka message does not crash the agent.
+
+Current phase:
 
 ```python
-mode = self.current_mode   # "local" or "remote"; what is active right now
+phase = self.experiment_phase  # defaults to "baseline"
 ```
 
----
+GPU metrics from `dnn_partition.server_metrics`:
 
-## Example strategy
+```python
+gpu_util   = self.gpu_metrics.get("gpu_util_pct", 0)
+gpu_temp   = self.gpu_metrics.get("gpu_temp_c", 0)
+gpu_mem_mb = self.gpu_metrics.get("gpu_mem_used_mb", 0)
+cpu_util   = self.gpu_metrics.get("cpu_util_pct", 0)
+power_w    = self.gpu_metrics.get("power_w", 0)
+
+yolo_queue = self.gpu_metrics.get("yolo_queue_ms", 0)
+yolo_infer = self.gpu_metrics.get("yolo_infer_ms", 0)
+yolo_rps   = self.gpu_metrics.get("yolo_success_rps", 0)
+total_rps  = self.gpu_metrics.get("total_rps", 0)
+total_pend = self.gpu_metrics.get("total_pending", 0)
+```
+
+`yolo_queue_ms` is usually the strongest remote-server warning signal. A rising
+queue means remote inference will slow down before GPU utilization alone looks
+obvious.
+
+Network metrics from `edgelab.network.metrics`:
+
+```python
+delay     = self.net_metrics.get("delay_ms", 0)
+jitter    = self.net_metrics.get("jitter_ms", 0)
+loss      = self.net_metrics.get("packet_loss_pct", 0)
+bandwidth = self.net_metrics.get("bandwidth", "unlimited")
+mode      = self.net_metrics.get("mode", "clear")
+```
+
+Local latency history:
+
+```python
+avg_lat  = self.avg_latency       # mean of last 20 latencies, or None
+all_lats = self.recent_latencies  # list[float], last 20 frame latencies
+mode     = self.current_mode      # "local" or "remote"
+```
+
+Example strategy:
 
 ```python
 def decide(self) -> str:
     phase = self.experiment_phase
 
-    # React to known bad conditions immediately
     if phase in ("gpu_load", "bandwidth_50", "mixed"):
         return "local"
 
-    # React to measured bad conditions
-    yolo_queue = self.gpu_metrics.get("yolo_queue_ms", 0)
-    gpu_util   = self.gpu_metrics.get("gpu_util_pct", 0)
-    net_delay  = self.net_metrics.get("delay_ms", 0)
-
-    if yolo_queue > 50 or gpu_util > 80:
+    if self.gpu_metrics.get("yolo_queue_ms", 0) > 50:
         return "local"
-    if net_delay > 30:
+    if self.gpu_metrics.get("gpu_util_pct", 0) > 85:
+        return "local"
+    if self.net_metrics.get("delay_ms", 0) > 40:
         return "local"
 
-    # Conditions look good: use the fast GPU
     return "remote"
 ```
 
-A stronger agent would also react to `self.avg_latency` rising, avoid switching too rapidly, and use the phase as a predictive signal (the phase changes before performance actually degrades).
-
----
+Stronger agents also avoid thrashing by requiring a bad condition to persist for
+two or three `decide()` calls before switching modes.
 
 ## Scoring
 
-Each scored frame produces a displacement in pixels:
+For each scored frame:
 
+```text
+displacement_px = sqrt((predicted_x - true_x)^2 + (predicted_y - true_y)^2)
 ```
-displacement = sqrt((predicted_x - true_x)^2 + (predicted_y - true_y)^2)
+
+| Situation | Score behavior |
+| --- | --- |
+| Target absent in ground truth | Frame is excluded from cumulative score |
+| Target present and model detects it | Euclidean distance in pixels |
+| Target present and model misses it | `MISS_PENALTY_PX`, default `100.0` |
+
+The fixed miss penalty keeps a single missed detection from dominating the score
+as a 1000+ px distance from origin. Set `MISS_PENALTY_PX=0` only if you want to
+skip missed detections entirely.
+
+The app writes per-frame results with:
+
+```text
+timestamp
+frame_number
+group_id
+experiment_phase
+processing_mode
+latency_ms
+true_x,true_y
+predicted_x,predicted_y
+displacement_px
+cumulative_displacement_px
 ```
 
-Frames where the target is not on screen are skipped. Frames where the model returns no detection score a fixed `MISS_PENALTY_PX` (default 100 px) instead of distance-from-origin.
+`processing_mode` can be `local`, `remote`, or `local_fallback`. A
+`local_fallback` frame means remote inference failed or timed out, then the
+dispatcher paid that cost and ran local inference.
 
-Your final score is the sum of all per-frame displacements. **Lower is better.**
+## Experiment Phases
 
-The per-frame CSV (`data/results.csv`) and the end-of-run terminal summary both show a breakdown by phase so you can see where your agent is performing well and where it is not.
+`tc_controller.py` currently recognizes these phase names:
 
----
+| Phase | Index | Network action | GPU load |
+| --- | ---: | --- | --- |
+| `baseline` | 0 | clear | no |
+| `bandwidth_200` | 1 | `tbf 200mbit 2mbit 50ms` | no |
+| `bandwidth_50` | 2 | `tbf 50mbit 2mbit 50ms` | no |
+| `jitter_light` | 3 | `netem_tbf 0.1ms 0.4ms 1gbit 2mbit 50ms` | no |
+| `gpu_load` | 4 | clear | yes, triggered externally |
+| `mixed` | 5 | `tbf 50mbit 2mbit 50ms` | yes, triggered externally |
 
-## Documentation index
+Phase rules stay active until the next phase. Do not pass a duration to
+`tc_control.sh` from automated phase control; SeQaM controls timing.
 
-| Document | Audience | What it covers |
-|----------|----------|---------------|
-| `docs/student-guide.md` | Students | Full setup, all metrics, env vars, scoring, troubleshooting |
-| `docs/operator-guide.md` | Tutors | Day-of checklist, VM startup order, reset between groups |
-| `docs/vm1-kafka-grafana.md` | Operators | SeQaM/Kafka/Grafana VM (172.22.174.149) |
-| `docs/vm2-gpu-server.md` | Operators | GPU server and Triton (172.22.174.145) |
-| `docs/vm3-network-vm.md` | Operators | Network VM and tc scripts (172.22.174.148) |
-| `docs/seqam-integration.md` | Operators | SeQaM scenario setup and phase-trigger flow |
-| `publishers/network_conditions/README.md` | Operators | Network VM scripts: full setup and CLI reference |
-| `dashboard/README.md` | Everyone | Dashboard setup, Pi configuration, troubleshooting |
-| `seqam/README.md` | Operators | SeQaM scenario configuration |
+Important consistency check: the current `seqam/scenario.json` uses
+`bandwidth_5`, but `tc_controller.py` does not currently define that phase. Add
+`bandwidth_5` to `PHASE_MAP` or change the scenario back to an existing phase
+before running that scenario.
+
+The current checked-in SeQaM scenario is a short heavy-load cycle:
+
+| Time | Action |
+| ---: | --- |
+| 0 s | Stop GPU load; set `baseline` |
+| 10 s | Set `gpu_load`; start LC1 GPU load at concurrency `32` |
+| 25 s | Stop GPU load; set `jitter_light` |
+| 40 s | Set `bandwidth_5` |
+| 55 s | Set `mixed`; start LC1 GPU load at concurrency `32` |
+| 70 s | Stop GPU load; set `baseline` |
+| 75 s | Exit |
+
+Older drafts used a 120-second four-phase cycle:
+`baseline -> gpu_load -> bandwidth_50 -> mixed`. If you return to that schedule,
+keep the phase names aligned with `PHASE_MAP`.
+
+## Dashboard
+
+The dashboard is optional and best-effort. It should never slow or crash the
+experiment. The Pi client sends throttled, JPEG-compressed annotated frames to a
+FastAPI backend. The backend also consumes Kafka metrics when configured and
+broadcasts state to the React frontend over WebSocket.
+
+Main features:
+
+| Feature | What it shows |
+| --- | --- |
+| Annotated video | Ground-truth car center, predicted box, displacement line |
+| Processing mode | `LOCAL`, `REMOTE`, or `LOCAL_FALLBACK` |
+| Latency | Current, average, min, max, p95 |
+| Displacement | Current, rolling average, cumulative score |
+| Phase | Current experiment phase from Kafka |
+| Infrastructure | GPU utilization, GPU memory, Triton queue, network delay/jitter/loss |
+| Charts | Rolling latency, displacement, cumulative score, placement mode, GPU, network |
+| Summary | Local/remote percentages, total frames, final score, best/worst values |
+
+Backend API:
+
+```text
+GET  /health
+GET  /api/state
+GET  /api/history
+POST /api/frame
+GET  /api/frame
+POST /api/reset
+WS   /ws
+```
+
+Important dashboard variables:
+
+```dotenv
+DASHBOARD_ENABLED=true
+DASHBOARD_URL=http://localhost:8080
+DASHBOARD_FPS=5
+DASHBOARD_JPEG_QUALITY=70
+DASHBOARD_FRAME_WIDTH=960
+
+DASHBOARD_HOST=0.0.0.0
+DASHBOARD_PORT=8080
+DASHBOARD_MAX_HISTORY=300
+DASHBOARD_PUBLIC_API_URL=
+```
+
+If the browser says reconnecting, check:
+
+```bash
+curl http://<pi-ip>:8080/health
+```
+
+If video is missing but charts update, check `DASHBOARD_ENABLED=true` and the
+client logs for dashboard publisher startup.
+
+## Ground Truth
+
+Ground truth is generated offline with HSV color segmentation. It does not use
+YOLO, so YOLO misses remain measurable.
+
+```bash
+python ground_truth/generate_ground_truth.py \
+    --video data/video.mp4 \
+    --output data/ground_truth.csv
+```
+
+The generator:
+
+1. Converts each frame to HSV.
+2. Masks both red hue bands, 0-10 and 160-179.
+3. Cleans the mask with morphological open and close operations.
+4. Selects the largest red blob within car-sized bounds.
+5. Writes the bounding-box center to CSV.
+6. Linearly interpolates remaining missing rows.
+
+CSV columns:
+
+| Column | Description |
+| --- | --- |
+| `frame_number` | 1-indexed frame counter |
+| `center_x` | Car center X coordinate |
+| `center_y` | Car center Y coordinate |
+| `confidence` | Always `1.0` for color segmentation |
+| `class_id` | Always `2` |
+| `class_name` | Always `car` |
+
+To export the ONNX model for inference:
+
+```bash
+pip install ultralytics
+yolo export model=yolov10n.pt format=onnx
+```
+
+## Operator Startup
+
+Use this order for a demo or lab session:
+
+```text
+1. VM1 central Kafka/Grafana/SeQaM stack
+2. VM2 Triton GPU server and GPU metrics publisher
+3. VM3 network publisher and tc_controller
+4. LC1 GPU load client ready and stopped
+5. Raspberry Pi app and dashboard
+6. SeQaM experiment dispatcher
+```
+
+### VM1: Kafka, UI, Grafana, SeQaM
+
+```bash
+ssh mae@172.22.174.149
+cd /home/mae/grafana-kafka
+docker compose up -d
+docker ps | grep -E 'kafka|ui|grafana|prometheus'
+```
+
+Check Kafka topics:
+
+```bash
+docker exec -it dnn-partition-kafka kafka-topics.sh \
+  --bootstrap-server localhost:9092 \
+  --list
+```
+
+Expected topics:
+
+```text
+dnn_partition.client_metrics
+dnn_partition.server_metrics
+edgelab.network.metrics
+edgelab.phase
+```
+
+Useful URLs:
+
+```text
+Kafka broker: 172.22.174.149:9092
+Kafka UI:     http://172.22.174.149:8080
+Grafana:      http://172.22.174.149:3000
+Prometheus:   http://172.22.174.149:9090
+SeQaM API:    http://172.22.174.149:8000
+```
+
+Kafka has topic auto-creation enabled, so `edgelab.network.metrics` and
+`edgelab.phase` appear once VM3 publishers send their first messages.
+
+### VM2: GPU Server
+
+```bash
+ssh mae@172.22.174.145
+cd /home/mae/server
+docker compose up -d
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/v2/health/ready
+nvidia-smi
+```
+
+Expected Triton ports:
+
+```text
+8000 HTTP
+8001 gRPC
+8002 metrics
+8100 JPEG remote inference API, if deployed
+```
+
+Models:
+
+| Model | Purpose |
+| --- | --- |
+| `yolov10n` | Student remote inference |
+| `resnet50_full` | GPU load generation |
+
+Start GPU metrics publisher if needed:
+
+```bash
+cd /home/mae/server
+source .venv/bin/activate
+nohup python3 -u kafka_metrics_publisher.py \
+  --kafka-bootstrap-servers 172.22.174.149:9092 \
+  > server_metrics.log 2>&1 &
+```
+
+The publisher reads `nvidia-smi` and Triton metrics at
+`http://localhost:8002/metrics`, then publishes to
+`dnn_partition.server_metrics`.
+
+Start the remote JPEG API with:
+
+```bash
+docker compose -f docker-compose.gpu-server.yml up -d --build
+```
+
+Health checks:
+
+```bash
+curl http://172.22.174.145:8100/health  # direct, bypass check
+curl http://172.22.174.148:8100/health  # router path, student path
+```
+
+### VM3: Network / Router VM
+
+```bash
+ssh mae@172.22.174.148
+cd /home/mae/network_load
+printf "baseline\n" > /tmp/edgelab_phase
+sudo -n /home/mae/network_load/tc_control.sh clear
+```
+
+Start services:
+
+```bash
+/home/mae/network_load/network_publisher_service.sh start
+/home/mae/network_load/tc_controller_service.sh start
+
+/home/mae/network_load/network_publisher_service.sh status
+/home/mae/network_load/tc_controller_service.sh status
+```
+
+Expected state:
+
+```text
+network_conditions_publisher running
+tc_controller running
+baseline
+qdisc fq_codel ...
+```
+
+The VM3 interface is `ens18`. `tc_control.sh` supports:
+
+```bash
+sudo /home/mae/network_load/tc_control.sh show
+sudo /home/mae/network_load/tc_control.sh clear
+sudo /home/mae/network_load/tc_control.sh tbf 50mbit 2mbit 50ms
+sudo /home/mae/network_load/tc_control.sh netem_tbf 0.1ms 0.4ms 1gbit 2mbit 50ms
+```
+
+Passwordless sudo for the tc script is required:
+
+```text
+mae ALL=(root) NOPASSWD: /home/mae/network_load/tc_control.sh
+```
+
+Put that in `/etc/sudoers.d/edgelab-tc-control` with mode `440`, then verify:
+
+```bash
+sudo -n /home/mae/network_load/tc_control.sh clear
+```
+
+VM3 routing checks:
+
+```bash
+sysctl net.ipv4.ip_forward
+sudo iptables -t nat -L -n -v
+nc -vz 172.22.174.145 8001
+```
+
+A missing `ss` listener on `8001` on VM3 is normal when forwarding is handled by
+iptables DNAT rather than a user-space process.
+
+### LC1: GPU Load Client
+
+```bash
+ssh lc1@172.22.232.19
+cd /home/lc1/edgelab-load-client
+./run_gpu_load.sh stop
+./run_gpu_load.sh status
+```
+
+Manual test:
+
+```bash
+./run_gpu_load.sh start 8 30
+./run_gpu_load.sh status
+./run_gpu_load.sh stop
+```
+
+LC1 should load the GPU server directly, not through VM3:
+
+```text
+LC1 -> 172.22.174.145:8001
+```
+
+This stresses the server, not the shaped student network path.
+
+### Raspberry Pi
+
+```bash
+ssh mae@<pi-ip>
+cd ~/edge-lab
+docker compose -f docker-compose.pi.yml down
+docker compose -f docker-compose.pi.yml up
+```
+
+Expected logs:
+
+```text
+RemoteClient connected to JPEG inference API at http://172.22.174.148:8100
+Kafka producer connected
+Dashboard Kafka consumer subscribed
+FrameReader started
+Dispatcher started
+Scorer started
+```
+
+## SeQaM
+
+SeQaM executes timed SSH commands. The current SSH target config is
+`seqam/ScenarioConfig.json`; merge it into:
+
+```text
+~/.seqam_fh_dortmund_project_emulate/ScenarioConfig.json
+```
+
+Current targets:
+
+| Target | Host | User |
+| --- | --- | --- |
+| `net-vm` | `172.22.174.148` | `mae` |
+| `gpu-server` | `172.22.174.145` | `mae` |
+| `load-vm` | `172.22.232.19` | `lc1` |
+
+In this SeQaM setup, these targets live under `router` in `ScenarioConfig.json`.
+
+Run a one-shot scenario:
+
+```bash
+curl -X POST http://172.22.174.149:8000/config/ExperimentConfig.json \
+  -H "Content-Type: application/json" \
+  -d @seqam/scenario.json
+```
+
+Or use the SeQaM console:
+
+```text
+start_module module:experiment_dispatcher source:cache
+```
+
+The safest network-control pattern is:
+
+```text
+SeQaM -> set_phase.sh <phase> on VM3
+VM3 tc_controller.py -> applies sudo tc_control.sh locally
+VM3 tc_controller.py -> publishes edgelab.phase
+VM3 network_conditions_publisher.py -> publishes actual tc state
+```
+
+Avoid direct `sudo tc_control.sh` commands in the SeQaM scenario unless the
+sudoers setup has been deliberately verified. Using `set_phase.sh` keeps the
+sudo operation local to VM3 and easier to debug.
+
+## Kafka Validation
+
+Run these from VM1 while an experiment is active.
+
+Phase events:
+
+```bash
+docker exec -it dnn-partition-kafka kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic edgelab.phase
+```
+
+Network metrics:
+
+```bash
+docker exec -it dnn-partition-kafka kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic edgelab.network.metrics
+```
+
+GPU metrics:
+
+```bash
+docker exec -it dnn-partition-kafka kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic dnn_partition.server_metrics
+```
+
+Client metrics:
+
+```bash
+docker exec -it dnn-partition-kafka kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic dnn_partition.client_metrics
+```
+
+Watch only new live messages by omitting `--from-beginning`. Old `dry_run`
+messages in `edgelab.phase` are normal if they came from earlier testing.
+
+## Benchmarking
+
+Use this before writing strategy:
+
+```bash
+python scripts/benchmark_inference.py --mode local \
+  --model data/yolov10n.onnx \
+  --video data/video.mp4
+
+python scripts/benchmark_inference.py --mode remote \
+  --model data/yolov10n.onnx \
+  --remote-inference-url http://172.22.174.148:8100
+
+python scripts/benchmark_inference.py --mode both \
+  --model data/yolov10n.onnx \
+  --video data/video.mp4 \
+  --remote-inference-url http://172.22.174.148:8100
+```
+
+The legacy gRPC path sends a 4.9 MB FP32 tensor per request. At a 50 Mbit/s cap,
+that can produce hundreds of milliseconds of latency. The preferred JPEG gateway
+reduces that network payload significantly.
+
+## Cleanup And Reset
+
+Normal cleanup:
+
+```bash
+# Pi
+ssh mae@<pi-ip>
+cd ~/edge-lab
+docker compose -f docker-compose.pi.yml down
+
+# LC1
+ssh lc1@172.22.232.19
+cd /home/lc1/edgelab-load-client
+./run_gpu_load.sh stop
+
+# VM3
+ssh mae@172.22.174.148
+/home/mae/network_load/set_phase.sh baseline
+sudo -n /home/mae/network_load/tc_control.sh clear
+sudo -n /home/mae/network_load/tc_control.sh show
+```
+
+Reset a dashboard between groups:
+
+```bash
+curl -X POST http://<pi-ip>:8080/api/reset
+```
+
+It is okay to leave VM3 `network_conditions_publisher` and `tc_controller`
+running between demos. They only listen, publish state, and react to phase
+changes.
+
+## Troubleshooting
+
+### App crashes with FileNotFoundError
+
+Check `VIDEO_PATH`, `GROUND_TRUTH_PATH`, and `MODEL_PATH` in `.env`, then verify
+the files exist.
+
+### Remote inference is unreachable
+
+Check:
+
+```bash
+curl http://172.22.174.148:8100/health
+```
+
+The Pi should use:
+
+```dotenv
+REMOTE_INFERENCE_URL=http://172.22.174.148:8100
+```
+
+Only use the legacy gRPC fallback when `REMOTE_INFERENCE_URL` is blank:
+
+```dotenv
+TRITON_URL=172.22.174.148:8001
+```
+
+### Kafka is unreachable
+
+```bash
+nc -zv 172.22.174.149 9092
+```
+
+If Kafka is down, the app continues without Kafka. The phase remains
+`baseline`, GPU metrics are empty, and network metrics default to clear.
+
+### Dashboard phase changes but network path stays clear
+
+On VM3:
+
+```bash
+cd /home/mae/network_load
+tail -80 tc_controller.log
+sudo -n /home/mae/network_load/tc_control.sh show
+```
+
+If the log contains a sudo password error, fix passwordless sudo for
+`tc_control.sh` and restart the controller:
+
+```bash
+/home/mae/network_load/tc_controller_service.sh restart
+```
+
+### `tc_controller.py` reports unknown phase
+
+Check the phase file:
+
+```bash
+cat /tmp/edgelab_phase
+```
+
+Then compare with `PHASE_MAP` in:
+
+```text
+publishers/network_conditions/tc_controller.py
+```
+
+The current `seqam/scenario.json` contains `bandwidth_5`, which must be added to
+`PHASE_MAP` or replaced with an existing phase.
+
+### Network publisher always reports clear
+
+Check whether the network really is clear:
+
+```bash
+sudo -n /home/mae/network_load/tc_control.sh show
+```
+
+Apply a known phase and watch logs:
+
+```bash
+/home/mae/network_load/set_phase.sh jitter_light
+sleep 2
+tail -20 /home/mae/network_load/network_conditions_publisher.log
+```
+
+### SeQaM says the experiment finished but network did not change
+
+Follow the real chain:
+
+```text
+SeQaM SSH command
+-> set_phase.sh writes /tmp/edgelab_phase
+-> tc_controller.py notices phase
+-> tc_control.sh applies qdisc
+-> network_conditions_publisher.py publishes actual state
+-> Kafka edgelab.network.metrics
+-> dashboard and SP agent
+```
+
+Check VM3 logs and Kafka network messages before debugging the dashboard.
+
+### Multi-line shell command says `--phase-file: command not found`
+
+A blank line after a `\` continuation broke the command. Use the service script:
+
+```bash
+/home/mae/network_load/tc_controller_service.sh restart
+```
+
+Or paste the command as one single line.
+
+### Background process is stopped
+
+Usually a background process tried to ask for a sudo password. Kill old jobs and
+restart with service scripts:
+
+```bash
+jobs
+ps aux | grep tc_controller | grep -v grep
+/home/mae/network_load/tc_controller_service.sh restart
+```
+
+### GPU load keeps running
+
+```bash
+ssh lc1@172.22.232.19
+cd /home/lc1/edgelab-load-client
+./run_gpu_load.sh stop
+./run_gpu_load.sh status
+```
+
+### Very low detection rate
+
+Use the current car-tracking settings:
+
+```dotenv
+TARGET_CLASS_ID=2,5,7
+TARGET_CONFIDENCE_THRESHOLD=0.1
+```
+
+Also verify that `ground_truth.csv` matches the video.
+
+### High cumulative displacement
+
+Common causes:
+
+| Cause | What to check |
+| --- | --- |
+| Remote during bad network/GPU load | Filter results by phase and mode |
+| Local during clean baseline | Compare local/remote benchmark results |
+| Remote failures | Count `local_fallback` rows |
+| Mode thrashing | Add switching hysteresis in `decide()` |
+
+### Pi is overloaded
+
+Try:
+
+```dotenv
+FRAME_INTERVAL_MS=200
+DISPLAY_OUTPUT=false
+LOG_LEVEL=WARNING
+DASHBOARD_FPS=3
+DASHBOARD_FRAME_WIDTH=640
+```
+
+## Environment Reference
+
+| Variable | Purpose |
+| --- | --- |
+| `GROUP_ID` | Student group number |
+| `VIDEO_PATH` | Input video path |
+| `GROUND_TRUTH_PATH` | Ground-truth CSV path |
+| `MODEL_PATH` | Local ONNX model path |
+| `REMOTE_INFERENCE_URL` | Preferred JPEG API, normally `http://172.22.174.148:8100` |
+| `REMOTE_JPEG_QUALITY` | JPEG quality for remote inference |
+| `REMOTE_INFERENCE_TIMEOUT_SEC` | Remote API timeout |
+| `TRITON_URL` | Legacy gRPC fallback, normally `172.22.174.148:8001` |
+| `TRITON_MODEL_NAME` | Triton model name, normally `yolov10n` |
+| `KAFKA_BROKERS` | Kafka broker list |
+| `KAFKA_GPU_TOPIC` | GPU metrics topic |
+| `KAFKA_NET_TOPIC` | Network metrics topic |
+| `KAFKA_PHASE_TOPIC` | Phase topic |
+| `APP_METRICS_TOPIC` | Client metrics topic |
+| `INITIAL_PROCESSING_MODE` | `local` or `remote` before first agent decision |
+| `FRAME_INTERVAL_MS` | Frame interval, `100` means 10 fps |
+| `DISPLAY_OUTPUT` | OpenCV display window |
+| `AUTO_STOP` | Wait for phase cycle and exit automatically |
+| `CONFIDENCE_THRESHOLD` | YOLO detection threshold |
+| `TARGET_CLASS_ID` | Target class filter, `2,5,7` for this video |
+| `TARGET_CONFIDENCE_THRESHOLD` | Target-specific confidence threshold |
+| `SP_AGENT_INTERVAL_MS` | How often `decide()` runs |
+| `MISS_PENALTY_PX` | Fixed score penalty for missed detections |
+| `SP_AGENT_DEBUG_METRICS` | Periodic metrics logging from the agent |
+| `DASHBOARD_ENABLED` | Enable client frame publishing to dashboard |
+| `DASHBOARD_URL` | Dashboard backend URL from the client |
+| `DASHBOARD_FPS` | Dashboard frame publish limit |
+| `DASHBOARD_JPEG_QUALITY` | Dashboard JPEG quality |
+| `DASHBOARD_FRAME_WIDTH` | Dashboard frame width limit |
+| `NETWORK_INTERFACE` | VM3 network interface, normally `ens18` |
+| `PHASE_FILE` | VM3 phase file, normally `/tmp/edgelab_phase` |
+
+## Documentation Cleanup
+
+This README is the canonical, deduplicated project guide. Older Markdown files
+from previous drafts, roadmaps, per-component READMEs, and testing notes have
+been archived under:
+
+```text
+docs/archive/markdown-sources/
+```
+
+Those files are kept only as historical source material. The generated full
+project inventory, if present in the archive, remains ignored because it is a
+large code dump and may contain local environment snapshots. Prefer this README
+for current setup, operation, and student instructions.
