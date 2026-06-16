@@ -20,6 +20,16 @@ export interface InfrastructureMetric {
   [key: string]: MetricValue;
 }
 
+export interface LatencySummary {
+  latest_ms?: number | null;
+  rolling_average_ms?: number | null;
+  min_ms?: number | null;
+  max_ms?: number | null;
+  p95_ms?: number | null;
+  sample_count?: number;
+  frame_number?: number;
+}
+
 export interface DashboardState {
   group_id: string;
   latest: FrameMetric;
@@ -35,6 +45,8 @@ export interface DashboardState {
     min_ms?: number | null;
     max_ms?: number | null;
     p95_ms?: number | null;
+    local?: LatencySummary;
+    remote?: LatencySummary;
   };
   displacement: {
     rolling_average_px?: number | null;

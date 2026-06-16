@@ -37,6 +37,25 @@ def _percentile(values: list[float], percentile: float) -> float | None:
     return ordered[index]
 
 
+def _mode_latency_summary(items: deque, mode: str) -> dict[str, Any]:
+    mode_items = [
+        item for item in items
+        if str(item.get("processing_mode", "")).lower() == mode
+        and item.get("latency_ms") is not None
+    ]
+    values = [float(item["latency_ms"]) for item in mode_items]
+    latest = mode_items[-1] if mode_items else {}
+    return {
+        "latest_ms": values[-1] if values else None,
+        "rolling_average_ms": _average(values[-20:]),
+        "min_ms": min(values) if values else None,
+        "max_ms": max(values) if values else None,
+        "p95_ms": _percentile(values, 0.95),
+        "sample_count": len(values),
+        "frame_number": latest.get("frame_number"),
+    }
+
+
 @dataclass
 class GroupState:
     """Mutable state for one student group."""
@@ -212,6 +231,8 @@ class DashboardState:
                     "min_ms": min(latency_values) if latency_values else None,
                     "max_ms": max(latency_values) if latency_values else None,
                     "p95_ms": _percentile(latency_values, 0.95),
+                    "local": _mode_latency_summary(group.history, "local"),
+                    "remote": _mode_latency_summary(group.history, "remote"),
                 },
                 "displacement": {
                     "rolling_average_px": _average(displacement_values[-20:]),

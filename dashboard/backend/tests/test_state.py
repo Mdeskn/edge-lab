@@ -55,6 +55,18 @@ def test_app_metrics_do_not_set_dashboard_phase_before_phase_topic() -> None:
     assert snapshot["experiment_phase"] == "unknown"
 
 
+def test_latency_snapshot_keeps_local_and_remote_separate() -> None:
+    state = DashboardState(max_history=10, group_id="1")
+    state.update_app_metric(metric(timestamp=1.0, mode="remote") | {"latency_ms": 80.0})
+    state.update_app_metric(metric(timestamp=2.0, mode="local") | {"latency_ms": 500.0})
+
+    snapshot = state.snapshot()
+    assert snapshot["latency"]["remote"]["latest_ms"] == 80.0
+    assert snapshot["latency"]["remote"]["sample_count"] == 1
+    assert snapshot["latency"]["local"]["latest_ms"] == 500.0
+    assert snapshot["latency"]["local"]["sample_count"] == 1
+
+
 def test_reset_preserves_latest_frame_but_clears_summary() -> None:
     state = DashboardState(max_history=10, group_id="3")
     state.update_frame(metric(), b"jpeg")
