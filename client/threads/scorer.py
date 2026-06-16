@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 _FONT = cv2.FONT_HERSHEY_SIMPLEX
 _WHITE = (255, 255, 255)
 _GREEN = (0, 255, 0)
-_RED = (0, 0, 255)
 _YELLOW = (0, 255, 255)
+_ORANGE = (0, 165, 255)
 
 
 class Scorer:
@@ -232,8 +232,25 @@ class Scorer:
             cv2.circle(frame, (int(gt_x), int(gt_y)), 8, _GREEN, -1)
             cv2.putText(frame, "GT", (int(gt_x) + 10, int(gt_y) - 8), _FONT, 0.5, _GREEN, 1)
         if has_prediction:
-            cv2.rectangle(frame, (int(pred_x1), int(pred_y1)), (int(pred_x2), int(pred_y2)), _RED, 2)
-            cv2.putText(frame, "PRED", (int(pred_x1), int(pred_y1) - 6), _FONT, 0.5, _RED, 1)
+            pred_center = (int(pred_x), int(pred_y))
+            cv2.drawMarker(
+                frame,
+                pred_center,
+                _ORANGE,
+                markerType=cv2.MARKER_CROSS,
+                markerSize=28,
+                thickness=2,
+            )
+            cv2.circle(frame, pred_center, 3, _ORANGE, -1)
+            cv2.putText(
+                frame,
+                "YOLO",
+                (pred_center[0] + 10, pred_center[1] - 8),
+                _FONT,
+                0.5,
+                _ORANGE,
+                1,
+            )
         if has_ground_truth and has_prediction:
             cv2.line(
                 frame,

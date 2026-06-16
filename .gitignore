@@ -55,13 +55,11 @@ scripts/*
 !scripts/calibrate_phases.py
 !scripts/preflight.sh
 !scripts/cleanup_all.sh
-!scripts/gpu-load-lc1/
-scripts/gpu-load-lc1/*
-!scripts/gpu-load-lc1/run_gpu_load.sh
-!scripts/net-vm/
-scripts/net-vm/*
-!scripts/net-vm/tc_control.sh
-!scripts/net-vm/tc_controller.py
+
+# VM-deployed script snapshots/copies stay local and should not be added.
+scripts/gpu-load-lc1/**
+scripts/gpu-server/**
+scripts/net-vm/**
 docs/
 !docs/
 docs/*

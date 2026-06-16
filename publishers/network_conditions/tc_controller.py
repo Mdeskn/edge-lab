@@ -176,7 +176,7 @@ PHASE_MAP: dict[str, dict] = {
         "description": "Apply light netem delay/jitter with high bandwidth.",
         "tc_args": ["netem_tbf", "0.1ms", "0.4ms", "1gbit", "2mbit", "50ms"],
         "tc_parameters": {
-            "mode": "netem_loss_tbf",
+            "mode": "netem_tbf",
             "bandwidth": "1gbit",
             "burst": "2mbit",
             "tbf_latency": "50ms",
@@ -205,7 +205,7 @@ PHASE_MAP: dict[str, dict] = {
         "description": "Mixed phase. Apply 5mbit shaping plus 2% packet loss; GPU load may be triggered externally.",
         "tc_args": ["netem_loss_tbf", "0ms", "0ms", "2%", "5mbit", "256kb", "50ms"],
         "tc_parameters": {
-            "mode": "netem_tbf",
+            "mode": "netem_loss_tbf",
             "bandwidth": "5mbit",
             "burst": "256kb",
             "tbf_latency": "50ms",

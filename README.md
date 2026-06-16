@@ -306,7 +306,7 @@ The current SeQaM scenario emits these phase names:
 | `gpu_load` | 4 | clear | yes, triggered externally |
 | `jitter_light` | 3 | `netem_tbf 0.1ms 0.4ms 1gbit 2mbit 50ms` | no |
 | `bandwidth_5` | 6 | `tbf 5mbit 256kb 50ms` | no |
-| `mixed` | 5 | `tbf 5mbit 256kb 50ms` | yes, triggered externally |
+| `mixed` | 5 | `netem_loss_tbf 0ms 0ms 2% 5mbit 256kb 50ms` | yes, triggered externally |
 
 Phase rules stay active until the next phase. Do not pass a duration to
 `tc_control.sh` from automated phase control; SeQaM controls timing.
@@ -320,10 +320,10 @@ The current checked-in SeQaM scenario is a short heavy-load cycle:
 | Time | Action |
 | ---: | --- |
 | 0 s | Stop GPU load; set `baseline` |
-| 10 s | Set `gpu_load`; start LC1 GPU load at concurrency `32` |
+| 10 s | Set `gpu_load`; start LC1 GPU load pattern `30,80` every 7 s |
 | 25 s | Stop GPU load; set `jitter_light` |
 | 40 s | Set `bandwidth_5` |
-| 55 s | Set `mixed`; start LC1 GPU load at concurrency `32` |
+| 55 s | Set `mixed`; start LC1 GPU load pattern `30,80` every 7 s |
 | 70 s | Stop GPU load; set `baseline` |
 | 75 s | Exit |
 
