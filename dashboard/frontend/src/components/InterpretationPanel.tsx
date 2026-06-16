@@ -9,20 +9,27 @@ function interpretation(state: DashboardState): string {
   const loss = Number(network.packet_loss_pct || 0);
   const utilization = Number(gpu.gpu_util_pct || 0);
   const queue = Number(gpu.yolo_queue_ms || 0);
-  const recent = frames.slice(-8).map((frame) => frame.displacement_px).filter((value): value is number => value != null);
+  const recent = frames.slice(-8).map((f) => f.displacement_px).filter((v): v is number => v != null);
 
-  if (delay >= 60 || loss >= 2) return "Network conditions are poor. Local processing may be safer until the path improves.";
-  if (utilization >= 85 || queue >= 25) return "The GPU server is under load. Local processing may reduce queueing delay.";
-  if (recent.length >= 6 && recent.slice(-3).reduce((sum, value) => sum + value, 0) > recent.slice(0, 3).reduce((sum, value) => sum + value, 0) * 1.35) {
-    return "Displacement is rising. The prediction is lagging further behind the ground truth.";
+  if (delay >= 60 || loss >= 2) {
+    const parts: string[] = [];
+    if (delay >= 60) parts.push(`delay ${delay.toFixed(0)} ms`);
+    if (loss >= 2) parts.push(`packet loss ${loss.toFixed(1)}%`);
+    return `Network path is degraded: ${parts.join(", ")}.`;
   }
-  if (state.latest.processing_mode === "remote" && utilization < 70 && delay < 30 && loss < 1) {
-    return "Remote inference is currently beneficial: network and GPU conditions are both favorable.";
+  if (utilization >= 85 || queue >= 25) {
+    return `GPU server is under load: ${utilization.toFixed(0)}% utilization, ${queue.toFixed(0)} ms queue time.`;
+  }
+  if (recent.length >= 6 && recent.slice(-3).reduce((a, v) => a + v, 0) > recent.slice(0, 3).reduce((a, v) => a + v, 0) * 1.35) {
+    return "Displacement is rising: recent frames are tracking further from ground truth.";
+  }
+  if (state.latest.processing_mode === "remote") {
+    return `Remote inference active. GPU: ${utilization.toFixed(0)}%, delay: ${delay.toFixed(0)} ms, loss: ${loss.toFixed(1)}%.`;
   }
   if (state.latest.processing_mode?.startsWith("local")) {
-    return "Local inference avoids network and server variability, but watch whether its latency increases displacement.";
+    return `Local inference active. GPU: ${utilization.toFixed(0)}%, delay: ${delay.toFixed(0)} ms.`;
   }
-  return "Watch latency and displacement together. A good placement decision keeps the prediction close to the ground truth.";
+  return `GPU: ${utilization.toFixed(0)}%, delay: ${delay.toFixed(0)} ms, loss: ${loss.toFixed(1)}%.`;
 }
 
 interface Props {

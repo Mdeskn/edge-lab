@@ -35,8 +35,8 @@ trip, and when local edge inference is safer.
 | VM1 | `172.22.174.149` | Kafka broker, Kafka UI, Grafana/Prometheus, SeQaM API when enabled |
 | VM2 | `172.22.174.145` | GPU server, Triton, JPEG inference API, GPU metrics publisher |
 | VM3 | `172.22.174.148` | Network/router VM, traffic shaping, network metrics, phase controller |
-| LC1 | `172.22.232.19` | External GPU load client |
-| Raspberry Pi | group-assigned | Student client app, local inference, dashboard |
+| LC1 | `172.22.229.169` | External GPU load client |
+| Raspberry Pi | `172.22.229.167` | Student client app, local inference, dashboard |
 
 Primary inference path:
 
@@ -592,7 +592,7 @@ iptables DNAT rather than a user-space process.
 ### LC1: GPU Load Client
 
 ```bash
-ssh lc1@172.22.232.19
+ssh lc1@172.22.229.169
 cd /home/lc1/edgelab-load-client
 ./run_gpu_load.sh stop
 ./run_gpu_load.sh status
@@ -649,7 +649,7 @@ Current targets:
 | --- | --- | --- |
 | `net-vm` | `172.22.174.148` | `mae` |
 | `gpu-server` | `172.22.174.145` | `mae` |
-| `load-vm` | `172.22.232.19` | `lc1` |
+| `load-vm` | `172.22.229.169` | `lc1` |
 
 In this SeQaM setup, these targets live under `router` in `ScenarioConfig.json`.
 
@@ -753,7 +753,7 @@ cd ~/edge-lab
 docker compose -f docker-compose.pi.yml down
 
 # LC1
-ssh lc1@172.22.232.19
+ssh lc1@172.22.229.169
 cd /home/lc1/edgelab-load-client
 ./run_gpu_load.sh stop
 
@@ -900,7 +900,7 @@ ps aux | grep tc_controller | grep -v grep
 ### GPU load keeps running
 
 ```bash
-ssh lc1@172.22.232.19
+ssh lc1@172.22.229.169
 cd /home/lc1/edgelab-load-client
 ./run_gpu_load.sh stop
 ./run_gpu_load.sh status

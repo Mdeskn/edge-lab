@@ -20,7 +20,7 @@
       {
         "name": "load-vm",
         "description": "GPU load client VM",
-        "host": "172.22.232.19",
+        "host": "172.22.229.169",
         "ssh_user": "lc1",
         "ssh_port": 22
       }
