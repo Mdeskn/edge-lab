@@ -16,6 +16,18 @@ export async function fetchDashboardState(): Promise<DashboardState> {
   return response.json();
 }
 
+export async function setPlacementMode(mode: "local" | "remote"): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/placement`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode }),
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Dashboard API returned ${response.status}`);
+  }
+}
+
 export function subscribeToDashboard(
   onUpdate: (state: DashboardState) => void,
   onConnection: (connected: boolean) => void,

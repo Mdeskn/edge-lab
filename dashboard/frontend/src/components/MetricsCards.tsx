@@ -1,4 +1,6 @@
-import { Clock3, Gauge, Route, Trophy } from "lucide-react";
+import { Cloud, Clock3, Gauge, Laptop, Route, Trophy } from "lucide-react";
+import { useState } from "react";
+import { setPlacementMode } from "../api";
 import type { DashboardState, LatencySummary } from "../types";
 
 const metric = (value?: number | null, suffix = "", digits = 1) =>
@@ -35,6 +37,32 @@ function LatencyCard({ title, summary, active, className }: LatencyCardProps) {
 export function MetricsCards({ state }: Props) {
   const mode = (state.latest.processing_mode || "unknown").toUpperCase();
   const modeClass = mode.startsWith("LOCAL") ? "mode-local" : mode === "REMOTE" ? "mode-remote" : "";
+  const manualControl = state.placement_control;
+  const manualEnabled = Boolean(manualControl?.enabled);
+  const [pendingMode, setPendingMode] = useState<"local" | "remote" | null>(null);
+  const [controlError, setControlError] = useState<string | null>(null);
+
+  const requestPlacement = async (nextMode: "local" | "remote") => {
+    setPendingMode(nextMode);
+    setControlError(null);
+    try {
+      await setPlacementMode(nextMode);
+    } catch (error) {
+      setControlError(error instanceof Error ? error.message : "Placement command failed");
+    } finally {
+      setPendingMode(null);
+    }
+  };
+
+  const placementStatus = !manualEnabled
+    ? "Automatic SP-agent"
+    : pendingMode
+      ? "Sending command"
+      : controlError
+        ? "Command failed"
+        : manualControl?.requested_mode
+          ? `Requested ${manualControl.requested_mode.toUpperCase()}`
+          : "Manual override";
 
   return (
     <section className="metric-grid" aria-label="Current score metrics">
@@ -42,6 +70,31 @@ export function MetricsCards({ state }: Props) {
         <div className="metric-card-top"><Gauge size={20} /><span>Processing mode</span></div>
         <strong>{mode}</strong>
         <small>Active inference location</small>
+        <div className="placement-controls" aria-label="Manual placement controls">
+          <button
+            type="button"
+            title="Force local inference"
+            className={`placement-button ${mode.startsWith("LOCAL") ? "active" : ""}`}
+            disabled={!manualEnabled || pendingMode !== null}
+            aria-pressed={mode.startsWith("LOCAL")}
+            onClick={() => requestPlacement("local")}
+          >
+            <Laptop size={16} />
+            <span>Local</span>
+          </button>
+          <button
+            type="button"
+            title="Force remote inference"
+            className={`placement-button ${mode === "REMOTE" ? "active" : ""}`}
+            disabled={!manualEnabled || pendingMode !== null}
+            aria-pressed={mode === "REMOTE"}
+            onClick={() => requestPlacement("remote")}
+          >
+            <Cloud size={16} />
+            <span>Remote</span>
+          </button>
+        </div>
+        <small className={`placement-status ${controlError ? "error" : ""}`}>{placementStatus}</small>
       </article>
       <LatencyCard
         title="Local latency"

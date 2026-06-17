@@ -1,5 +1,6 @@
 """Validated payloads accepted by the dashboard backend."""
 import time
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -36,3 +37,9 @@ class PhaseMetric(BaseModel):
 
     timestamp: float = Field(default_factory=time.time)
     phase: str = "unknown"
+
+
+class PlacementControlRequest(BaseModel):
+    """Manual local/remote placement command from the dashboard."""
+
+    mode: Literal["local", "remote"]

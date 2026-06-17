@@ -88,7 +88,7 @@ from collections import deque
 from typing import Optional
 
 from config import Config
-from shared_state import SharedState
+from shared_state import REQUESTED_PROCESSING_MODES, SharedState
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +107,18 @@ def _normalize_phase_value(value) -> str:
         return "baseline"
     phase = value.strip()
     return phase or "baseline"
+
+
+def _group_matches(message_group_id, config_group_id: str) -> bool:
+    """Return True when a control message targets this group."""
+    if message_group_id in (None, ""):
+        return True
+
+    def normalize(value) -> str:
+        text = str(value).strip().lower()
+        return text[5:] if text.startswith("group") else text
+
+    return normalize(message_group_id) == normalize(config_group_id)
 
 
 class SPAgentBase:
@@ -131,6 +143,7 @@ class SPAgentBase:
         self._recent_latencies: deque = deque(maxlen=20)
 
         self._debug_metrics: bool = getattr(config, "sp_agent_debug_metrics", False)
+        self._manual_control_enabled: bool = getattr(config, "manual_placement_control", False)
         self._last_debug_log: float = 0.0
 
         self._consumer = None
@@ -147,22 +160,18 @@ class SPAgentBase:
                         "auto.offset.reset": "latest",
                     }
                 )
-                self._consumer.subscribe(
-                    [
-                        config.kafka_gpu_topic,
-                        config.kafka_net_topic,
-                        config.kafka_phase_topic,
-                        config.kafka_app_topic,
-                    ]
-                )
-                self._consumer_enabled = True
-                logger.info(
-                    "SPAgentBase subscribed to Kafka topics: %s, %s, %s, %s",
+                topics = [
                     config.kafka_gpu_topic,
                     config.kafka_net_topic,
                     config.kafka_phase_topic,
                     config.kafka_app_topic,
-                )
+                ]
+                if self._manual_control_enabled:
+                    topics.append(config.kafka_control_topic)
+
+                self._consumer.subscribe(topics)
+                self._consumer_enabled = True
+                logger.info("SPAgentBase subscribed to Kafka topics: %s", ", ".join(topics))
             except Exception as exc:
                 logger.error("SPAgentBase failed to create Kafka consumer: %s", exc)
         else:
@@ -258,6 +267,16 @@ class SPAgentBase:
         logger.info("SPAgent started")
         interval_s = self._config.sp_agent_interval_ms / 1000.0
 
+        if self._manual_control_enabled:
+            logger.info(
+                "SPAgent automatic decisions disabled; waiting for manual placement controls on %s",
+                self._config.kafka_control_topic,
+            )
+            while not self._shared_state.is_shutdown_requested():
+                time.sleep(interval_s)
+            logger.info("SPAgent stopped")
+            return
+
         while not self._shared_state.is_shutdown_requested():
             loop_start = time.time()
 
@@ -347,6 +366,12 @@ class SPAgentBase:
                             with self._metrics_lock:
                                 self._recent_latencies.append(float(latency))
 
+                elif (
+                    self._manual_control_enabled
+                    and topic == self._config.kafka_control_topic
+                ):
+                    self._handle_manual_control(payload)
+
         except Exception:
             logger.exception("SPAgent Kafka consumer thread crashed")
         finally:
@@ -354,6 +379,23 @@ class SPAgentBase:
                 self._consumer.close()
             except Exception:
                 pass
+
+    def _handle_manual_control(self, payload: dict) -> None:
+        """Apply a dashboard placement command when it targets this group."""
+        if not _group_matches(payload.get("group_id"), self._config.group_id):
+            return
+
+        mode = str(payload.get("mode", "")).strip().lower()
+        if mode not in REQUESTED_PROCESSING_MODES:
+            logger.warning("Ignoring invalid manual placement mode: %r", mode)
+            return
+
+        self.set_mode(mode)
+        logger.info(
+            "Manual placement command applied: mode=%s source=%s",
+            mode,
+            payload.get("source", "unknown"),
+        )
 
     # ------------------------------------------------------------------ #
     # Debug logging (enabled by SP_AGENT_DEBUG_METRICS=true)              #

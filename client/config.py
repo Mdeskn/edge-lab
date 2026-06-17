@@ -30,6 +30,8 @@ class Config:
     kafka_gpu_topic: str
     kafka_net_topic: str
     kafka_phase_topic: str
+    kafka_control_topic: str
+    manual_placement_control: bool
     otlp_endpoint: str
     initial_processing_mode: str
     frame_interval_ms: int
@@ -82,6 +84,8 @@ def load_config() -> Config:
         kafka_gpu_topic=os.environ.get("KAFKA_GPU_TOPIC", "dnn_partition.server_metrics"),
         kafka_net_topic=os.environ.get("KAFKA_NET_TOPIC", "edgelab.network.metrics"),
         kafka_phase_topic=os.environ.get("KAFKA_PHASE_TOPIC", "edgelab.phase"),
+        kafka_control_topic=os.environ.get("KAFKA_CONTROL_TOPIC", "edgelab.placement.control"),
+        manual_placement_control=os.environ.get("MANUAL_PLACEMENT_CONTROL", "false").lower() == "true",
         otlp_endpoint=os.environ.get("OTLP_ENDPOINT", ""),
         initial_processing_mode=os.environ.get("INITIAL_PROCESSING_MODE", "local"),
         frame_interval_ms=int(os.environ.get("FRAME_INTERVAL_MS", "100")),

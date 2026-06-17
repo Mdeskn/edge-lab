@@ -79,6 +79,14 @@ export interface DashboardState {
     best_displacement_px?: number | null;
     worst_displacement_px?: number | null;
   };
+  placement_control?: {
+    enabled: boolean;
+    topic?: string;
+    requested_mode?: "local" | "remote" | null;
+    status?: string;
+    detail?: string;
+    updated_at?: number | null;
+  };
   history: {
     frames: FrameMetric[];
     gpu: InfrastructureMetric[];

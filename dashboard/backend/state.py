@@ -84,7 +84,13 @@ class GroupState:
 class DashboardState:
     """Maintain one group's latest values and rolling history."""
 
-    def __init__(self, max_history: int = 300, group_id: str = "1"):
+    def __init__(
+        self,
+        max_history: int = 300,
+        group_id: str = "1",
+        placement_control_enabled: bool = False,
+        placement_control_topic: str = "",
+    ):
         self.max_history = max(10, max_history)
         self.group_id = normalize_group_id(group_id)
         self._lock = RLock()
@@ -98,6 +104,18 @@ class DashboardState:
             "connected": False,
             "detail": "disabled",
             "last_message_at": None,
+        }
+        self._placement_control: dict[str, Any] = {
+            "enabled": placement_control_enabled,
+            "topic": placement_control_topic,
+            "requested_mode": None,
+            "status": "enabled" if placement_control_enabled else "disabled",
+            "detail": (
+                "manual controls available"
+                if placement_control_enabled
+                else "SP-agent automatic decisions"
+            ),
+            "updated_at": None,
         }
 
     def update_app_metric(self, metric: dict[str, Any]) -> bool:
@@ -196,6 +214,22 @@ class DashboardState:
             self._kafka_status["detail"] = "receiving metrics"
             self._kafka_status["last_message_at"] = time.time()
 
+    def update_placement_control(
+        self,
+        *,
+        requested_mode: str | None = None,
+        status: str | None = None,
+        detail: str | None = None,
+    ) -> None:
+        with self._lock:
+            if requested_mode is not None:
+                self._placement_control["requested_mode"] = requested_mode
+            if status is not None:
+                self._placement_control["status"] = status
+            if detail is not None:
+                self._placement_control["detail"] = detail
+            self._placement_control["updated_at"] = time.time()
+
     def snapshot(self, include_history: bool = True) -> dict[str, Any]:
         """Return a JSON-ready immutable dashboard view."""
         with self._lock:
@@ -248,6 +282,7 @@ class DashboardState:
                     },
                 },
                 "summary": self._summary(group),
+                "placement_control": deepcopy(self._placement_control),
                 "history": history,
                 "updated_at": time.time(),
             }
@@ -282,6 +317,7 @@ class DashboardState:
                 "status": "ok",
                 "group_id": self.group_id,
                 "kafka": deepcopy(self._kafka_status),
+                "placement_control": deepcopy(self._placement_control),
                 "max_history": self.max_history,
             }
 

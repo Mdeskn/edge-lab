@@ -270,6 +270,54 @@ h2 {
   border-top-color: #6559a8;
 }
 
+.placement-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.placement-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 34px;
+  gap: 6px;
+  border: 1px solid #cbd8d6;
+  border-radius: 7px;
+  background: #f8fbfa;
+  color: #28403e;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.placement-button:hover:not(:disabled) {
+  border-color: #8ca5a1;
+  background: #eef5f3;
+}
+
+.placement-button.active {
+  border-color: #26845a;
+  background: #e6f4ed;
+  color: #1d6546;
+}
+
+.placement-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.placement-status {
+  min-height: 15px;
+}
+
+.placement-status.error {
+  color: #b23b35;
+}
+
 .score-card {
   border-left: 4px solid #d9a735;
 }

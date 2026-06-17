@@ -240,6 +240,8 @@ def main() -> None:
     logger.info("  target_class_id      : %s", config.target_class_id)
     logger.info("  target_conf_threshold: %.2f", config.target_conf_threshold)
     logger.info("  sp_agent_interval_ms : %d", config.sp_agent_interval_ms)
+    logger.info("  manual_placement    : %s", config.manual_placement_control)
+    logger.info("  control_topic       : %s", config.kafka_control_topic)
     logger.info("  auto_stop            : %s", config.auto_stop)
     logger.info("  phase_timeout_sec    : %.0f", config.phase_timeout_sec)
     logger.info("  miss_penalty_px      : %.1f", config.miss_penalty_px)
