@@ -28,6 +28,8 @@ export interface LatencySummary {
   p95_ms?: number | null;
   sample_count?: number;
   frame_number?: number;
+  timestamp?: number;
+  source?: "scored" | "probe";
 }
 
 export interface DashboardState {

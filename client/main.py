@@ -19,6 +19,7 @@ from metrics.telemetry import setup_telemetry
 from threads.frame_reader import FrameReader
 from threads.dispatcher import Dispatcher
 from threads.scorer import Scorer
+from threads.latency_probe import LatencyProbe
 from student.sp_agent import SPAgent
 
 logger = logging.getLogger(__name__)
@@ -242,6 +243,8 @@ def main() -> None:
     logger.info("  sp_agent_interval_ms : %d", config.sp_agent_interval_ms)
     logger.info("  manual_placement    : %s", config.manual_placement_control)
     logger.info("  control_topic       : %s", config.kafka_control_topic)
+    logger.info("  latency_probes      : %s", config.latency_probes_enabled)
+    logger.info("  probe_interval_sec  : %.1f", config.latency_probe_interval_sec)
     logger.info("  auto_stop            : %s", config.auto_stop)
     logger.info("  phase_timeout_sec    : %.0f", config.phase_timeout_sec)
     logger.info("  miss_penalty_px      : %.1f", config.miss_penalty_px)
@@ -314,6 +317,18 @@ def main() -> None:
         results_file,
     )
     sp_agent = SPAgent(config, shared_state)
+    latency_probe = None
+    if config.latency_probes_enabled:
+        if config.kafka_brokers:
+            latency_probe = LatencyProbe(
+                config,
+                shared_state,
+                local_server,
+                remote_client,
+                kafka_publisher,
+            )
+        else:
+            logger.warning("LATENCY_PROBES_ENABLED=true but KAFKA_BROKERS is empty")
 
     # 11. Phase-aware auto-stop
     phase_consumer = None
@@ -335,6 +350,10 @@ def main() -> None:
         threading.Thread(target=scorer.run, name="Scorer", daemon=False),
         threading.Thread(target=sp_agent.run, name="SPAgent", daemon=False),
     ]
+    if latency_probe is not None:
+        threads.append(
+            threading.Thread(target=latency_probe.run, name="LatencyProbe", daemon=False)
+        )
     for t in threads:
         t.start()
 

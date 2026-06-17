@@ -360,6 +360,8 @@ class SPAgentBase:
                         logger.warning("Failed to parse phase message: %s", exc)
 
                 elif topic == self._config.kafka_app_topic:
+                    if payload.get("event_type") == "latency_probe":
+                        continue
                     if str(payload.get("group_id", "")) == str(self._config.group_id):
                         latency = payload.get("latency_ms")
                         if latency is not None:

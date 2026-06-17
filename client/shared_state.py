@@ -24,6 +24,8 @@ class SharedState:
         self._current_gt_x: Optional[float] = None
         self._current_gt_y: Optional[float] = None
         self._current_frame_number: int = 0
+        self._latest_frame_number: int | None = None
+        self._latest_frame = None
 
         self._processing_mode: str = self._validate_processing_mode(initial_mode)
 
@@ -94,6 +96,21 @@ class SharedState:
         """Return (frame_number, gt_x, gt_y) as a tuple."""
         with self._lock:
             return (self._current_frame_number, self._current_gt_x, self._current_gt_y)
+
+    # --- Latest raw frame for optional latency probes ---
+
+    def update_latest_frame(self, frame_number: int, frame) -> None:
+        """Store the newest raw video frame for low-rate latency probes."""
+        with self._lock:
+            self._latest_frame_number = frame_number
+            self._latest_frame = frame.copy()
+
+    def get_latest_frame(self) -> tuple[int | None, object | None]:
+        """Return (frame_number, frame_copy) for the newest raw frame."""
+        with self._lock:
+            if self._latest_frame is None:
+                return None, None
+            return self._latest_frame_number, self._latest_frame.copy()
 
     # --- Latency history ---
 

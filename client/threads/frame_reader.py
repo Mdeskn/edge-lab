@@ -117,6 +117,8 @@ class FrameReader:
 
                 gt_x, gt_y = self._lookup_gt(self.frame_counter)
                 self.shared_state.update_ground_truth(self.frame_counter, gt_x, gt_y)
+                if self.config.latency_probes_enabled:
+                    self.shared_state.update_latest_frame(self.frame_counter, frame)
 
                 try:
                     self.reader_queue.put(

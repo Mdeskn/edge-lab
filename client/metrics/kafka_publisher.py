@@ -70,6 +70,7 @@ class AppMetricsPublisher:
             return
 
         payload = {
+            "event_type": "scored_frame",
             "timestamp": timestamp if timestamp is not None else time.time(),
             "frame_number": frame_number,
             "group_id": self.group_id,
@@ -94,6 +95,45 @@ class AppMetricsPublisher:
             self._producer.poll(0)
         except Exception as exc:
             logger.error("Kafka produce error: %s", exc)
+
+    def publish_latency_probe(
+        self,
+        frame_number: int,
+        experiment_phase: str,
+        probe_mode: str,
+        latency_ms: float | None,
+        timestamp: float | None = None,
+        status: str = "ok",
+        error: str | None = None,
+    ) -> None:
+        """Publish a non-scoring latency sample for one inference backend."""
+        if not self._enabled:
+            return
+
+        payload = {
+            "event_type": "latency_probe",
+            "timestamp": timestamp if timestamp is not None else time.time(),
+            "frame_number": frame_number,
+            "group_id": self.group_id,
+            "experiment_phase": experiment_phase,
+            "probe_mode": probe_mode,
+            "processing_mode": probe_mode,
+            "latency_ms": round(latency_ms, 2) if latency_ms is not None else None,
+            "status": status,
+        }
+        if error:
+            payload["error"] = error[:300]
+
+        try:
+            self._producer.produce(
+                self._topic,
+                key=self.group_id,
+                value=json.dumps(payload).encode("utf-8"),
+                callback=self._delivery_report,
+            )
+            self._producer.poll(0)
+        except Exception as exc:
+            logger.error("Kafka latency probe produce error: %s", exc)
 
     def flush(self) -> None:
         """Flush any buffered messages, waiting up to 5 seconds."""

@@ -54,11 +54,14 @@ class Config:
     dashboard_jpeg_quality: int
     dashboard_frame_width: int
     sp_agent_debug_metrics: bool
+    latency_probes_enabled: bool
+    latency_probe_interval_sec: float
 
 
 def load_config() -> Config:
     """Load and return a Config instance from environment variables."""
     group_id = os.environ.get("GROUP_ID", "1")
+    manual_placement_control = os.environ.get("MANUAL_PLACEMENT_CONTROL", "false").lower() == "true"
     target_class_value = os.environ.get("TARGET_CLASS_ID", "").strip()
     conf_threshold = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.3"))
     results_log_path = os.environ.get("RESULTS_LOG_PATH", "results.csv")
@@ -85,7 +88,7 @@ def load_config() -> Config:
         kafka_net_topic=os.environ.get("KAFKA_NET_TOPIC", "edgelab.network.metrics"),
         kafka_phase_topic=os.environ.get("KAFKA_PHASE_TOPIC", "edgelab.phase"),
         kafka_control_topic=os.environ.get("KAFKA_CONTROL_TOPIC", "edgelab.placement.control"),
-        manual_placement_control=os.environ.get("MANUAL_PLACEMENT_CONTROL", "false").lower() == "true",
+        manual_placement_control=manual_placement_control,
         otlp_endpoint=os.environ.get("OTLP_ENDPOINT", ""),
         initial_processing_mode=os.environ.get("INITIAL_PROCESSING_MODE", "local"),
         frame_interval_ms=int(os.environ.get("FRAME_INTERVAL_MS", "100")),
@@ -110,6 +113,11 @@ def load_config() -> Config:
         dashboard_jpeg_quality=int(os.environ.get("DASHBOARD_JPEG_QUALITY", "60")),
         dashboard_frame_width=int(os.environ.get("DASHBOARD_FRAME_WIDTH", "640")),
         sp_agent_debug_metrics=os.environ.get("SP_AGENT_DEBUG_METRICS", "false").lower() == "true",
+        latency_probes_enabled=os.environ.get(
+            "LATENCY_PROBES_ENABLED",
+            "true" if manual_placement_control else "false",
+        ).lower() == "true",
+        latency_probe_interval_sec=float(os.environ.get("LATENCY_PROBE_INTERVAL_SEC", "2.0")),
     )
 
 

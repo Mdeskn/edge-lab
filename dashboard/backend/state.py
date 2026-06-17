@@ -37,7 +37,7 @@ def _percentile(values: list[float], percentile: float) -> float | None:
     return ordered[index]
 
 
-def _mode_latency_summary(items: deque, mode: str) -> dict[str, Any]:
+def _mode_latency_summary(items: deque, mode: str, source: str = "scored") -> dict[str, Any]:
     mode_items = [
         item for item in items
         if str(item.get("processing_mode", "")).lower() == mode
@@ -53,7 +53,23 @@ def _mode_latency_summary(items: deque, mode: str) -> dict[str, Any]:
         "p95_ms": _percentile(values, 0.95),
         "sample_count": len(values),
         "frame_number": latest.get("frame_number"),
+        "timestamp": latest.get("timestamp"),
+        "source": source,
     }
+
+
+def _latency_summary_for_mode(group: "GroupState", mode: str) -> dict[str, Any]:
+    scored = _mode_latency_summary(group.history, mode, source="scored")
+    probes = group.latency_probes.get(mode, deque())
+    probe = _mode_latency_summary(probes, mode, source="probe")
+
+    latest_mode = str(group.latest_metric.get("processing_mode", "")).lower()
+    active = latest_mode == mode or (mode == "local" and latest_mode.startswith("local"))
+    if active and scored["sample_count"]:
+        return scored
+    if probe["sample_count"]:
+        return probe
+    return scored
 
 
 @dataclass
@@ -63,6 +79,7 @@ class GroupState:
     history: deque
     seen_samples: deque
     seen_sample_set: set[str] = field(default_factory=set)
+    latency_probes: dict[str, deque] = field(default_factory=dict)
     latest_metric: dict[str, Any] = field(default_factory=dict)
     frame_image: bytes | None = None
     frame_sequence: int = 0
@@ -123,6 +140,9 @@ class DashboardState:
         with self._lock:
             group = self._group
             clean = self._normalize_app_metric(metric)
+            if clean.get("event_type") == "latency_probe":
+                return self._update_latency_probe(group, clean)
+
             group.latest_metric = clean
 
             sample_key = self._sample_key(clean)
@@ -265,8 +285,8 @@ class DashboardState:
                     "min_ms": min(latency_values) if latency_values else None,
                     "max_ms": max(latency_values) if latency_values else None,
                     "p95_ms": _percentile(latency_values, 0.95),
-                    "local": _mode_latency_summary(group.history, "local"),
-                    "remote": _mode_latency_summary(group.history, "remote"),
+                    "local": _latency_summary_for_mode(group, "local"),
+                    "remote": _latency_summary_for_mode(group, "remote"),
                 },
                 "displacement": {
                     "rolling_average_px": _average(displacement_values[-20:]),
@@ -322,10 +342,32 @@ class DashboardState:
             }
 
     def _new_group(self) -> GroupState:
-        return GroupState(
+        group = GroupState(
             history=deque(maxlen=self.max_history),
             seen_samples=deque(maxlen=self.max_history * 4),
         )
+        group.latency_probes = {
+            "local": deque(maxlen=self.max_history),
+            "remote": deque(maxlen=self.max_history),
+        }
+        return group
+
+    def _update_latency_probe(self, group: GroupState, metric: dict[str, Any]) -> bool:
+        mode = str(
+            metric.get("probe_mode") or metric.get("processing_mode", "")
+        ).strip().lower()
+        if mode not in ("local", "remote"):
+            return False
+        if metric.get("latency_ms") is None:
+            return False
+
+        metric["probe_mode"] = mode
+        metric["processing_mode"] = mode
+        group.latency_probes.setdefault(
+            mode,
+            deque(maxlen=self.max_history),
+        ).append(metric)
+        return True
 
     def _normalize_app_metric(self, metric: dict[str, Any]) -> dict[str, Any]:
         clean = deepcopy(metric)

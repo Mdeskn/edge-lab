@@ -19,12 +19,15 @@ interface LatencyCardProps {
 
 function LatencyCard({ title, summary, active, className }: LatencyCardProps) {
   const frameNumber = summary?.frame_number;
+  const label = summary?.source === "probe"
+    ? frameNumber ? `Probe frame ${frameNumber}` : "Live probe"
+    : active ? "Current mode" : frameNumber ? `Last frame ${frameNumber}` : "Waiting for samples";
 
   return (
     <article className={`metric-card latency-card ${className}${active ? " active-latency" : ""}`}>
       <div className="metric-card-top"><Clock3 size={20} /><span>{title}</span></div>
       <strong>{metric(summary?.latest_ms, " ms")}</strong>
-      <small>{active ? "Current mode" : frameNumber ? `Last frame ${frameNumber}` : "Waiting for samples"}</small>
+      <small>{label}</small>
       <div className="metric-foot">
         <span>Avg {metric(summary?.rolling_average_ms, " ms")}</span>
         <span>P95 {metric(summary?.p95_ms, " ms")}</span>
