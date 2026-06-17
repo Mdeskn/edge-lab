@@ -36,6 +36,10 @@ running() {
   docker ps --format '{{.Names}}' | grep -qx "$NAME"
 }
 
+stop_sdk_containers() {
+  docker ps -q --filter "ancestor=$IMAGE" | xargs -r docker rm -f >/dev/null 2>&1 || true
+}
+
 pattern_pid() {
   if [ -f "$PATTERN_PID_FILE" ]; then
     cat "$PATTERN_PID_FILE" 2>/dev/null || true
@@ -171,8 +175,9 @@ case "$action" in
     ;;
   stop)
     stop_pattern
-    if running; then
-      docker rm -f "$NAME" >/dev/null 2>&1
+    if running || [ -n "$(docker ps -q --filter "ancestor=$IMAGE")" ]; then
+      docker rm -f "$NAME" >/dev/null 2>&1 || true
+      stop_sdk_containers
       echo "stopped gpu load"
     else
       echo "gpu load not running"

@@ -1,6 +1,7 @@
 """Remote inference clients used by the Pi."""
 import logging
 import time
+from http import HTTPStatus
 
 import cv2
 import numpy as np
@@ -160,7 +161,13 @@ class RemoteClient:
             headers={"Content-Type": "image/jpeg"},
             timeout=self._timeout,
         )
-        resp.raise_for_status()
+        if not resp.ok:
+            detail = resp.text.strip().replace("\n", " ")[:500]
+            status_name = HTTPStatus(resp.status_code).phrase
+            raise requests.HTTPError(
+                f"{resp.status_code} {status_name} from JPEG inference API: {detail}",
+                response=resp,
+            )
         payload = resp.json()
         prediction = payload.get("prediction", payload)
         return (
