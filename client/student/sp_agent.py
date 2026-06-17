@@ -16,10 +16,9 @@ class SPAgent(SPAgentBase):
     Implement decide() below. Return "local" or "remote".
 
     Tips:
-    - Check self.experiment_phase to know what load is currently running.
-      Values from the current SeQaM scenario are "baseline", "gpu_load",
-      "jitter_light", "bandwidth_5", and "mixed".
-      Defaults to "baseline" until the first phase message arrives from Kafka.
+    - Do NOT use self.experiment_phase to make decisions: an agent that checks
+      phase names instead of real metrics will be penalised. Your logic must
+      work based on what the sensors actually report.
     - Check self.avg_latency to see how recent end-to-end performance has been.
     - Use .get() for metric dicts: they may be empty until the first Kafka message arrives.
 
@@ -47,26 +46,22 @@ class SPAgent(SPAgentBase):
         Implement your placement strategy here.
         Return "local" or "remote".
 
-        This is a working example, not the final answer. Replace it with your
-        own strategy after you understand how each signal behaves.
+        Use the measured metrics below. Do NOT check self.experiment_phase to
+        decide: phase names are not available in a real deployment and will not
+        earn marks. Your strategy must react to actual observed signal values.
         """
-        phase = self.experiment_phase
         gpu_util = self.gpu_metrics.get("gpu_util_pct", 0)
         yolo_queue = self.gpu_metrics.get("yolo_queue_ms", 0)
         net_delay = self.net_metrics.get("delay_ms", 0)
-        net_jitter = self.net_metrics.get("jitter_ms", 0)
+        packet_loss = self.net_metrics.get("packet_loss_pct", 0)
 
-        # During bandwidth-limited or jitter phases, avoid the degraded link.
-        if phase.startswith("bandwidth_") or phase == "jitter_light":
-            return "local"
-
-        # If the GPU server is overloaded, fall back to local.
+        # GPU server is overloaded: local inference avoids the queue.
         if gpu_util > 80 or yolo_queue > 50:
             return "local"
 
-        # If the network path has high latency or jitter, prefer local.
-        if net_delay > 30 or net_jitter > 10:
+        # Network path is degraded: extra RTT or loss makes remote slower.
+        if net_delay > 30 or packet_loss >= 1.0:
             return "local"
 
-        # Conditions look healthy: use the faster remote GPU path.
+        # Conditions look healthy: remote GPU is faster than local CPU.
         return "remote"

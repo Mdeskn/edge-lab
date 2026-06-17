@@ -27,14 +27,8 @@ scripts/net-vm/nohup.out
 scripts/gpu-server/server/nohup.out
 scripts/gpu-load-lc1/gpu_load.log
 
-# Unused compose files
-docker-compose.dev*.yml
-docker-compose.prod*.yml
-docker-compose.test*.yml
-docker-compose.gpu-server*.yml
-docker-compose.local.*yml
-docker-compose.netvm.*yml
-dashboard/docker-compose.*yml
+# Non-student compose files (gpu-server, netvm, local dev, dashboard standalone)
+deploy/
 
 # Personal files
 lab_project_roadmap*.md

@@ -71,7 +71,7 @@ METRICS AVAILABLE IN YOUR decide() METHOD:
     self.experiment_phase  (str):
         Current load phase. Defaults to "baseline" until a phase message arrives.
         Values from the current SeQaM scenario are "baseline", "gpu_load",
-        "jitter_light", "bandwidth_5", and "mixed".
+        "jitter_light", "bandwidth_50", and "mixed".
 
     self.current_mode  (str):
         The processing mode currently active ("local" or "remote").
@@ -341,10 +341,11 @@ class SPAgentBase:
                         logger.warning("Failed to parse phase message: %s", exc)
 
                 elif topic == self._config.kafka_app_topic:
-                    latency = payload.get("latency_ms")
-                    if latency is not None:
-                        with self._metrics_lock:
-                            self._recent_latencies.append(float(latency))
+                    if str(payload.get("group_id", "")) == str(self._config.group_id):
+                        latency = payload.get("latency_ms")
+                        if latency is not None:
+                            with self._metrics_lock:
+                                self._recent_latencies.append(float(latency))
 
         except Exception:
             logger.exception("SPAgent Kafka consumer thread crashed")
@@ -388,12 +389,23 @@ class SPAgentBase:
 
     def _normalize_gpu_metrics(self, message: dict) -> dict:
         """
-        Normalize Eldiyar's nested GPU/Triton message into flat student-friendly fields.
+        Normalize a GPU/Triton server metrics message into flat student-friendly fields.
 
-        Input: raw message from dnn_partition.server_metrics (nested structure with
-               "server", "totals", and "models" keys).
+        Accepts two formats on the same Kafka topic (dnn_partition.server_metrics):
+          - Nested format (Eldiyar's publisher): has "server", "totals", "models" keys.
+          - Flat format (gpu_metrics_publisher.py): has "gpu_utilization_pct",
+            "triton_requests_per_sec", "triton_queue_duration_ms", etc.
+
         Output: flat dict with consistent snake_case keys. Always includes "raw".
         """
+        if "server" in message or "models" in message:
+            return self._normalize_gpu_metrics_nested(message)
+        if "gpu_utilization_pct" in message or "triton_requests_per_sec" in message:
+            return self._normalize_gpu_metrics_flat(message)
+        return self._normalize_gpu_metrics_nested(message)
+
+    def _normalize_gpu_metrics_nested(self, message: dict) -> dict:
+        """Handle Eldiyar's nested server metrics format."""
         server = message.get("server", {})
         totals = message.get("totals", {})
         models = message.get("models", [])
@@ -429,6 +441,44 @@ class SPAgentBase:
             "resnet_pending": resnet.get("pending_requests", 0),
             "resnet_queue_ms": resnet.get("avg_queue_time_ms", 0.0),
             "resnet_infer_ms": resnet.get("avg_compute_infer_ms", 0.0),
+
+            "raw": message,
+        }
+
+    def _normalize_gpu_metrics_flat(self, message: dict) -> dict:
+        """Handle the flat format from gpu_metrics_publisher.py."""
+        rps = message.get("triton_requests_per_sec", 0.0)
+        queue_ms = message.get("triton_queue_duration_ms", 0.0)
+        infer_ms = message.get("triton_inference_duration_ms", 0.0)
+
+        return {
+            "gpu_util_pct": message.get("gpu_utilization_pct", 0.0),
+            "gpu_freq_mhz": 0.0,
+            "gpu_temp_c": message.get("gpu_temperature_c", 0.0),
+            "gpu_mem_used_mb": message.get("gpu_memory_used_mb", 0.0),
+            "gpu_mem_total_mb": message.get("gpu_memory_total_mb", 0.0),
+            "cpu_util_pct": 0.0,
+            "mem_util_pct": 0.0,
+            "power_w": message.get("gpu_power_draw_w", 0.0),
+
+            "total_rps": rps,
+            "total_success_rps": rps,
+            "total_failure_rps": 0.0,
+            "total_pending": 0,
+
+            "yolo_success_rps": rps,
+            "yolo_inference_rps": rps,
+            "yolo_pending": 0,
+            "yolo_queue_ms": queue_ms,
+            "yolo_input_ms": 0.0,
+            "yolo_infer_ms": infer_ms,
+            "yolo_output_ms": 0.0,
+
+            "resnet_success_rps": 0.0,
+            "resnet_inference_rps": 0.0,
+            "resnet_pending": 0,
+            "resnet_queue_ms": 0.0,
+            "resnet_infer_ms": 0.0,
 
             "raw": message,
         }

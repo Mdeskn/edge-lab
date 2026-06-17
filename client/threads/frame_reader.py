@@ -118,16 +118,6 @@ class FrameReader:
                 gt_x, gt_y = self._lookup_gt(self.frame_counter)
                 self.shared_state.update_ground_truth(self.frame_counter, gt_x, gt_y)
 
-                if self.config.display_output:
-                    try:
-                        cv2.imshow("Edge Lab: Input Frame", frame)
-                        key = cv2.waitKey(1)
-                        if key == ord("q"):
-                            self.shared_state.request_shutdown()
-                            break
-                    except Exception as exc:
-                        logger.warning("Display error: %s", exc)
-
                 try:
                     self.reader_queue.put(
                         (self.frame_counter, frame.copy(), gt_x, gt_y, time.time()),

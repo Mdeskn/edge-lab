@@ -86,6 +86,8 @@ class DashboardKafkaConsumer:
                 self._state.touch_kafka()
                 topic = message.topic()
                 if topic == self._app_topic:
+                    if normalize_group_id(payload.get("group_id", "")) != self._group_id:
+                        continue
                     self._state.update_app_metric(payload)
                     self._notify()
                 elif topic == self._gpu_topic:

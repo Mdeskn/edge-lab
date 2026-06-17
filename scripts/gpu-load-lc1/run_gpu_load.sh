@@ -76,17 +76,15 @@ start_fixed_load() {
     exit 0
   fi
   docker rm -f "$NAME" >/dev/null 2>&1 || true
-  if [ "${load_duration:-0}" -gt 0 ] 2>/dev/null; then
-    runner=(timeout "${load_duration}s" docker run --rm --name "$NAME" --net=host "$IMAGE")
-  else
-    runner=(docker run --rm --name "$NAME" --net=host "$IMAGE")
-  fi
-  nohup "${runner[@]}" \
+  nohup docker run --rm --name "$NAME" --net=host "$IMAGE" \
     perf_analyzer -m "$MODEL" -i grpc -u "$TRITON_URL" \
     --input-data random \
     --concurrency-range "$load_concurrency" \
     --measurement-interval 999999 \
     >> "$LOGFILE" 2>&1 &
+  if [ "${load_duration:-0}" -gt 0 ] 2>/dev/null; then
+    ( sleep "${load_duration}"; docker rm -f "$NAME" >/dev/null 2>&1 || true ) &
+  fi
   echo "started gpu load (perf_analyzer) concurrency $load_concurrency duration $load_duration"
 }
 
@@ -163,7 +161,7 @@ case "$action" in
   pattern)
     stop_pattern
     docker rm -f "$NAME" >/dev/null 2>&1 || true
-    nohup bash "$0" pattern_worker "${2:-30,80}" "${3:-7}" "${4:-0}" \
+    nohup bash "$SCRIPT_DIR/run_gpu_load.sh" pattern_worker "${2:-30,80}" "${3:-7}" "${4:-0}" \
       >> "$LOGFILE" 2>&1 &
     echo "$!" > "$PATTERN_PID_FILE"
     echo "started gpu load pattern levels ${2:-30,80} step ${3:-7} duration ${4:-0}"

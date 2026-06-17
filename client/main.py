@@ -23,7 +23,7 @@ from student.sp_agent import SPAgent
 
 logger = logging.getLogger(__name__)
 
-EXPERIMENT_PHASES = ["baseline", "gpu_load", "jitter_light", "bandwidth_5", "mixed"]
+EXPERIMENT_PHASES = ["baseline", "gpu_load", "jitter_light", "bandwidth_50", "mixed"]
 
 
 def wait_for_first_phase(config: Config) -> tuple:
@@ -234,7 +234,6 @@ def main() -> None:
     logger.info("  otlp_endpoint        : %s", config.otlp_endpoint or "(not set)")
     logger.info("  initial_mode         : %s", config.initial_processing_mode)
     logger.info("  frame_interval_ms    : %d", config.frame_interval_ms)
-    logger.info("  display_output       : %s", config.display_output)
     logger.info("  results_log_path     : %s", config.results_log_path)
     logger.info("  results_by_phase_path: %s", config.results_by_phase_path)
     logger.info("  conf_threshold       : %.2f", config.conf_threshold)
@@ -277,6 +276,7 @@ def main() -> None:
             timeout=config.remote_inference_timeout,
             remote_inference_url=config.remote_inference_url,
             jpeg_quality=config.remote_jpeg_quality,
+            failure_cooldown=config.remote_failure_cooldown_sec,
         )
     else:
         logger.warning("REMOTE_INFERENCE_URL/TRITON_URL not set: running in local-only mode")

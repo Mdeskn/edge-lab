@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -e
 
 # Traffic Control Helper for Triton experiments
 # Interface used by router
@@ -32,7 +33,7 @@ show_usage() {
 
 clear_tc() {
     echo "[INFO] Clearing tc rules on $IFACE ..."
-    sudo tc qdisc del dev "$IFACE" root 2>/dev/null
+    sudo tc qdisc del dev "$IFACE" root 2>/dev/null || true
     echo "[INFO] Current qdisc:"
     tc qdisc show dev "$IFACE"
 }
@@ -111,6 +112,7 @@ apply_netem_tbf() {
     echo "       latency   = $latency"
 
     sudo tc qdisc replace dev "$IFACE" root handle 1: netem delay "$delay" "$jitter"
+    sudo tc qdisc del dev "$IFACE" parent 1:1 handle 10: 2>/dev/null || true
     sudo tc qdisc add dev "$IFACE" parent 1:1 handle 10: tbf rate "$rate" burst "$burst" latency "$latency"
 
     run_with_optional_timer "$duration"
@@ -141,6 +143,7 @@ apply_netem_loss_tbf() {
     echo "       latency   = $latency"
 
     sudo tc qdisc replace dev "$IFACE" root handle 1: netem delay "$delay" "$jitter" loss "$loss"
+    sudo tc qdisc del dev "$IFACE" parent 1:1 handle 10: 2>/dev/null || true
     sudo tc qdisc add dev "$IFACE" parent 1:1 handle 10: tbf rate "$rate" burst "$burst" latency "$latency"
 
     run_with_optional_timer "$duration"

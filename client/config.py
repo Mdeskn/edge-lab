@@ -24,6 +24,7 @@ class Config:
     remote_inference_url: str
     remote_jpeg_quality: int
     remote_inference_timeout: float
+    remote_failure_cooldown_sec: float
     kafka_brokers: str
     kafka_app_topic: str        # APP_METRICS_TOPIC env var; fallback: "dnn_partition.client_metrics"
     kafka_gpu_topic: str
@@ -34,7 +35,6 @@ class Config:
     frame_interval_ms: int
     input_width: int
     input_height: int
-    display_output: bool
     results_log_path: str
     results_by_phase_path: str
     queue_max_size: int
@@ -74,7 +74,8 @@ def load_config() -> Config:
         triton_model_name=os.environ.get("TRITON_MODEL_NAME", "yolov10n"),
         remote_inference_url=os.environ.get("REMOTE_INFERENCE_URL", "").strip(),
         remote_jpeg_quality=int(os.environ.get("REMOTE_JPEG_QUALITY", "80")),
-        remote_inference_timeout=float(os.environ.get("REMOTE_INFERENCE_TIMEOUT_SEC", "5.0")),
+        remote_inference_timeout=float(os.environ.get("REMOTE_INFERENCE_TIMEOUT_SEC", "1.5")),
+        remote_failure_cooldown_sec=float(os.environ.get("REMOTE_FAILURE_COOLDOWN_SEC", "3.0")),
         kafka_brokers=os.environ.get("KAFKA_BROKERS", ""),
         kafka_app_topic=os.environ.get("APP_METRICS_TOPIC", "").strip()
             or "dnn_partition.client_metrics",
@@ -86,7 +87,6 @@ def load_config() -> Config:
         frame_interval_ms=int(os.environ.get("FRAME_INTERVAL_MS", "100")),
         input_width=int(os.environ.get("MODEL_INPUT_WIDTH", "640")),
         input_height=int(os.environ.get("MODEL_INPUT_HEIGHT", "640")),
-        display_output=os.environ.get("DISPLAY_OUTPUT", "true").lower() == "true",
         results_log_path=results_log_path,
         results_by_phase_path=results_by_phase_path,
         queue_max_size=int(os.environ.get("QUEUE_MAX_SIZE", "10")),

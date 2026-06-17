@@ -1,6 +1,6 @@
 """
 Publishes scored frame records to Kafka.
-Topic: /edgelab/app/metrics/groupN (derived from config).
+Topic: APP_METRICS_TOPIC env var (default: dnn_partition.client_metrics).
 """
 import json
 import logging

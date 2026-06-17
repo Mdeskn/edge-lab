@@ -243,7 +243,7 @@ Example strategy:
 def decide(self) -> str:
     phase = self.experiment_phase
 
-    if phase in ("gpu_load", "jitter_light", "bandwidth_5", "mixed"):
+    if phase in ("gpu_load", "jitter_light", "bandwidth_50", "mixed"):
         return "local"
 
     if self.gpu_metrics.get("yolo_queue_ms", 0) > 50:
@@ -305,14 +305,14 @@ The current SeQaM scenario emits these phase names:
 | `baseline` | 0 | clear | no |
 | `gpu_load` | 4 | clear | yes, triggered externally |
 | `jitter_light` | 3 | `netem_tbf 0.1ms 0.4ms 1gbit 2mbit 50ms` | no |
-| `bandwidth_5` | 6 | `tbf 5mbit 256kb 50ms` | no |
+| `bandwidth_50` | 2 | `tbf 50mbit 2mbit 50ms` | no |
 | `mixed` | 5 | `netem_loss_tbf 0ms 0ms 2% 5mbit 256kb 50ms` | yes, triggered externally |
 
 Phase rules stay active until the next phase. Do not pass a duration to
 `tc_control.sh` from automated phase control; SeQaM controls timing.
 
 `tc_controller.py` also accepts legacy operator phases such as `bandwidth_200`
-and `bandwidth_50`, but they are not emitted by the current SeQaM scenario.
+and `bandwidth_5`, but they are not emitted by the current SeQaM scenario.
 Student-facing examples should use only the current scenario phases above.
 
 The current checked-in SeQaM scenario is a short heavy-load cycle:
@@ -320,10 +320,10 @@ The current checked-in SeQaM scenario is a short heavy-load cycle:
 | Time | Action |
 | ---: | --- |
 | 0 s | Stop GPU load; set `baseline` |
-| 10 s | Set `gpu_load`; start LC1 GPU load pattern `30,80` every 7 s |
+| 10 s | Set `gpu_load`; start LC1 GPU load at concurrency 8 |
 | 25 s | Stop GPU load; set `jitter_light` |
-| 40 s | Set `bandwidth_5` |
-| 55 s | Set `mixed`; start LC1 GPU load pattern `30,80` every 7 s |
+| 40 s | Set `bandwidth_50` |
+| 55 s | Set `mixed`; start LC1 GPU load at concurrency 8 |
 | 70 s | Stop GPU load; set `baseline` |
 | 75 s | Exit |
 
@@ -951,6 +951,7 @@ DASHBOARD_FRAME_WIDTH=640
 | `REMOTE_INFERENCE_URL` | Preferred JPEG API, normally `http://172.22.174.148:8100` |
 | `REMOTE_JPEG_QUALITY` | JPEG quality for remote inference |
 | `REMOTE_INFERENCE_TIMEOUT_SEC` | Remote API timeout |
+| `REMOTE_FAILURE_COOLDOWN_SEC` | After a remote failure, how long `is_available()` reports unavailable |
 | `TRITON_URL` | Legacy gRPC fallback, normally `172.22.174.148:8001` |
 | `TRITON_MODEL_NAME` | Triton model name, normally `yolov10n` |
 | `KAFKA_BROKERS` | Kafka broker list |

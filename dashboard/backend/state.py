@@ -308,31 +308,61 @@ class DashboardState:
 
     @staticmethod
     def _flatten_gpu_metrics(message: dict[str, Any]) -> dict[str, Any]:
-        """Flatten Eldiyar's nested server metrics into the same keys used by SPAgentBase."""
-        server = message.get("server", {})
-        totals = message.get("totals", {})
-        models = message.get("models", [])
-        yolo = next((m for m in models if m.get("model_name") == "yolov10n"), {})
+        """Flatten GPU metrics into a consistent flat dict for the dashboard.
+
+        Handles two formats on the same Kafka topic:
+          - Nested (Eldiyar's publisher): has "server", "totals", "models" keys.
+          - Flat (gpu_metrics_publisher.py): has "gpu_utilization_pct", etc.
+        """
+        if "server" in message or "models" in message:
+            server = message.get("server", {})
+            totals = message.get("totals", {})
+            models = message.get("models", [])
+            yolo = next((m for m in models if m.get("model_name") == "yolov10n"), {})
+            return {
+                "gpu_util_pct": server.get("gpu_util_percent", 0.0),
+                "gpu_freq_mhz": server.get("gpu_freq_mhz", 0.0),
+                "gpu_temp_c": server.get("gpu_temp_c", 0.0),
+                "gpu_mem_used_mb": server.get("gpu_mem_used_mb", 0.0),
+                "gpu_mem_total_mb": server.get("gpu_mem_total_mb", 0.0),
+                "cpu_util_pct": server.get("cpu_util_percent", 0.0),
+                "mem_util_pct": server.get("mem_util_percent", 0.0),
+                "power_w": server.get("power_w", 0.0),
+                "total_rps": totals.get("total_rps", 0.0),
+                "total_success_rps": totals.get("total_success_rps", 0.0),
+                "total_failure_rps": totals.get("total_failure_rps", 0.0),
+                "total_pending": totals.get("total_pending_requests", 0),
+                "yolo_pending": yolo.get("pending_requests", 0),
+                "yolo_success_rps": yolo.get("success_rps", 0.0),
+                "yolo_inference_rps": yolo.get("inference_rps", 0.0),
+                "yolo_queue_ms": yolo.get("avg_queue_time_ms", 0.0),
+                "yolo_input_ms": yolo.get("avg_compute_input_ms", 0.0),
+                "yolo_infer_ms": yolo.get("avg_compute_infer_ms", 0.0),
+                "yolo_output_ms": yolo.get("avg_compute_output_ms", 0.0),
+                "timestamp": message.get("timestamp", 0.0),
+            }
+
+        rps = message.get("triton_requests_per_sec", 0.0)
         return {
-            "gpu_util_pct": server.get("gpu_util_percent", 0.0),
-            "gpu_freq_mhz": server.get("gpu_freq_mhz", 0.0),
-            "gpu_temp_c": server.get("gpu_temp_c", 0.0),
-            "gpu_mem_used_mb": server.get("gpu_mem_used_mb", 0.0),
-            "gpu_mem_total_mb": server.get("gpu_mem_total_mb", 0.0),
-            "cpu_util_pct": server.get("cpu_util_percent", 0.0),
-            "mem_util_pct": server.get("mem_util_percent", 0.0),
-            "power_w": server.get("power_w", 0.0),
-            "total_rps": totals.get("total_rps", 0.0),
-            "total_success_rps": totals.get("total_success_rps", 0.0),
-            "total_failure_rps": totals.get("total_failure_rps", 0.0),
-            "total_pending": totals.get("total_pending_requests", 0),
-            "yolo_pending": yolo.get("pending_requests", 0),
-            "yolo_success_rps": yolo.get("success_rps", 0.0),
-            "yolo_inference_rps": yolo.get("inference_rps", 0.0),
-            "yolo_queue_ms": yolo.get("avg_queue_time_ms", 0.0),
-            "yolo_input_ms": yolo.get("avg_compute_input_ms", 0.0),
-            "yolo_infer_ms": yolo.get("avg_compute_infer_ms", 0.0),
-            "yolo_output_ms": yolo.get("avg_compute_output_ms", 0.0),
+            "gpu_util_pct": message.get("gpu_utilization_pct", 0.0),
+            "gpu_freq_mhz": 0.0,
+            "gpu_temp_c": message.get("gpu_temperature_c", 0.0),
+            "gpu_mem_used_mb": message.get("gpu_memory_used_mb", 0.0),
+            "gpu_mem_total_mb": message.get("gpu_memory_total_mb", 0.0),
+            "cpu_util_pct": 0.0,
+            "mem_util_pct": 0.0,
+            "power_w": message.get("gpu_power_draw_w", 0.0),
+            "total_rps": rps,
+            "total_success_rps": rps,
+            "total_failure_rps": 0.0,
+            "total_pending": 0,
+            "yolo_pending": 0,
+            "yolo_success_rps": rps,
+            "yolo_inference_rps": rps,
+            "yolo_queue_ms": message.get("triton_queue_duration_ms", 0.0),
+            "yolo_input_ms": 0.0,
+            "yolo_infer_ms": message.get("triton_inference_duration_ms", 0.0),
+            "yolo_output_ms": 0.0,
             "timestamp": message.get("timestamp", 0.0),
         }
 

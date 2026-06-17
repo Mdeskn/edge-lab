@@ -1,5 +1,6 @@
 """Remote inference clients used by the Pi."""
 import logging
+import time
 
 import cv2
 import numpy as np
@@ -31,6 +32,7 @@ class RemoteClient:
         timeout: float = 5.0,
         remote_inference_url: str = "",
         jpeg_quality: int = 80,
+        failure_cooldown: float = 3.0,
     ):
         """
         Initialize the selected remote client and perform a health check.
@@ -52,6 +54,8 @@ class RemoteClient:
         self._mode = "http_jpeg" if self._remote_inference_url else "triton_grpc"
         self._available = False
         self._client = None
+        self._failure_cooldown = failure_cooldown
+        self._last_failure_time: float | None = None
 
         if self._mode == "http_jpeg":
             self._connect_http_gateway()
@@ -59,21 +63,45 @@ class RemoteClient:
             self._connect_triton_grpc(triton_url)
 
     def is_available(self) -> bool:
-        """Return True if the configured remote endpoint was reachable at startup."""
-        return self._available
+        """
+        Return True if the remote endpoint was reachable at startup and hasn't
+        failed recently.
+
+        A single timed-out call would otherwise block the Dispatcher's single
+        processing thread for the full per-call timeout on every subsequent
+        frame still routed to "remote", repeating until the SP-Agent reacts.
+        Treating a recent failure as "unavailable" for a cooldown window lets
+        the Dispatcher skip straight to local without waiting on that timeout
+        again, and the client retries remote on its own once the cooldown
+        elapses.
+        """
+        if not self._available:
+            return False
+        if self._last_failure_time is not None:
+            if time.time() - self._last_failure_time < self._failure_cooldown:
+                return False
+        return True
 
     def sends_raw_frames(self) -> bool:
         """Return True when the client should pass raw BGR frames instead of tensors."""
         return self._mode == "http_jpeg"
 
     def infer(self, frame_or_tensor: np.ndarray, original_shape: tuple | None = None) -> tuple:
-        """Run inference with the selected remote transport."""
-        if self._mode == "http_jpeg":
-            return self._infer_http_jpeg(frame_or_tensor)
+        """Run inference with the selected remote transport.
 
-        if original_shape is None:
-            raise ValueError("original_shape is required for legacy Triton gRPC inference")
-        return self._infer_triton_grpc(frame_or_tensor, original_shape)
+        Records the failure time on any exception so is_available() enters
+        its cooldown window; the Dispatcher's caller handles local fallback.
+        """
+        try:
+            if self._mode == "http_jpeg":
+                return self._infer_http_jpeg(frame_or_tensor)
+
+            if original_shape is None:
+                raise ValueError("original_shape is required for legacy Triton gRPC inference")
+            return self._infer_triton_grpc(frame_or_tensor, original_shape)
+        except Exception:
+            self._last_failure_time = time.time()
+            raise
 
     def _connect_http_gateway(self) -> None:
         """Connect to the VM2 JPEG inference API."""

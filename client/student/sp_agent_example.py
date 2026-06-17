@@ -18,7 +18,7 @@ class ExampleSPAgent(SPAgentBase):
     behavior and recover when conditions are better than expected.
     """
 
-    BAD_PHASES = {"gpu_load", "jitter_light", "bandwidth_5", "mixed"}
+    BAD_PHASES = {"gpu_load", "jitter_light", "bandwidth_50", "mixed"}
 
     def __init__(self, config: Config, shared_state: SharedState):
         """Keep a little state so the strategy avoids switching too rapidly."""

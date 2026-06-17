@@ -135,12 +135,6 @@ class Scorer:
                 displacement_px, has_prediction, avg_display_latency, mode, current_phase, score_summary,
             )
 
-            if self.config.display_output:
-                try:
-                    cv2.imshow("Edge Lab: Output with Overlay", frame)
-                except Exception as exc:
-                    logger.warning("Display (output) error: %s", exc)
-
             try:
                 self._csv_writer.writerow(
                     [

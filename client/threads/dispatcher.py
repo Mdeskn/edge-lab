@@ -123,6 +123,7 @@ class Dispatcher:
                                     )
                                 result_mode = "local_fallback"
                     else:
+                        result_mode = "local"
                         tensor = preprocess_once()
                         with self.tracer.start_as_current_span("local_inference") as li_span:
                             li_span.set_attribute("model.name", "yolov10n")

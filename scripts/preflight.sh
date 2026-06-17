@@ -115,6 +115,38 @@ check_gpu_metrics_publisher() {
   fi
 }
 
+check_gpu_idle() {
+  message="$(
+    run_remote "$VM1_SSH" \
+      "docker exec $KAFKA_CONTAINER kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic dnn_partition.server_metrics --max-messages 1 --timeout-ms $KAFKA_MESSAGE_TIMEOUT_MS" \
+      2>/dev/null | grep -m1 '^{'
+  )"
+
+  if [ -z "$message" ]; then
+    fail "GPU idle check: no recent message on dnn_partition.server_metrics"
+    return
+  fi
+
+  detail="$(printf '%s' "$message" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+busy = [m for m in data.get("models", []) if m.get("pending_requests", 0)]
+gpu_util = (data.get("server") or {}).get("gpu_util_percent")
+util_str = "{:.0f}%".format(gpu_util) if isinstance(gpu_util, (int, float)) else "n/a"
+if busy:
+    parts = ", ".join("{}={}".format(m.get("model_name"), m.get("pending_requests")) for m in busy)
+    print("FAIL leftover pending requests: {} (gpu_util={})".format(parts, util_str))
+else:
+    print("OK gpu_util={}".format(util_str))
+' 2>&1)"
+
+  case "$detail" in
+    OK*) ok "GPU is idle (${detail#OK })" ;;
+    FAIL*) fail "GPU is not idle, ${detail#FAIL }" ;;
+    *) fail "GPU idle check: could not parse metrics message ($detail)" ;;
+  esac
+}
+
 check_ssh "VM1 Kafka/Grafana" "$VM1_SSH"
 check_ssh "VM2 GPU server" "$VM2_SSH"
 check_ssh "VM3 router/network" "$VM3_SSH"
@@ -129,6 +161,7 @@ check_tcp "Triton gRPC" "$VM2_HOST" 8001
 check_http "JPEG gateway" "$REMOTE_INFERENCE_URL/health"
 check_pi_router_resolution
 check_gpu_metrics_publisher
+check_gpu_idle
 
 if [ "${#failures[@]}" -eq 0 ]; then
   printf '\nPreflight passed: all checks green.\n'
