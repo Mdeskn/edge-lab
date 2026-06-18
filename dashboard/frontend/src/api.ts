@@ -1,6 +1,6 @@
 import type { DashboardState } from "./types";
 
-const defaultApiUrl = `${window.location.protocol}//${window.location.hostname}:8080`;
+const defaultApiUrl = `${window.location.protocol}//${window.location.host}`;
 
 export const API_BASE = (import.meta.env.VITE_API_URL || defaultApiUrl).replace(/\/$/, "");
 
