@@ -24,8 +24,6 @@ services:
     build:
       context: ./dashboard/frontend
       dockerfile: Dockerfile
-      args:
-        VITE_API_URL: ${DASHBOARD_PUBLIC_API_URL:-}
     ports:
       - "5173:5173"
     depends_on:

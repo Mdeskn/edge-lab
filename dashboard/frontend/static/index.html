@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Edge-Lab Live Dashboard</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main>
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">~</span>
+          <div>
+            <h1>Edge-Lab Live Dashboard</h1>
+            <p>Service placement and tracking quality</p>
+          </div>
+        </div>
+        <div class="topbar-controls">
+          <span class="status-dot-wrap"><i id="socket-dot" class="status-dot"></i><span id="socket-label">Connecting</span></span>
+          <div class="phase-block">
+            <span class="eyebrow">Experiment phase</span>
+            <strong id="phase-name">UNKNOWN</strong>
+            <small id="phase-description">Waiting for phase metrics</small>
+          </div>
+        </div>
+      </header>
+
+      <div id="error-banner" class="error-banner hidden"></div>
+      <div id="loading-state" class="loading-state">Connecting to Edge-Lab dashboard...</div>
+
+      <div id="dashboard-shell" class="dashboard-shell hidden">
+        <section class="overview-grid">
+          <section class="panel video-panel">
+            <div class="panel-heading">
+              <div>
+                <span class="eyebrow">Annotated stream</span>
+                <h2>Live Video</h2>
+              </div>
+              <span id="frame-counter" class="frame-counter">Frame N/A</span>
+            </div>
+            <div class="video-stage">
+              <img id="video-frame" alt="Live annotated Edge-Lab frame">
+              <div id="video-empty" class="video-empty">
+                <span class="empty-icon">[]</span>
+                <span>Waiting for the first client frame</span>
+              </div>
+            </div>
+            <div class="video-legend">
+              <span><i class="legend-dot gt"></i>GT position</span>
+              <span><i class="legend-dot pred"></i>Predicted position</span>
+              <span><i class="legend-line"></i>Displacement</span>
+            </div>
+            <div class="video-coords">
+              <span id="gt-coords">GT (N/A)</span>
+              <span id="pred-coords">Pred (N/A)</span>
+            </div>
+          </section>
+
+          <section class="metric-grid" aria-label="Current score metrics">
+            <article id="mode-card" class="metric-card mode-card">
+              <div class="metric-card-top"><span class="mini-icon">MODE</span><span>Processing mode</span></div>
+              <strong id="processing-mode">UNKNOWN</strong>
+              <small>Active inference location</small>
+              <div class="placement-controls" aria-label="Manual placement controls">
+                <button id="force-local" type="button" class="placement-button" title="Force local inference">Local</button>
+                <button id="force-remote" type="button" class="placement-button" title="Force remote inference">Remote</button>
+              </div>
+              <small id="placement-status" class="placement-status">Automatic SP-agent</small>
+            </article>
+
+            <article id="local-latency-card" class="metric-card latency-card local-latency">
+              <div class="metric-card-top"><span class="mini-icon">LAT</span><span>Local latency</span></div>
+              <strong id="local-latency">N/A</strong>
+              <small id="local-latency-label">Waiting for samples</small>
+              <div class="metric-foot">
+                <span id="local-latency-avg">Avg N/A</span>
+                <span id="local-latency-p95">P95 N/A</span>
+                <span id="local-latency-n">N 0</span>
+              </div>
+            </article>
+
+            <article id="remote-latency-card" class="metric-card latency-card remote-latency">
+              <div class="metric-card-top"><span class="mini-icon">LAT</span><span>Remote latency</span></div>
+              <strong id="remote-latency">N/A</strong>
+              <small id="remote-latency-label">Waiting for samples</small>
+              <div class="metric-foot">
+                <span id="remote-latency-avg">Avg N/A</span>
+                <span id="remote-latency-p95">P95 N/A</span>
+                <span id="remote-latency-n">N 0</span>
+              </div>
+            </article>
+
+            <article class="metric-card score-card">
+              <div class="metric-card-top"><span class="mini-icon">DISP</span><span>Frame displacement</span></div>
+              <strong id="frame-displacement">N/A</strong>
+              <small id="rolling-displacement">Rolling avg N/A</small>
+            </article>
+
+            <article class="metric-card score-card">
+              <div class="metric-card-top"><span class="mini-icon">SUM</span><span>Cumulative score</span></div>
+              <strong id="cumulative-score">N/A</strong>
+              <small>Lower is better</small>
+            </article>
+          </section>
+        </section>
+
+        <section class="signal-grid">
+          <section class="panel infrastructure-panel">
+            <div class="panel-heading">
+              <div>
+                <span class="eyebrow">Live signals</span>
+                <h2>Infrastructure</h2>
+              </div>
+              <span class="mini-icon">RF</span>
+            </div>
+            <div class="infra-columns">
+              <div class="infra-group">
+                <h3>GPU server</h3>
+                <dl>
+                  <div><dt>GPU utilization</dt><dd id="gpu-util">N/A</dd></div>
+                  <div><dt>GPU temp</dt><dd id="gpu-temp">N/A</dd></div>
+                  <div><dt>GPU memory</dt><dd id="gpu-memory">N/A</dd></div>
+                  <div><dt>YOLO queue</dt><dd id="yolo-queue">N/A</dd></div>
+                  <div><dt>Requests/s</dt><dd id="gpu-rps">N/A</dd></div>
+                </dl>
+              </div>
+              <div class="infra-group">
+                <h3>Network path</h3>
+                <dl>
+                  <div><dt>Mode</dt><dd id="net-mode">N/A</dd></div>
+                  <div><dt>Bandwidth</dt><dd id="net-bandwidth">N/A</dd></div>
+                  <div><dt>Delay</dt><dd id="net-delay">N/A</dd></div>
+                  <div><dt>Jitter</dt><dd id="net-jitter">N/A</dd></div>
+                  <div><dt>Packet loss</dt><dd id="net-loss">N/A</dd></div>
+                </dl>
+              </div>
+              <div class="infra-group status-group">
+                <h3>Data links</h3>
+                <span class="status-dot-wrap"><i id="kafka-dot" class="status-dot"></i><span>Kafka metrics</span></span>
+                <span class="status-dot-wrap"><i id="frames-dot" class="status-dot"></i><span>Client frames</span></span>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel interpretation-panel">
+            <span class="mini-icon">INFO</span>
+            <div>
+              <h2>What does this mean?</h2>
+              <p id="interpretation-text">Waiting for metrics.</p>
+            </div>
+          </section>
+        </section>
+
+        <section class="charts-section">
+          <div class="section-heading">
+            <span class="eyebrow">Rolling window</span>
+            <h2>Live Trends</h2>
+          </div>
+          <div id="charts-grid" class="charts-grid"></div>
+        </section>
+
+        <section class="panel summary-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">Current run</span>
+              <h2>Run Summary</h2>
+            </div>
+            <span class="mini-icon">RUN</span>
+          </div>
+          <div class="summary-grid">
+            <div><span>Total frames</span><strong id="summary-total">0</strong></div>
+            <div><span>Local frames</span><strong id="summary-local">0</strong></div>
+            <div><span>Remote frames</span><strong id="summary-remote">0</strong></div>
+            <div><span>Average latency</span><strong id="summary-latency">N/A</strong></div>
+            <div><span>Average displacement</span><strong id="summary-displacement">N/A</strong></div>
+            <div><span>Final score</span><strong id="summary-score">N/A</strong></div>
+            <div><span>Best / worst latency</span><strong id="summary-latency-range">N/A / N/A</strong></div>
+            <div><span>Best / worst displacement</span><strong id="summary-displacement-range">N/A / N/A</strong></div>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script src="/app.js" defer></script>
+  </body>
+</html>
