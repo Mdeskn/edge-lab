@@ -110,18 +110,29 @@ class Dispatcher:
                                         tensor, frame.shape
                                     )
                             except Exception as exc:
-                                logger.warning(
-                                    "Remote inference failed: %s, falling back to local", exc
-                                )
-                                with self.tracer.start_as_current_span(
-                                    "local_inference_fallback"
-                                ) as fb_span:
-                                    fb_span.set_attribute("model.name", "yolov10n")
-                                    tensor = preprocess_once("preprocess_fallback")
-                                    pred_x, pred_y, pred_x1, pred_y1, pred_x2, pred_y2 = self.local_server.infer(
-                                        tensor, frame.shape
+                                if self.config.remote_fallback_to_local:
+                                    logger.warning(
+                                        "Remote inference failed: %s, falling back to local", exc
                                     )
-                                result_mode = "local_fallback"
+                                    with self.tracer.start_as_current_span(
+                                        "local_inference_fallback"
+                                    ) as fb_span:
+                                        fb_span.set_attribute("model.name", "yolov10n")
+                                        tensor = preprocess_once("preprocess_fallback")
+                                        pred_x, pred_y, pred_x1, pred_y1, pred_x2, pred_y2 = self.local_server.infer(
+                                            tensor, frame.shape
+                                        )
+                                    result_mode = "local_fallback"
+                                else:
+                                    logger.warning(
+                                        "Remote inference failed: %s, skipping local fallback",
+                                        exc,
+                                    )
+                                    pred_x = pred_y = pred_x1 = pred_y1 = pred_x2 = pred_y2 = 0.0
+                                    result_mode = "remote_unavailable"
+                    elif requested_mode == "remote" and not self.config.remote_fallback_to_local:
+                        result_mode = "remote_unavailable"
+                        pred_x = pred_y = pred_x1 = pred_y1 = pred_x2 = pred_y2 = 0.0
                     else:
                         result_mode = "local"
                         tensor = preprocess_once()

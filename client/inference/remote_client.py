@@ -49,6 +49,7 @@ class RemoteClient:
             if target_conf_threshold is not None
             else conf_threshold
         )
+        self._triton_url = triton_url
         self._timeout = timeout
         self._remote_inference_url = remote_inference_url.rstrip("/")
         self._jpeg_quality = min(max(jpeg_quality, 1), 100)
@@ -65,8 +66,8 @@ class RemoteClient:
 
     def is_available(self) -> bool:
         """
-        Return True if the remote endpoint was reachable at startup and hasn't
-        failed recently.
+        Return True if the remote endpoint is reachable and has not failed
+        recently. If the startup check failed, retry after the cooldown window.
 
         A single timed-out call would otherwise block the Dispatcher's single
         processing thread for the full per-call timeout on every subsequent
@@ -77,7 +78,16 @@ class RemoteClient:
         elapses.
         """
         if not self._available:
-            return False
+            now = time.time()
+            if (
+                self._last_failure_time is None
+                or now - self._last_failure_time >= self._failure_cooldown
+            ):
+                if self._mode == "http_jpeg":
+                    self._connect_http_gateway()
+                else:
+                    self._connect_triton_grpc(self._triton_url)
+            return self._available
         if self._last_failure_time is not None:
             if time.time() - self._last_failure_time < self._failure_cooldown:
                 return False
@@ -113,11 +123,14 @@ class RemoteClient:
             )
             resp.raise_for_status()
             self._available = True
+            self._last_failure_time = None
             logger.info(
                 "RemoteClient connected to JPEG inference API at %s",
                 self._remote_inference_url,
             )
         except Exception as exc:
+            self._available = False
+            self._last_failure_time = time.time()
             logger.error(
                 "RemoteClient failed to connect to JPEG inference API at %s: %s",
                 self._remote_inference_url,
@@ -131,12 +144,17 @@ class RemoteClient:
             alive = self._client.is_server_live()
             if alive:
                 self._available = True
+                self._last_failure_time = None
                 logger.info("RemoteClient connected to Triton at %s", triton_url)
             else:
+                self._available = False
+                self._last_failure_time = time.time()
                 logger.error(
                     "Triton health check returned not-live for %s", triton_url
                 )
         except Exception as exc:
+            self._available = False
+            self._last_failure_time = time.time()
             logger.error("RemoteClient failed to connect to Triton at %s: %s", triton_url, exc)
 
     def _infer_http_jpeg(self, frame: np.ndarray) -> tuple:

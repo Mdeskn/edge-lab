@@ -230,6 +230,7 @@ def main() -> None:
     logger.info("  model_path           : %s", config.model_path)
     logger.info("  remote_inference_url : %s", config.remote_inference_url or "(not set)")
     logger.info("  remote_jpeg_quality  : %d", config.remote_jpeg_quality)
+    logger.info("  remote_fallback_local: %s", config.remote_fallback_to_local)
     logger.info("  triton_url           : %s", config.triton_url or "(not set, legacy only)")
     logger.info("  kafka_brokers        : %s", config.kafka_brokers or "(not set)")
     logger.info("  otlp_endpoint        : %s", config.otlp_endpoint or "(not set)")

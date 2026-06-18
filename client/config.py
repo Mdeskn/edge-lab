@@ -25,6 +25,7 @@ class Config:
     remote_jpeg_quality: int
     remote_inference_timeout: float
     remote_failure_cooldown_sec: float
+    remote_fallback_to_local: bool
     kafka_brokers: str
     kafka_app_topic: str        # APP_METRICS_TOPIC env var; fallback: "dnn_partition.client_metrics"
     kafka_gpu_topic: str
@@ -81,6 +82,9 @@ def load_config() -> Config:
         remote_jpeg_quality=int(os.environ.get("REMOTE_JPEG_QUALITY", "80")),
         remote_inference_timeout=float(os.environ.get("REMOTE_INFERENCE_TIMEOUT_SEC", "1.5")),
         remote_failure_cooldown_sec=float(os.environ.get("REMOTE_FAILURE_COOLDOWN_SEC", "3.0")),
+        remote_fallback_to_local=os.environ.get(
+            "REMOTE_FALLBACK_TO_LOCAL", "true"
+        ).lower() == "true",
         kafka_brokers=os.environ.get("KAFKA_BROKERS", ""),
         kafka_app_topic=os.environ.get("APP_METRICS_TOPIC", "").strip()
             or "dnn_partition.client_metrics",

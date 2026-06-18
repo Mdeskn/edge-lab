@@ -63,7 +63,7 @@ def load_settings() -> Settings:
         target_conf_threshold=float(
             os.environ.get("TARGET_CONFIDENCE_THRESHOLD", str(conf_threshold))
         ),
-        triton_timeout=float(os.environ.get("TRITON_TIMEOUT_SEC", "1.0")),
+        triton_timeout=float(os.environ.get("TRITON_TIMEOUT_SEC", "1.4")),
     )
 
 
@@ -88,12 +88,13 @@ class TritonGateway:
         self.settings = settings
         self._client = grpcclient.InferenceServerClient(url=settings.triton_url)
         logger.info(
-            "Remote inference gateway configured triton_url=%s model=%s input=%dx%d target_class=%s",
+            "Remote inference gateway configured triton_url=%s model=%s input=%dx%d target_class=%s triton_timeout=%.2fs",
             settings.triton_url,
             settings.model_name,
             settings.input_width,
             settings.input_height,
             settings.target_class_id if settings.target_class_id is not None else "any",
+            settings.triton_timeout,
         )
 
     def health(self) -> dict[str, Any]:
@@ -108,6 +109,7 @@ class TritonGateway:
             "model_ready": model_ready,
             "triton_url": self.settings.triton_url,
             "model_name": self.settings.model_name,
+            "triton_timeout_sec": self.settings.triton_timeout,
         }
 
     def infer(self, preprocessed_frame: np.ndarray, original_shape: tuple[int, ...]) -> tuple:
