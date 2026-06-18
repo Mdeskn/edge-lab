@@ -57,6 +57,7 @@ class Config:
     sp_agent_debug_metrics: bool
     latency_probes_enabled: bool
     latency_probe_interval_sec: float
+    latency_deadline_ms: float
 
 
 def load_config() -> Config:
@@ -122,6 +123,7 @@ def load_config() -> Config:
             "true" if manual_placement_control else "false",
         ).lower() == "true",
         latency_probe_interval_sec=float(os.environ.get("LATENCY_PROBE_INTERVAL_SEC", "2.0")),
+        latency_deadline_ms=float(os.environ.get("LATENCY_DEADLINE_MS", "300.0")),
     )
 
 

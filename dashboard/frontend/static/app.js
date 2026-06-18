@@ -15,6 +15,7 @@ const phaseDescriptions = {
 
 const chartDefs = [
   { title: "Latency", unit: " ms", series: [{ label: "latency", color: "#147d92", source: "frames", key: "latency_ms" }] },
+  { title: "Latency jitter", unit: " ms", series: [{ label: "jitter", color: "#d4560e", source: "frames", key: "jitter_ms" }] },
   { title: "Frame displacement", unit: " px", series: [{ label: "distance", color: "#d14a45", source: "frames", key: "displacement_px" }] },
   { title: "Cumulative displacement", unit: " px", series: [{ label: "score", color: "#b37916", source: "frames", key: "cumulative_displacement_px" }] },
   {
@@ -176,12 +177,23 @@ function renderMetrics(state) {
   text("processing-mode", mode);
 
   renderPlacement(state);
-  renderLatency("local", state.latency?.local, mode === "LOCAL");
+  renderLatency("local", state.latency?.local, mode === "LOCAL" || mode.startsWith("LOCAL"));
   renderLatency("remote", state.latency?.remote, mode === "REMOTE");
 
   text("frame-displacement", metric(state.latest?.displacement_px, " px"));
   text("rolling-displacement", `Rolling avg ${metric(state.displacement?.rolling_average_px, " px")}`);
   text("cumulative-score", metric(state.latest?.cumulative_displacement_px, " px", 0));
+
+  const jitter = state.latest?.jitter_ms;
+  text("current-jitter", metric(jitter, " ms"));
+  const jitterValues = (state.history?.frames || [])
+    .map((frame) => frame.jitter_ms)
+    .filter((value) => value != null && value > 0);
+  const recentJitter = jitterValues.slice(-20);
+  const avgJitter = recentJitter.length
+    ? recentJitter.reduce((sum, value) => sum + value, 0) / recentJitter.length
+    : null;
+  text("jitter-avg", `Rolling avg ${metric(avgJitter, " ms")}`);
 }
 
 function renderPlacement(state) {
@@ -210,8 +222,8 @@ function renderPlacement(state) {
 
 function renderLatency(mode, summary, active) {
   const prefix = `${mode}-latency`;
-  const card = el[`${prefix}-card`];
-  card.classList.toggle("active-latency", active);
+  const side = el[`${prefix}-card`];
+  if (side) side.classList.toggle("is-active", active);
   text(prefix, metric(summary?.latest_ms, " ms"));
   text(`${prefix}-label`, latencyLabel(summary, active));
   text(`${prefix}-avg`, `Avg ${metric(summary?.rolling_average_ms, " ms")}`);

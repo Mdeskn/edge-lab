@@ -51,6 +51,7 @@ class Scorer:
         self.results_file = results_file
         self._csv_writer = None
         self._display_latencies: deque = deque(maxlen=5)
+        self._last_latency_ms: float | None = None
 
     def run(self) -> None:
         """
@@ -70,6 +71,8 @@ class Scorer:
                 "experiment_phase",
                 "processing_mode",
                 "latency_ms",
+                "jitter_ms",
+                "deadline_miss",
                 "true_x",
                 "true_y",
                 "predicted_x",
@@ -105,6 +108,16 @@ class Scorer:
             self._display_latencies.append(latency_ms)
             avg_display_latency = sum(self._display_latencies) / len(self._display_latencies)
 
+            # Jitter: absolute frame-to-frame latency variation
+            if self._last_latency_ms is not None:
+                jitter_ms = abs(latency_ms - self._last_latency_ms)
+            else:
+                jitter_ms = 0.0
+            self._last_latency_ms = latency_ms
+
+            # Deadline miss
+            deadline_miss = latency_ms > self.config.latency_deadline_ms
+
             has_ground_truth = gt_x is not None and gt_y is not None
             # (0.0, 0.0) is the sentinel returned by both inference backends when
             # no detection passes the confidence threshold.
@@ -126,7 +139,9 @@ class Scorer:
                     current_phase,
                     displacement_px,
                     latency_ms,
+                    jitter_ms,
                     mode,
+                    deadline_miss=deadline_miss,
                 )
             score_summary = self.shared_state.get_score_summary()
 
@@ -144,6 +159,8 @@ class Scorer:
                         current_phase,
                         mode,
                         round(latency_ms, 2),
+                        round(jitter_ms, 2),
+                        int(deadline_miss),
                         _round_optional(gt_x),
                         _round_optional(gt_y),
                         round(pred_x, 2),
@@ -162,6 +179,8 @@ class Scorer:
                     experiment_phase=current_phase,
                     processing_mode=mode,
                     latency_ms=latency_ms,
+                    jitter_ms=round(jitter_ms, 2),
+                    deadline_miss=bool(deadline_miss),
                     displacement_px=displacement_px,
                     true_x=gt_x,
                     true_y=gt_y,
@@ -184,6 +203,8 @@ class Scorer:
                     predicted_y=pred_y,
                     processing_mode=mode,
                     latency_ms=latency_ms,
+                    jitter_ms=round(jitter_ms, 2),
+                    deadline_miss=bool(deadline_miss),
                     displacement_px=displacement_px,
                     cumulative_displacement_px=score_summary["cumulative_displacement"],
                     experiment_phase=current_phase,

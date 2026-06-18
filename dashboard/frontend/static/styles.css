@@ -276,7 +276,31 @@ h2 {
 .metric-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+    "mode mode mode"
+    "latency latency latency"
+    "jitter disp score";
+}
+
+.metric-grid > .mode-card {
+  grid-area: mode;
+}
+
+.metric-grid > .latency-compare-card {
+  grid-area: latency;
+}
+
+.metric-grid > .jitter-card {
+  grid-area: jitter;
+}
+
+.metric-grid > .displacement-card {
+  grid-area: disp;
+}
+
+.metric-grid > .cumulative-card {
+  grid-area: score;
 }
 
 .metric-card {
@@ -372,28 +396,75 @@ h2 {
   border-left: 4px solid #d9a735;
 }
 
-.latency-card {
-  border-left: 4px solid #879795;
+.jitter-card {
+  border-left: 4px solid #d4560e;
 }
 
-.latency-card.local-latency {
-  border-left-color: #26845a;
+.latency-compare-card {
+  padding: 15px;
 }
 
-.latency-card.remote-latency {
-  border-left-color: #6559a8;
+.latency-columns {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  gap: 0;
+  margin-top: 12px;
 }
 
-.latency-card.active-latency {
-  border-top: 5px solid #879795;
+.latency-divider {
+  background: #e3e9e8;
+  margin: 0 16px;
 }
 
-.latency-card.local-latency.active-latency {
-  border-top-color: #26845a;
+.latency-side {
+  display: flex;
+  padding: 4px 0;
+  flex-direction: column;
 }
 
-.latency-card.remote-latency.active-latency {
-  border-top-color: #6559a8;
+.latency-side-label {
+  margin-bottom: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.local-latency-side .latency-side-label {
+  color: #26845a;
+}
+
+.remote-latency-side .latency-side-label {
+  color: #6559a8;
+}
+
+.latency-side strong {
+  display: block;
+  margin-top: 0;
+  color: #1c302f;
+  font-size: 28px;
+  line-height: 1;
+  word-break: break-word;
+}
+
+.latency-side small {
+  margin-top: 5px;
+  color: #667a78;
+  font-size: 12px;
+}
+
+.latency-side.is-active {
+  margin: -4px;
+  padding: 8px;
+  border-radius: 6px;
+}
+
+.local-latency-side.is-active {
+  background: #eef9f4;
+}
+
+.remote-latency-side.is-active {
+  background: #f2f0fa;
 }
 
 .metric-foot {
@@ -478,7 +549,7 @@ dd {
 .charts-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 
 .chart-panel {
@@ -645,6 +716,25 @@ dd {
   .summary-grid,
   .infra-columns {
     grid-template-columns: 1fr;
+  }
+
+  .metric-grid {
+    grid-template-areas:
+      "mode"
+      "latency"
+      "jitter"
+      "disp"
+      "score";
+  }
+
+  .latency-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .latency-divider {
+    width: 100%;
+    height: 1px;
+    margin: 12px 0;
   }
 
   .infra-group,

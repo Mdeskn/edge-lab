@@ -64,6 +64,23 @@ class Dispatcher:
             except queue.Empty:
                 continue
 
+            # Drain stale frames that piled up while inference was running.
+            # Always process the most recent frame so displacement reflects real movement.
+            drained = 0
+            while True:
+                try:
+                    newer = self.reader_queue.get_nowait()
+                    frame_number, frame, gt_x, gt_y, enqueue_time = newer
+                    drained += 1
+                except queue.Empty:
+                    break
+            if drained > 0:
+                logger.debug(
+                    "Dispatcher: drained %d stale frame(s), processing frame %d",
+                    drained,
+                    frame_number,
+                )
+
             dispatch_start = time.time()
             requested_mode = self.shared_state.get_processing_mode()
 

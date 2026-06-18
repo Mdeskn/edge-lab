@@ -71,6 +71,8 @@ class DashboardPublisher:
         displacement_px: float | None,
         cumulative_displacement_px: float,
         experiment_phase: str,
+        jitter_ms: float = 0.0,
+        deadline_miss: bool = False,
     ) -> None:
         """Encode and enqueue the newest annotated frame when the FPS limit allows it."""
         if not self._enabled:
@@ -101,6 +103,8 @@ class DashboardPublisher:
                 "predicted_y": round(predicted_y, 2),
                 "processing_mode": processing_mode,
                 "latency_ms": round(latency_ms, 2),
+                "jitter_ms": round(jitter_ms, 2),
+                "deadline_miss": int(deadline_miss),
                 "displacement_px": _round_optional(displacement_px),
                 "cumulative_displacement_px": round(cumulative_displacement_px, 2),
                 "experiment_phase": experiment_phase,

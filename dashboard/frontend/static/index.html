@@ -69,35 +69,46 @@
               <small id="placement-status" class="placement-status">Automatic SP-agent</small>
             </article>
 
-            <article id="local-latency-card" class="metric-card latency-card local-latency">
-              <div class="metric-card-top"><span class="mini-icon">LAT</span><span>Local latency</span></div>
-              <strong id="local-latency">N/A</strong>
-              <small id="local-latency-label">Waiting for samples</small>
-              <div class="metric-foot">
-                <span id="local-latency-avg">Avg N/A</span>
-                <span id="local-latency-p95">P95 N/A</span>
-                <span id="local-latency-n">N 0</span>
+            <article class="metric-card latency-compare-card">
+              <div class="metric-card-top"><span class="mini-icon">LAT</span><span>Inference latency</span></div>
+              <div class="latency-columns">
+                <div id="local-latency-card" class="latency-side local-latency-side">
+                  <span class="latency-side-label">LOCAL</span>
+                  <strong id="local-latency">N/A</strong>
+                  <small id="local-latency-label">Waiting for samples</small>
+                  <div class="metric-foot">
+                    <span id="local-latency-avg">Avg N/A</span>
+                    <span id="local-latency-p95">P95 N/A</span>
+                    <span id="local-latency-n">N 0</span>
+                  </div>
+                </div>
+                <div class="latency-divider"></div>
+                <div id="remote-latency-card" class="latency-side remote-latency-side">
+                  <span class="latency-side-label">REMOTE</span>
+                  <strong id="remote-latency">N/A</strong>
+                  <small id="remote-latency-label">Waiting for samples</small>
+                  <div class="metric-foot">
+                    <span id="remote-latency-avg">Avg N/A</span>
+                    <span id="remote-latency-p95">P95 N/A</span>
+                    <span id="remote-latency-n">N 0</span>
+                  </div>
+                </div>
               </div>
             </article>
 
-            <article id="remote-latency-card" class="metric-card latency-card remote-latency">
-              <div class="metric-card-top"><span class="mini-icon">LAT</span><span>Remote latency</span></div>
-              <strong id="remote-latency">N/A</strong>
-              <small id="remote-latency-label">Waiting for samples</small>
-              <div class="metric-foot">
-                <span id="remote-latency-avg">Avg N/A</span>
-                <span id="remote-latency-p95">P95 N/A</span>
-                <span id="remote-latency-n">N 0</span>
-              </div>
+            <article class="metric-card jitter-card">
+              <div class="metric-card-top"><span class="mini-icon">JIT</span><span>Latency jitter</span></div>
+              <strong id="current-jitter">N/A</strong>
+              <small id="jitter-avg">Rolling avg N/A</small>
             </article>
 
-            <article class="metric-card score-card">
+            <article class="metric-card score-card displacement-card">
               <div class="metric-card-top"><span class="mini-icon">DISP</span><span>Frame displacement</span></div>
               <strong id="frame-displacement">N/A</strong>
               <small id="rolling-displacement">Rolling avg N/A</small>
             </article>
 
-            <article class="metric-card score-card">
+            <article class="metric-card score-card cumulative-card">
               <div class="metric-card-top"><span class="mini-icon">SUM</span><span>Cumulative score</span></div>
               <strong id="cumulative-score">N/A</strong>
               <small>Lower is better</small>

@@ -60,6 +60,8 @@ class AppMetricsPublisher:
         predicted_y: float,
         cumulative_displacement_px: float,
         timestamp: float | None = None,
+        jitter_ms: float = 0.0,
+        deadline_miss: bool = False,
     ) -> None:
         """
         Serialize metrics to JSON and produce to the configured topic.
@@ -77,6 +79,8 @@ class AppMetricsPublisher:
             "experiment_phase": experiment_phase,
             "processing_mode": processing_mode,
             "latency_ms": round(latency_ms, 2),
+            "jitter_ms": round(jitter_ms, 2),
+            "deadline_miss": int(deadline_miss),
             "displacement_px": _round_optional(displacement_px),
             "true_x": _round_optional(true_x),
             "true_y": _round_optional(true_y),

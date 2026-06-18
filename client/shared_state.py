@@ -179,9 +179,11 @@ class SharedState:
         phase: str,
         displacement_px: float | None,
         latency_ms: float,
+        jitter_ms: float,
         processing_mode: str,
+        deadline_miss: bool = False,
     ) -> None:
-        """Record scored per-phase latency, displacement, and placement split."""
+        """Record scored per-phase latency, jitter, displacement, deadline miss, and placement split."""
         if displacement_px is None:
             return
 
@@ -192,6 +194,10 @@ class SharedState:
             stats["frames"] += 1
             stats["total_latency_ms"] += latency_ms
             stats["latency_frames"] += 1
+            stats["total_jitter_ms"] += jitter_ms
+            stats["jitter_frames"] += 1
+            if deadline_miss:
+                stats["deadline_misses"] += 1
             if processing_mode == "remote":
                 stats["remote_frames"] += 1
             elif processing_mode == "local_fallback":
@@ -207,6 +213,9 @@ class SharedState:
                 "frames": 0,
                 "total_latency_ms": 0.0,
                 "latency_frames": 0,
+                "total_jitter_ms": 0.0,
+                "jitter_frames": 0,
+                "deadline_misses": 0,
                 "local_frames": 0,
                 "remote_frames": 0,
                 "local_fallback_frames": 0,

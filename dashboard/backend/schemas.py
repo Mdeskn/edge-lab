@@ -16,6 +16,8 @@ class AppMetric(BaseModel):
     experiment_phase: str = "unknown"
     processing_mode: str = "unknown"
     latency_ms: float | None = None
+    jitter_ms: float | None = None
+    deadline_miss: int | None = None
     displacement_px: float | None = None
     true_x: float | None = None
     true_y: float | None = None
