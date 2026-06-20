@@ -12,7 +12,7 @@ from typing import Any
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 
 from .kafka_consumer import DashboardKafkaConsumer
 from .schemas import FrameUpdate, PlacementControlRequest
@@ -263,6 +263,36 @@ def get_frame() -> Response:
         content=jpeg,
         media_type="image/jpeg",
         headers={"Cache-Control": "no-store, max-age=0"},
+    )
+
+
+@app.get("/api/video-stream")
+async def video_stream() -> StreamingResponse:
+    """Stream each new annotated JPEG without coupling video to state updates."""
+    async def frames():
+        last_sequence = -1
+        while True:
+            sequence, jpeg = dashboard_state.frame_snapshot()
+            if jpeg is None or sequence == last_sequence:
+                await asyncio.sleep(0.04)
+                continue
+
+            last_sequence = sequence
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n"
+                + f"Content-Length: {len(jpeg)}\r\n\r\n".encode("ascii")
+                + jpeg
+                + b"\r\n"
+            )
+
+    return StreamingResponse(
+        frames(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

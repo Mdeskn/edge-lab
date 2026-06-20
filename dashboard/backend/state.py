@@ -316,6 +316,11 @@ class DashboardState:
         with self._lock:
             return self._group.frame_image
 
+    def frame_snapshot(self) -> tuple[int, bytes | None]:
+        """Return the current frame sequence and immutable JPEG bytes."""
+        with self._lock:
+            return self._group.frame_sequence, self._group.frame_image
+
     def reset(self) -> None:
         """Reset cumulative counters and history.
 

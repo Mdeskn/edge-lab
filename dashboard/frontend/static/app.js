@@ -42,8 +42,8 @@ let socket = null;
 let stopped = false;
 let pendingMode = null;
 let controlError = "";
-let displayedFrameUrl = "";
-let requestedFrameUrl = "";
+let videoStreamStarted = false;
+let videoReconnectTimer = null;
 let pendingSocketState = null;
 let socketRenderTimer = null;
 
@@ -110,6 +110,7 @@ function connectSocket() {
 window.addEventListener("beforeunload", () => {
   stopped = true;
   if (socketRenderTimer) window.clearTimeout(socketRenderTimer);
+  if (videoReconnectTimer) window.clearTimeout(videoReconnectTimer);
   if (socket) socket.close();
 });
 
@@ -176,26 +177,30 @@ function renderTopbar(state) {
 
 function renderVideo(state) {
   text("frame-counter", `Frame ${state.frame?.frame_number ?? "N/A"}`);
-  const frameUrl = state.frame?.url ? apiUrl(state.frame.url) : "";
-  if (frameUrl && frameUrl !== requestedFrameUrl) {
-    requestedFrameUrl = frameUrl;
-    const image = new Image();
-    image.onload = () => {
-      if (requestedFrameUrl !== frameUrl) return;
-      displayedFrameUrl = frameUrl;
-      el["video-frame"].src = frameUrl;
-      el["video-frame"].classList.add("is-visible");
-      el["video-empty"].classList.add("hidden");
-    };
-    image.onerror = () => {
-      if (requestedFrameUrl === frameUrl) requestedFrameUrl = displayedFrameUrl;
-    };
-    image.src = frameUrl;
-  }
+  if (state.frame?.url && !videoStreamStarted) startVideoStream();
 
   const latest = state.latest || {};
   text("gt-coords", `GT (${coords(latest.true_x, latest.true_y)})`);
   text("pred-coords", `Pred (${coords(latest.predicted_x, latest.predicted_y)})`);
+}
+
+function startVideoStream() {
+  if (stopped || videoStreamStarted) return;
+  videoStreamStarted = true;
+
+  const image = el["video-frame"];
+  image.classList.add("is-visible");
+  el["video-empty"].classList.add("hidden");
+  image.onerror = () => {
+    videoStreamStarted = false;
+    if (!stopped && !videoReconnectTimer) {
+      videoReconnectTimer = window.setTimeout(() => {
+        videoReconnectTimer = null;
+        startVideoStream();
+      }, 1500);
+    }
+  };
+  image.src = apiUrl(`/api/video-stream?v=${Date.now()}`);
 }
 
 function renderMetrics(state) {

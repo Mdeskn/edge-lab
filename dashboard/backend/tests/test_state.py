@@ -77,3 +77,13 @@ def test_reset_preserves_latest_frame_but_clears_summary() -> None:
     assert snapshot["summary"]["total_frames"] == 0
     assert snapshot["frame"]["url"] == "/api/frame?v=1"
     assert state.frame_image() == b"jpeg"
+
+
+def test_frame_snapshot_returns_sequence_and_image() -> None:
+    state = DashboardState(max_history=10, group_id="3")
+    assert state.frame_snapshot() == (0, None)
+
+    state.update_frame(metric(), b"first")
+    state.update_frame(metric(timestamp=2.0), b"second")
+
+    assert state.frame_snapshot() == (2, b"second")
