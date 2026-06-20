@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 
 from .kafka_consumer import DashboardKafkaConsumer
-from .schemas import FrameUpdate, PlacementControlRequest, PreviewUpdate
+from .schemas import AppMetric, FrameUpdate, PlacementControlRequest, PreviewUpdate
 from .state import DashboardState
 
 load_dotenv()
@@ -200,6 +200,19 @@ async def post_preview(update: PreviewUpdate) -> dict[str, Any]:
     dashboard_state.update_preview(metric, jpeg)
     await socket_manager.broadcast()
     return {"accepted": True, "group_id": dashboard_state.group_id}
+
+
+@app.post("/api/metric", status_code=202)
+async def post_metric(update: AppMetric) -> dict[str, Any]:
+    """Accept scored data directly; Kafka duplicates are safely deduplicated."""
+    is_new = dashboard_state.update_app_metric(update.model_dump())
+    if is_new:
+        await socket_manager.broadcast()
+    return {
+        "accepted": True,
+        "new_sample": is_new,
+        "group_id": dashboard_state.group_id,
+    }
 
 
 @app.post("/api/reset", status_code=200)

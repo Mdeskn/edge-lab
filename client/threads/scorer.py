@@ -9,6 +9,7 @@ import math
 import queue
 
 from config import Config
+from metrics.dashboard_publisher import DashboardPublisher
 from shared_state import SharedState
 from metrics.kafka_publisher import AppMetricsPublisher
 
@@ -27,6 +28,7 @@ class Scorer:
         shared_state: SharedState,
         scorer_queue: queue.Queue,
         kafka_publisher: AppMetricsPublisher,
+        dashboard_publisher: DashboardPublisher,
         results_file: io.IOBase,
     ):
         """Store dependencies and CSV writer state."""
@@ -34,6 +36,7 @@ class Scorer:
         self.shared_state = shared_state
         self.scorer_queue = scorer_queue
         self.kafka_publisher = kafka_publisher
+        self.dashboard_publisher = dashboard_publisher
         self.results_file = results_file
         self._csv_writer = None
         self._last_latency_ms: float | None = None
@@ -168,6 +171,22 @@ class Scorer:
                 )
             except Exception as exc:
                 logger.error("Kafka publish error in Scorer: %s", exc)
+
+            self.dashboard_publisher.publish_metric(
+                frame_number=frame_number,
+                timestamp=result_time,
+                true_x=gt_x,
+                true_y=gt_y,
+                predicted_x=pred_x,
+                predicted_y=pred_y,
+                processing_mode=mode,
+                latency_ms=latency_ms,
+                jitter_ms=jitter_ms,
+                deadline_miss=deadline_miss,
+                displacement_px=displacement_px,
+                cumulative_displacement_px=score_summary["cumulative_displacement"],
+                experiment_phase=current_phase,
+            )
 
             if displacement_px is not None and has_prediction:
                 frame_h, frame_w = frame.shape[:2]

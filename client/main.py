@@ -319,6 +319,7 @@ def main() -> None:
         shared_state,
         scorer_queue,
         kafka_publisher,
+        dashboard_publisher,
         results_file,
     )
     sp_agent = SPAgent(config, shared_state)

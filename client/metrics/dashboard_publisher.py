@@ -24,15 +24,19 @@ class DashboardPublisher:
 
     def __init__(self, config: Config):
         self._enabled = config.dashboard_enabled
-        self._url = f"{config.dashboard_url.rstrip('/')}/api/preview"
+        base_url = config.dashboard_url.rstrip("/")
+        self._preview_url = f"{base_url}/api/preview"
+        self._metric_url = f"{base_url}/api/metric"
         self._fps = max(config.dashboard_fps, 0.1)
         self._jpeg_quality = min(max(config.dashboard_jpeg_quality, 1), 100)
         self._frame_width = max(config.dashboard_frame_width, 0)
         self._last_publish_time = 0.0
-        self._queue: queue.Queue = queue.Queue(maxsize=1)
+        self._preview_queue: queue.Queue = queue.Queue(maxsize=1)
+        self._metric_queue: queue.Queue = queue.Queue(maxsize=1)
         self._stop_event = threading.Event()
-        self._session = None
-        self._worker = None
+        self._preview_session = None
+        self._metric_session = None
+        self._workers: list[threading.Thread] = []
 
         if not self._enabled:
             logger.info("Dashboard publishing disabled")
@@ -41,19 +45,71 @@ class DashboardPublisher:
         try:
             import requests
 
-            self._session = requests.Session()
+            self._preview_session = requests.Session()
+            self._metric_session = requests.Session()
         except ImportError:
             self._enabled = False
             logger.warning("Dashboard publishing disabled: install the 'requests' package")
             return
 
-        self._worker = threading.Thread(
-            target=self._run,
-            name="dashboard-preview-publisher",
-            daemon=True,
+        self._workers = [
+            threading.Thread(
+                target=self._run_preview,
+                name="dashboard-preview-publisher",
+                daemon=True,
+            ),
+            threading.Thread(
+                target=self._run_metrics,
+                name="dashboard-metrics-publisher",
+                daemon=True,
+            ),
+        ]
+        for worker in self._workers:
+            worker.start()
+        logger.info(
+            "Dashboard publishing enabled: preview=%s fps=%.1f metrics=%s",
+            self._preview_url,
+            self._fps,
+            self._metric_url,
         )
-        self._worker.start()
-        logger.info("Dashboard preview enabled: url=%s fps=%.1f", self._url, self._fps)
+
+    def publish_metric(
+        self,
+        *,
+        frame_number: int,
+        timestamp: float,
+        true_x: float | None,
+        true_y: float | None,
+        predicted_x: float,
+        predicted_y: float,
+        processing_mode: str,
+        latency_ms: float,
+        jitter_ms: float,
+        deadline_miss: bool,
+        displacement_px: float | None,
+        cumulative_displacement_px: float,
+        experiment_phase: str,
+    ) -> None:
+        """Queue one scored record for direct low-latency dashboard updates."""
+        if not self._enabled:
+            return
+        payload = {
+            "event_type": "scored_frame",
+            "timestamp": timestamp,
+            "frame_number": frame_number,
+            "experiment_phase": experiment_phase,
+            "processing_mode": processing_mode,
+            "latency_ms": round(latency_ms, 2),
+            "jitter_ms": round(jitter_ms, 2),
+            "deadline_miss": int(deadline_miss),
+            "displacement_px": _round_optional(displacement_px),
+            "true_x": _round_optional(true_x),
+            "true_y": _round_optional(true_y),
+            "predicted_x": round(predicted_x, 2),
+            "predicted_y": round(predicted_y, 2),
+            "cumulative_displacement_px": round(cumulative_displacement_px, 2),
+        }
+        self._replace_queued(self._metric_queue, payload)
 
     def publish_preview(
         self,
@@ -81,22 +137,24 @@ class DashboardPublisher:
             "true_y": true_y,
             "prediction": dict(prediction) if prediction else None,
         }
-        self._replace_queued(item)
+        self._replace_queued(self._preview_queue, item)
 
     def close(self) -> None:
         """Stop the publisher without delaying application shutdown."""
         if not self._enabled:
             return
         self._stop_event.set()
-        if self._worker:
-            self._worker.join(timeout=1.0)
-        if self._session:
-            self._session.close()
+        for worker in self._workers:
+            worker.join(timeout=1.0)
+        if self._preview_session:
+            self._preview_session.close()
+        if self._metric_session:
+            self._metric_session.close()
 
-    def _run(self) -> None:
+    def _run_preview(self) -> None:
         while not self._stop_event.is_set():
             try:
-                item = self._queue.get(timeout=0.25)
+                item = self._preview_queue.get(timeout=0.25)
             except queue.Empty:
                 continue
 
@@ -123,10 +181,30 @@ class DashboardPublisher:
                     "latency_ms": _round_optional(prediction.get("latency_ms")),
                     "image_base64": base64.b64encode(jpeg).decode("ascii"),
                 }
-                response = self._session.post(self._url, json=payload, timeout=0.75)
+                response = self._preview_session.post(
+                    self._preview_url,
+                    json=payload,
+                    timeout=0.75,
+                )
                 response.raise_for_status()
             except Exception as exc:
                 logger.debug("Dashboard preview unavailable: %s", exc)
+
+    def _run_metrics(self) -> None:
+        while not self._stop_event.is_set():
+            try:
+                payload = self._metric_queue.get(timeout=0.25)
+            except queue.Empty:
+                continue
+            try:
+                response = self._metric_session.post(
+                    self._metric_url,
+                    json=payload,
+                    timeout=0.75,
+                )
+                response.raise_for_status()
+            except Exception as exc:
+                logger.debug("Dashboard metrics unavailable: %s", exc)
 
     def _draw_preview(self, frame: np.ndarray, item: dict, prediction: dict | None) -> None:
         true_x = item["true_x"]
@@ -187,18 +265,19 @@ class DashboardPublisher:
         size = (self._frame_width, max(1, int(frame.shape[0] * scale)))
         return cv2.resize(frame, size, interpolation=cv2.INTER_AREA)
 
-    def _replace_queued(self, item: dict) -> None:
+    @staticmethod
+    def _replace_queued(target_queue: queue.Queue, item: dict) -> None:
         try:
-            self._queue.put_nowait(item)
+            target_queue.put_nowait(item)
             return
         except queue.Full:
             pass
         try:
-            self._queue.get_nowait()
+            target_queue.get_nowait()
         except queue.Empty:
             pass
         try:
-            self._queue.put_nowait(item)
+            target_queue.put_nowait(item)
         except queue.Full:
             pass
 
