@@ -15,8 +15,9 @@ logger = logging.getLogger(__name__)
 _FONT = cv2.FONT_HERSHEY_SIMPLEX
 _GREEN = (0, 255, 0)
 _YELLOW = (0, 255, 255)
-_ORANGE = (0, 165, 255)
+_CYAN = (255, 255, 0)
 _WHITE = (255, 255, 255)
+_DARK = (12, 20, 20)
 
 
 class DashboardPublisher:
@@ -225,18 +226,35 @@ class DashboardPublisher:
         )
         if has_prediction:
             pred = (int(pred_x), int(pred_y))
+            # Dark underlay + cyan cross + ring makes the prediction visible
+            # on any background after JPEG compression.
             cv2.drawMarker(
                 frame,
                 pred,
-                _ORANGE,
+                _DARK,
                 markerType=cv2.MARKER_CROSS,
-                markerSize=28,
-                thickness=2,
+                markerSize=48,
+                thickness=9,
             )
-            cv2.circle(frame, pred, 3, _ORANGE, -1)
-            cv2.putText(frame, "YOLO", (pred[0] + 10, pred[1] - 8), _FONT, 0.5, _ORANGE, 1)
+            cv2.drawMarker(
+                frame,
+                pred,
+                _CYAN,
+                markerType=cv2.MARKER_CROSS,
+                markerSize=48,
+                thickness=5,
+            )
+            cv2.circle(frame, pred, 22, _DARK, 4)
+            cv2.circle(frame, pred, 22, _CYAN, 2)
+            cv2.circle(frame, pred, 5, _DARK, -1)
+            cv2.circle(frame, pred, 3, _CYAN, -1)
+            label_at = (pred[0] + 14, pred[1] - 12)
+            cv2.putText(frame, "YOLO", label_at, _FONT, 0.65, _DARK, 5)
+            cv2.putText(frame, "YOLO", label_at, _FONT, 0.65, _CYAN, 2)
             if has_gt:
-                cv2.line(frame, (int(true_x), int(true_y)), pred, _YELLOW, 1)
+                gt = (int(true_x), int(true_y))
+                cv2.line(frame, gt, pred, _DARK, 4)
+                cv2.line(frame, gt, pred, _YELLOW, 2)
 
         prediction_frame = prediction.get("frame_number")
         lag = (
