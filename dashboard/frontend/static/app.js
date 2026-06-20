@@ -43,6 +43,9 @@ let stopped = false;
 let pendingMode = null;
 let controlError = "";
 let displayedFrameUrl = "";
+let requestedFrameUrl = "";
+let pendingSocketState = null;
+let socketRenderTimer = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   bindElements();
@@ -89,9 +92,11 @@ function connectSocket() {
   socket.onopen = () => setSocketConnected(true);
   socket.onmessage = (event) => {
     try {
-      render(JSON.parse(event.data));
+      queueSocketRender(JSON.parse(event.data));
       hideError();
-    } catch {
+    } catch (error) {
+      console.error("Dashboard update failed", error);
+      showError(`Dashboard update failed: ${error.message || "invalid state"}`);
       setSocketConnected(false);
     }
   };
@@ -104,8 +109,27 @@ function connectSocket() {
 
 window.addEventListener("beforeunload", () => {
   stopped = true;
+  if (socketRenderTimer) window.clearTimeout(socketRenderTimer);
   if (socket) socket.close();
 });
+
+function queueSocketRender(state) {
+  pendingSocketState = state;
+  if (!latestState) {
+    const initialState = pendingSocketState;
+    pendingSocketState = null;
+    render(initialState);
+    return;
+  }
+  if (socketRenderTimer) return;
+
+  socketRenderTimer = window.setTimeout(() => {
+    socketRenderTimer = null;
+    const newestState = pendingSocketState;
+    pendingSocketState = null;
+    if (newestState) render(newestState);
+  }, 250);
+}
 
 async function requestPlacement(mode) {
   if (!latestState || !latestState.placement_control?.enabled || pendingMode) return;
@@ -153,13 +177,18 @@ function renderTopbar(state) {
 function renderVideo(state) {
   text("frame-counter", `Frame ${state.frame?.frame_number ?? "N/A"}`);
   const frameUrl = state.frame?.url ? apiUrl(state.frame.url) : "";
-  if (frameUrl && frameUrl !== displayedFrameUrl) {
+  if (frameUrl && frameUrl !== requestedFrameUrl) {
+    requestedFrameUrl = frameUrl;
     const image = new Image();
     image.onload = () => {
+      if (requestedFrameUrl !== frameUrl) return;
       displayedFrameUrl = frameUrl;
       el["video-frame"].src = frameUrl;
       el["video-frame"].classList.add("is-visible");
       el["video-empty"].classList.add("hidden");
+    };
+    image.onerror = () => {
+      if (requestedFrameUrl === frameUrl) requestedFrameUrl = displayedFrameUrl;
     };
     image.src = frameUrl;
   }

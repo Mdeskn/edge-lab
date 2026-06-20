@@ -30,10 +30,14 @@ logger = logging.getLogger(__name__)
 class WebSocketManager:
     """Track browser clients and publish state snapshots."""
 
-    def __init__(self, state: DashboardState):
+    def __init__(self, state: DashboardState, max_fps: float = 2.0):
         self._state = state
         self._connections: set[WebSocket] = set()
         self._lock = asyncio.Lock()
+        self._broadcast_interval = 1.0 / max(max_fps, 0.1)
+        self._broadcast_task: asyncio.Task | None = None
+        self._broadcast_requested = False
+        self._last_broadcast_at = 0.0
 
     async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
@@ -45,13 +49,36 @@ class WebSocketManager:
             self._connections.discard(websocket)
 
     async def broadcast(self) -> None:
+        """Coalesce frequent producer updates into a bounded browser stream."""
+        self._broadcast_requested = True
+        if self._broadcast_task is None or self._broadcast_task.done():
+            self._broadcast_task = asyncio.create_task(self._broadcast_loop())
+
+    async def _broadcast_loop(self) -> None:
+        while self._broadcast_requested:
+            self._broadcast_requested = False
+            loop = asyncio.get_running_loop()
+            wait_seconds = self._broadcast_interval - (
+                loop.time() - self._last_broadcast_at
+            )
+            if wait_seconds > 0:
+                await asyncio.sleep(wait_seconds)
+
+            await self._send_snapshot()
+            self._last_broadcast_at = loop.time()
+
+    async def _send_snapshot(self) -> None:
         async with self._lock:
             connections = list(self._connections)
 
+        if not connections:
+            return
+
+        snapshot = self._state.snapshot()
         disconnected: list[WebSocket] = []
         for websocket in connections:
             try:
-                await websocket.send_json(self._state.snapshot())
+                await websocket.send_json(snapshot)
             except Exception:
                 disconnected.append(websocket)
 
@@ -62,6 +89,7 @@ class WebSocketManager:
 
 
 max_history = int(os.environ.get("DASHBOARD_MAX_HISTORY", "300"))
+websocket_fps = float(os.environ.get("DASHBOARD_WEBSOCKET_FPS", "2"))
 manual_placement_control = os.environ.get("MANUAL_PLACEMENT_CONTROL", "false").lower() == "true"
 placement_control_topic = os.environ.get("KAFKA_CONTROL_TOPIC", "edgelab.placement.control")
 kafka_brokers = os.environ.get("KAFKA_BROKERS", "")
@@ -71,7 +99,7 @@ dashboard_state = DashboardState(
     placement_control_enabled=manual_placement_control,
     placement_control_topic=placement_control_topic,
 )
-socket_manager = WebSocketManager(dashboard_state)
+socket_manager = WebSocketManager(dashboard_state, max_fps=websocket_fps)
 event_loop: asyncio.AbstractEventLoop | None = None
 placement_control_producer = None
 
