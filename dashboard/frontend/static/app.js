@@ -180,8 +180,14 @@ function renderVideo(state) {
   if (state.frame?.url && !videoStreamStarted) startVideoStream();
 
   const latest = state.latest || {};
-  text("gt-coords", `GT (${coords(latest.true_x, latest.true_y)})`);
-  text("pred-coords", `Pred (${coords(latest.predicted_x, latest.predicted_y)})`);
+  const display = state.frame || {};
+  text("gt-coords", `GT (${coords(display.true_x ?? latest.true_x, display.true_y ?? latest.true_y)})`);
+  const predictionFrame = display.prediction_frame_number;
+  const predictionLabel = predictionFrame != null ? `Pred f${predictionFrame}` : "Pred";
+  text(
+    "pred-coords",
+    `${predictionLabel} (${coords(display.predicted_x ?? latest.predicted_x, display.predicted_y ?? latest.predicted_y)})`,
+  );
 }
 
 function startVideoStream() {

@@ -26,6 +26,7 @@ class SharedState:
         self._current_frame_number: int = 0
         self._latest_frame_number: int | None = None
         self._latest_frame = None
+        self._latest_prediction: dict | None = None
 
         self._processing_mode: str = self._validate_processing_mode(initial_mode)
 
@@ -111,6 +112,37 @@ class SharedState:
             if self._latest_frame is None:
                 return None, None
             return self._latest_frame_number, self._latest_frame.copy()
+
+    # --- Latest completed prediction for the real-time dashboard preview ---
+
+    def update_latest_prediction(
+        self,
+        frame_number: int,
+        video_cycle: int,
+        predicted_x: float,
+        predicted_y: float,
+        processing_mode: str,
+        latency_ms: float,
+    ) -> None:
+        """Store the newest completed prediction without changing scoring state."""
+        with self._lock:
+            self._latest_prediction = {
+                "frame_number": frame_number,
+                "video_cycle": video_cycle,
+                "predicted_x": predicted_x,
+                "predicted_y": predicted_y,
+                "processing_mode": processing_mode,
+                "latency_ms": latency_ms,
+            }
+
+    def get_latest_prediction(self) -> dict | None:
+        """Return a copy of the newest completed prediction."""
+        with self._lock:
+            return (
+                dict(self._latest_prediction)
+                if self._latest_prediction is not None
+                else None
+            )
 
     # --- Latency history ---
 

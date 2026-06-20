@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 
 from .kafka_consumer import DashboardKafkaConsumer
-from .schemas import FrameUpdate, PlacementControlRequest
+from .schemas import FrameUpdate, PlacementControlRequest, PreviewUpdate
 from .state import DashboardState
 
 load_dotenv()
@@ -185,16 +185,19 @@ def history() -> dict[str, Any]:
 
 @app.post("/api/frame", status_code=202)
 async def post_frame(update: FrameUpdate) -> dict[str, Any]:
-    try:
-        jpeg = base64.b64decode(update.image_base64, validate=True)
-    except (binascii.Error, ValueError) as exc:
-        raise HTTPException(status_code=400, detail="image_base64 is not valid base64") from exc
-
-    if not jpeg.startswith(b"\xff\xd8") or not jpeg.endswith(b"\xff\xd9"):
-        raise HTTPException(status_code=400, detail="image_base64 must contain a JPEG image")
+    jpeg = _decode_jpeg(update.image_base64)
 
     metric = update.model_dump(exclude={"image_base64"})
     dashboard_state.update_frame(metric, jpeg)
+    await socket_manager.broadcast()
+    return {"accepted": True, "group_id": dashboard_state.group_id}
+
+
+@app.post("/api/preview", status_code=202)
+async def post_preview(update: PreviewUpdate) -> dict[str, Any]:
+    jpeg = _decode_jpeg(update.image_base64)
+    metric = update.model_dump(exclude={"image_base64"})
+    dashboard_state.update_preview(metric, jpeg)
     await socket_manager.broadcast()
     return {"accepted": True, "group_id": dashboard_state.group_id}
 
@@ -294,6 +297,17 @@ async def video_stream() -> StreamingResponse:
             "X-Accel-Buffering": "no",
         },
     )
+
+
+def _decode_jpeg(image_base64: str) -> bytes:
+    try:
+        jpeg = base64.b64decode(image_base64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="image_base64 is not valid base64") from exc
+
+    if not jpeg.startswith(b"\xff\xd8") or not jpeg.endswith(b"\xff\xd9"):
+        raise HTTPException(status_code=400, detail="image_base64 must contain a JPEG image")
+    return jpeg
 
 
 @app.websocket("/ws")

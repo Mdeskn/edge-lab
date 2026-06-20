@@ -75,7 +75,7 @@ def test_reset_preserves_latest_frame_but_clears_summary() -> None:
 
     snapshot = state.snapshot()
     assert snapshot["summary"]["total_frames"] == 0
-    assert snapshot["frame"]["url"] == "/api/frame?v=1"
+    assert snapshot["frame"]["url"] == "/api/video-stream"
     assert state.frame_image() == b"jpeg"
 
 
@@ -87,3 +87,24 @@ def test_frame_snapshot_returns_sequence_and_image() -> None:
     state.update_frame(metric(timestamp=2.0), b"second")
 
     assert state.frame_snapshot() == (2, b"second")
+
+
+def test_preview_drives_video_without_changing_score_summary() -> None:
+    state = DashboardState(max_history=10, group_id="3")
+    state.update_preview(
+        {
+            "frame_number": 9,
+            "true_x": 100.0,
+            "true_y": 200.0,
+            "predicted_x": 90.0,
+            "predicted_y": 190.0,
+            "prediction_frame_number": 7,
+        },
+        b"preview",
+    )
+
+    snapshot = state.snapshot()
+    assert snapshot["frame"]["frame_number"] == 9
+    assert snapshot["frame"]["prediction_frame_number"] == 7
+    assert snapshot["summary"]["total_frames"] == 0
+    assert state.frame_snapshot() == (1, b"preview")

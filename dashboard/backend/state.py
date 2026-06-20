@@ -84,6 +84,10 @@ class GroupState:
     frame_image: bytes | None = None
     frame_sequence: int = 0
     frame_updated_at: float | None = None
+    preview_metric: dict[str, Any] = field(default_factory=dict)
+    preview_image: bytes | None = None
+    preview_sequence: int = 0
+    preview_updated_at: float | None = None
     total_frames: int = 0
     local_frames: int = 0
     remote_frames: int = 0
@@ -202,6 +206,15 @@ class DashboardState:
             group.frame_sequence += 1
             group.frame_updated_at = time.time()
 
+    def update_preview(self, metric: dict[str, Any], image: bytes) -> None:
+        """Store the latest real-time preview without affecting score totals."""
+        with self._lock:
+            group = self._group
+            group.preview_metric = deepcopy(metric)
+            group.preview_image = image
+            group.preview_sequence += 1
+            group.preview_updated_at = time.time()
+
     def update_gpu_metrics(self, metric: dict[str, Any]) -> None:
         with self._lock:
             clean = self._flatten_gpu_metrics(metric)
@@ -256,9 +269,19 @@ class DashboardState:
             group = self._group
             latency_values = _numbers(group.history, "latency_ms")
             displacement_values = _numbers(group.history, "displacement_px")
+            display_updated_at = group.preview_updated_at or group.frame_updated_at
             dashboard_connected = (
-                group.frame_updated_at is not None
-                and time.time() - group.frame_updated_at < 5.0
+                display_updated_at is not None
+                and time.time() - display_updated_at < 5.0
+            )
+            display_metric = group.preview_metric or group.latest_metric
+            display_sequence = (
+                group.preview_sequence
+                if group.preview_image is not None
+                else group.frame_sequence
+            )
+            has_display_frame = (
+                group.preview_image is not None or group.frame_image is not None
             )
 
             history = {
@@ -271,14 +294,21 @@ class DashboardState:
                 "latest": deepcopy(group.latest_metric),
                 "experiment_phase": self._phase,
                 "frame": {
-                    "sequence": group.frame_sequence,
-                    "frame_number": group.latest_metric.get("frame_number"),
+                    "sequence": display_sequence,
+                    "frame_number": display_metric.get("frame_number"),
                     "url": (
-                        f"/api/frame?v={group.frame_sequence}"
-                        if group.frame_image is not None
+                        "/api/video-stream"
+                        if has_display_frame
                         else None
                     ),
-                    "updated_at": group.frame_updated_at,
+                    "updated_at": display_updated_at,
+                    "true_x": display_metric.get("true_x"),
+                    "true_y": display_metric.get("true_y"),
+                    "predicted_x": display_metric.get("predicted_x"),
+                    "predicted_y": display_metric.get("predicted_y"),
+                    "prediction_frame_number": display_metric.get(
+                        "prediction_frame_number"
+                    ),
                 },
                 "latency": {
                     "rolling_average_ms": _average(latency_values[-20:]),
@@ -298,7 +328,7 @@ class DashboardState:
                     "dashboard": {
                         "connected": dashboard_connected,
                         "detail": "receiving frames" if dashboard_connected else "waiting for frames",
-                        "last_frame_at": group.frame_updated_at,
+                        "last_frame_at": display_updated_at,
                     },
                 },
                 "summary": self._summary(group),
@@ -319,6 +349,8 @@ class DashboardState:
     def frame_snapshot(self) -> tuple[int, bytes | None]:
         """Return the current frame sequence and immutable JPEG bytes."""
         with self._lock:
+            if self._group.preview_image is not None:
+                return self._group.preview_sequence, self._group.preview_image
             return self._group.frame_sequence, self._group.frame_image
 
     def reset(self) -> None:
@@ -333,6 +365,10 @@ class DashboardState:
             fresh.frame_image = old.frame_image
             fresh.frame_sequence = old.frame_sequence
             fresh.frame_updated_at = old.frame_updated_at
+            fresh.preview_metric = old.preview_metric
+            fresh.preview_image = old.preview_image
+            fresh.preview_sequence = old.preview_sequence
+            fresh.preview_updated_at = old.preview_updated_at
             self._group = fresh
 
     def health(self) -> dict[str, Any]:

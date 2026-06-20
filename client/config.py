@@ -114,7 +114,7 @@ def load_config() -> Config:
         miss_penalty_px=float(os.environ.get("MISS_PENALTY_PX", "100.0")),
         dashboard_enabled=os.environ.get("DASHBOARD_ENABLED", "false").lower() == "true",
         dashboard_url=os.environ.get("DASHBOARD_URL", "http://localhost:8080"),
-        dashboard_fps=float(os.environ.get("DASHBOARD_FPS", "2")),
+        dashboard_fps=float(os.environ.get("DASHBOARD_FPS", "10")),
         dashboard_jpeg_quality=int(os.environ.get("DASHBOARD_JPEG_QUALITY", "60")),
         dashboard_frame_width=int(os.environ.get("DASHBOARD_FRAME_WIDTH", "640")),
         sp_agent_debug_metrics=os.environ.get("SP_AGENT_DEBUG_METRICS", "false").lower() == "true",

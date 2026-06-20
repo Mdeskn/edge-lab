@@ -50,17 +50,22 @@ class Dispatcher:
         """
         Main thread loop.
 
-        Dequeues (frame_number, frame, gt_x, gt_y, enqueue_time), runs the
-        appropriate inference backend, records latency, and enqueues results
-        for the Scorer. Remote failures fall back to local inference.
+        Dequeues a frame with its video-cycle identity and ground truth, runs
+        the appropriate inference backend, records latency, and enqueues the
+        result for the Scorer. Remote failures may fall back to local inference.
         """
         logger.info("Dispatcher started")
 
         while not self.shared_state.is_shutdown_requested():
             try:
-                frame_number, frame, gt_x, gt_y, enqueue_time = self.reader_queue.get(
-                    timeout=1.0
-                )
+                (
+                    frame_number,
+                    video_cycle,
+                    frame,
+                    gt_x,
+                    gt_y,
+                    enqueue_time,
+                ) = self.reader_queue.get(timeout=1.0)
             except queue.Empty:
                 continue
 
@@ -70,7 +75,14 @@ class Dispatcher:
             while True:
                 try:
                     newer = self.reader_queue.get_nowait()
-                    frame_number, frame, gt_x, gt_y, enqueue_time = newer
+                    (
+                        frame_number,
+                        video_cycle,
+                        frame,
+                        gt_x,
+                        gt_y,
+                        enqueue_time,
+                    ) = newer
                     drained += 1
                 except queue.Empty:
                     break
@@ -167,6 +179,14 @@ class Dispatcher:
 
             latency_ms = (time.time() - dispatch_start) * 1000.0
             self.shared_state.add_latency(latency_ms)
+            self.shared_state.update_latest_prediction(
+                frame_number,
+                video_cycle,
+                pred_x,
+                pred_y,
+                result_mode,
+                latency_ms,
+            )
 
             try:
                 self.scorer_queue.put(

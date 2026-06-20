@@ -304,7 +304,12 @@ def main() -> None:
     scorer_queue: queue.Queue = queue.Queue(maxsize=config.queue_max_size)
 
     # 10. Thread objects
-    frame_reader = FrameReader(config, shared_state, reader_queue)
+    frame_reader = FrameReader(
+        config,
+        shared_state,
+        reader_queue,
+        dashboard_publisher,
+    )
     dispatcher = Dispatcher(
         config, shared_state, local_server, remote_client,
         reader_queue, scorer_queue, tracer,
@@ -314,7 +319,6 @@ def main() -> None:
         shared_state,
         scorer_queue,
         kafka_publisher,
-        dashboard_publisher,
         results_file,
     )
     sp_agent = SPAgent(config, shared_state)

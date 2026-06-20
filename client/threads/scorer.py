@@ -1,36 +1,24 @@
 """
 Thread 3: Receives inference results, calculates displacement vs ground truth,
-draws overlay on displayed frame, logs to CSV, publishes to Kafka.
+logs to CSV, and publishes to Kafka.
 """
 import csv
 import io
 import logging
 import math
 import queue
-import time
-from collections import deque
-
-import cv2
-import numpy as np
 
 from config import Config
 from shared_state import SharedState
-from metrics.dashboard_publisher import DashboardPublisher
 from metrics.kafka_publisher import AppMetricsPublisher
 
 logger = logging.getLogger(__name__)
 
-_FONT = cv2.FONT_HERSHEY_SIMPLEX
-_WHITE = (255, 255, 255)
-_GREEN = (0, 255, 0)
-_YELLOW = (0, 255, 255)
-_ORANGE = (0, 165, 255)
-
 
 class Scorer:
     """
-    Consumes inference results, scores them against ground truth, draws a HUD
-    overlay on the frame, writes CSV rows, and publishes metrics to Kafka.
+    Consumes inference results, scores them against ground truth, writes CSV
+    rows, and publishes metrics to Kafka.
     """
 
     def __init__(
@@ -39,7 +27,6 @@ class Scorer:
         shared_state: SharedState,
         scorer_queue: queue.Queue,
         kafka_publisher: AppMetricsPublisher,
-        dashboard_publisher: DashboardPublisher,
         results_file: io.IOBase,
     ):
         """Store dependencies and CSV writer state."""
@@ -47,10 +34,8 @@ class Scorer:
         self.shared_state = shared_state
         self.scorer_queue = scorer_queue
         self.kafka_publisher = kafka_publisher
-        self.dashboard_publisher = dashboard_publisher
         self.results_file = results_file
         self._csv_writer = None
-        self._display_latencies: deque = deque(maxlen=5)
         self._last_latency_ms: float | None = None
 
     def run(self) -> None:
@@ -58,7 +43,7 @@ class Scorer:
         Main thread loop.
 
         Writes CSV header on startup, then processes each result tuple from
-        scorer_queue: computes displacement, draws HUD, writes CSV, publishes Kafka.
+        scorer_queue: computes displacement, writes CSV, and publishes Kafka.
         """
         logger.info("Scorer started")
 
@@ -92,10 +77,10 @@ class Scorer:
                     gt_y,
                     pred_x,
                     pred_y,
-                    pred_x1,
-                    pred_y1,
-                    pred_x2,
-                    pred_y2,
+                    _pred_x1,
+                    _pred_y1,
+                    _pred_x2,
+                    _pred_y2,
                     latency_ms,
                     mode,
                     result_time,
@@ -104,9 +89,6 @@ class Scorer:
                 continue
 
             current_phase = self.shared_state.get_experiment_phase()
-
-            self._display_latencies.append(latency_ms)
-            avg_display_latency = sum(self._display_latencies) / len(self._display_latencies)
 
             # Jitter: absolute frame-to-frame latency variation
             if self._last_latency_ms is not None:
@@ -144,11 +126,6 @@ class Scorer:
                     deadline_miss=deadline_miss,
                 )
             score_summary = self.shared_state.get_score_summary()
-
-            self._draw_overlay(
-                frame, gt_x, gt_y, pred_x, pred_y, pred_x1, pred_y1, pred_x2, pred_y2,
-                displacement_px, has_prediction, avg_display_latency, mode, current_phase, score_summary,
-            )
 
             try:
                 self._csv_writer.writerow(
@@ -192,26 +169,6 @@ class Scorer:
             except Exception as exc:
                 logger.error("Kafka publish error in Scorer: %s", exc)
 
-            try:
-                self.dashboard_publisher.publish(
-                    frame=frame,
-                    frame_number=frame_number,
-                    timestamp=result_time,
-                    true_x=gt_x,
-                    true_y=gt_y,
-                    predicted_x=pred_x,
-                    predicted_y=pred_y,
-                    processing_mode=mode,
-                    latency_ms=latency_ms,
-                    jitter_ms=round(jitter_ms, 2),
-                    deadline_miss=bool(deadline_miss),
-                    displacement_px=displacement_px,
-                    cumulative_displacement_px=score_summary["cumulative_displacement"],
-                    experiment_phase=current_phase,
-                )
-            except Exception as exc:
-                logger.warning("Dashboard publish error in Scorer: %s", exc)
-
             if displacement_px is not None and has_prediction:
                 frame_h, frame_w = frame.shape[:2]
                 warn_threshold = math.sqrt(frame_w ** 2 + frame_h ** 2) * 0.05
@@ -222,88 +179,6 @@ class Scorer:
                     )
 
         logger.info("Scorer stopped")
-
-    def _draw_overlay(
-        self,
-        frame: np.ndarray,
-        gt_x: float | None,
-        gt_y: float | None,
-        pred_x: float,
-        pred_y: float,
-        pred_x1: float,
-        pred_y1: float,
-        pred_x2: float,
-        pred_y2: float,
-        displacement_px: float | None,
-        has_prediction: bool,
-        avg_display_latency: float,
-        mode: str,
-        current_phase: str,
-        score_summary: dict,
-    ) -> None:
-        """Draw ground truth, prediction box, connecting line, and HUD text onto frame."""
-        has_ground_truth = gt_x is not None and gt_y is not None
-        if has_ground_truth:
-            cv2.circle(frame, (int(gt_x), int(gt_y)), 8, _GREEN, -1)
-            cv2.putText(frame, "GT", (int(gt_x) + 10, int(gt_y) - 8), _FONT, 0.5, _GREEN, 1)
-        if has_prediction:
-            pred_center = (int(pred_x), int(pred_y))
-            cv2.drawMarker(
-                frame,
-                pred_center,
-                _ORANGE,
-                markerType=cv2.MARKER_CROSS,
-                markerSize=28,
-                thickness=2,
-            )
-            cv2.circle(frame, pred_center, 3, _ORANGE, -1)
-            cv2.putText(
-                frame,
-                "YOLO",
-                (pred_center[0] + 10, pred_center[1] - 8),
-                _FONT,
-                0.5,
-                _ORANGE,
-                1,
-            )
-        if has_ground_truth and has_prediction:
-            cv2.line(
-                frame,
-                (int(gt_x), int(gt_y)),
-                (int(pred_x), int(pred_y)),
-                _YELLOW,
-                1,
-            )
-
-        cv2.putText(frame, f"Mode: {mode}", (10, 30), _FONT, 0.6, _WHITE, 1)
-        cv2.putText(frame, f"Phase: {current_phase}", (10, 55), _FONT, 0.6, _WHITE, 1)
-        cv2.putText(frame, f"Latency (avg 5): {avg_display_latency:.0f}ms", (10, 80), _FONT, 0.6, _WHITE, 1)
-        if displacement_px is None:
-            displacement_text = "N/A"
-        elif not has_prediction:
-            displacement_text = f"MISS ({displacement_px:.1f}px penalty)"
-        else:
-            displacement_text = f"{displacement_px:.1f}px"
-        cv2.putText(frame, f"Displacement: {displacement_text}", (10, 105), _FONT, 0.6, _WHITE, 1)
-        cv2.putText(
-            frame,
-            f"Cumulative: {score_summary['cumulative_displacement']:.0f}px",
-            (10, 130),
-            _FONT,
-            0.6,
-            _WHITE,
-            1,
-        )
-        cv2.putText(
-            frame,
-            f"Scored frames: {score_summary['frames_processed']}",
-            (10, 155),
-            _FONT,
-            0.6,
-            _WHITE,
-            1,
-        )
-
 
 def _round_optional(value: float | None) -> float | None:
     """Round a numeric metric while preserving unavailable values."""

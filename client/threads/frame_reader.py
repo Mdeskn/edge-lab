@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 
 from config import Config
+from metrics.dashboard_publisher import DashboardPublisher
 from shared_state import SharedState
 
 logger = logging.getLogger(__name__)
@@ -28,12 +29,15 @@ class FrameReader:
         config: Config,
         shared_state: SharedState,
         reader_queue: queue.Queue,
+        dashboard_publisher: DashboardPublisher,
     ):
         """Store references and initialise the frame counter."""
         self.config = config
         self.shared_state = shared_state
         self.reader_queue = reader_queue
+        self.dashboard_publisher = dashboard_publisher
         self.frame_counter: int = 0
+        self._video_cycle: int = 0
         self._ground_truth: Dict[int, Tuple[Optional[float], Optional[float]]] = {}
 
     def _load_ground_truth(self) -> Dict[int, Tuple[Optional[float], Optional[float]]]:
@@ -111,6 +115,7 @@ class FrameReader:
                 if not ret:
                     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     self.frame_counter = 0
+                    self._video_cycle += 1
                     continue
 
                 self.frame_counter += 1
@@ -122,11 +127,35 @@ class FrameReader:
 
                 try:
                     self.reader_queue.put(
-                        (self.frame_counter, frame.copy(), gt_x, gt_y, time.time()),
+                        (
+                            self.frame_counter,
+                            self._video_cycle,
+                            frame.copy(),
+                            gt_x,
+                            gt_y,
+                            time.time(),
+                        ),
                         timeout=0.05,
                     )
                 except queue.Full:
                     logger.debug("reader_queue full, dropping frame %d", self.frame_counter)
+
+                # The inference queue owns its copy. The preview worker can now
+                # annotate the original capture frame without affecting inference.
+                latest_prediction = self.shared_state.get_latest_prediction()
+                if (
+                    latest_prediction is not None
+                    and latest_prediction.get("video_cycle") != self._video_cycle
+                ):
+                    latest_prediction = None
+                self.dashboard_publisher.publish_preview(
+                    frame=frame,
+                    frame_number=self.frame_counter,
+                    timestamp=time.time(),
+                    true_x=gt_x,
+                    true_y=gt_y,
+                    prediction=latest_prediction,
+                )
 
                 if self.frame_counter % 100 == 0:
                     logger.debug("FrameReader: frame %d", self.frame_counter)

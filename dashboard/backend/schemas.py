@@ -32,6 +32,21 @@ class FrameUpdate(AppMetric):
     image_base64: str
 
 
+class PreviewUpdate(BaseModel):
+    """A current source frame with current GT and latest completed prediction."""
+
+    timestamp: float = Field(default_factory=time.time)
+    frame_number: int
+    true_x: float | None = None
+    true_y: float | None = None
+    predicted_x: float | None = None
+    predicted_y: float | None = None
+    prediction_frame_number: int | None = None
+    processing_mode: str = "unknown"
+    latency_ms: float | None = None
+    image_base64: str
+
+
 class PhaseMetric(BaseModel):
     """Current experiment phase."""
 
