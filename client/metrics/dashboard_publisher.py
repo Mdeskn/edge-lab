@@ -211,13 +211,6 @@ class DashboardPublisher:
         true_x = item["true_x"]
         true_y = item["true_y"]
         has_gt = true_x is not None and true_y is not None
-        if has_gt:
-            gt = (int(true_x), int(true_y))
-            cv2.circle(frame, gt, 12, _DARK, -1)
-            cv2.circle(frame, gt, 10, _GREEN, -1)
-            cv2.putText(frame, "GT", (gt[0] + 13, gt[1] - 10), _FONT, 0.55, _DARK, 4)
-            cv2.putText(frame, "GT", (gt[0] + 13, gt[1] - 10), _FONT, 0.55, _GREEN, 1)
-
         prediction = prediction or {}
         pred_x = prediction.get("predicted_x")
         pred_y = prediction.get("predicted_y")
@@ -257,6 +250,14 @@ class DashboardPublisher:
                 gt = (int(true_x), int(true_y))
                 cv2.line(frame, gt, pred, _DARK, 4)
                 cv2.line(frame, gt, pred, _YELLOW, 2)
+
+        # Draw GT last so it always renders on top of the YOLO marker.
+        if has_gt:
+            gt = (int(true_x), int(true_y))
+            cv2.circle(frame, gt, 12, _DARK, -1)
+            cv2.circle(frame, gt, 10, _GREEN, -1)
+            cv2.putText(frame, "GT", (gt[0] + 13, gt[1] - 10), _FONT, 0.55, _DARK, 4)
+            cv2.putText(frame, "GT", (gt[0] + 13, gt[1] - 10), _FONT, 0.55, _GREEN, 1)
 
         prediction_frame = prediction.get("frame_number")
         lag = (
