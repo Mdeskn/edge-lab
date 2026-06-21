@@ -383,21 +383,46 @@ class SPAgentBase:
                 pass
 
     def _handle_manual_control(self, payload: dict) -> None:
-        """Apply a dashboard placement command when it targets this group."""
+        """Apply a dashboard placement or cycle command when it targets this group."""
         if not _group_matches(payload.get("group_id"), self._config.group_id):
             return
 
         mode = str(payload.get("mode", "")).strip().lower()
-        if mode not in REQUESTED_PROCESSING_MODES:
-            logger.warning("Ignoring invalid manual placement mode: %r", mode)
-            return
+        if mode:
+            if mode not in REQUESTED_PROCESSING_MODES:
+                logger.warning("Ignoring invalid manual placement mode: %r", mode)
+            else:
+                self.set_mode(mode)
+                logger.info(
+                    "Manual placement command applied: mode=%s source=%s",
+                    mode,
+                    payload.get("source", "unknown"),
+                )
 
-        self.set_mode(mode)
-        logger.info(
-            "Manual placement command applied: mode=%s source=%s",
-            mode,
-            payload.get("source", "unknown"),
-        )
+        action = payload.get("action")
+        if action == "start_on_next_cycle":
+            from shared_state import CollectionState
+            if self._shared_state.get_collection_state() == CollectionState.ARMED:
+                self._shared_state.request_start_on_next_cycle()
+                logger.info("Received start_on_next_cycle command")
+            else:
+                logger.warning(
+                    "Ignoring start_on_next_cycle: state is %s",
+                    self._shared_state.get_collection_state().value,
+                )
+        elif action == "abort_current_cycle":
+            from shared_state import CollectionState
+            if self._shared_state.get_collection_state() == CollectionState.COLLECTING:
+                self._shared_state.transition_to_armed()
+                logger.info("Cycle aborted by command")
+            else:
+                logger.warning(
+                    "Ignoring abort_current_cycle: state is %s",
+                    self._shared_state.get_collection_state().value,
+                )
+        elif action == "reset_to_armed":
+            self._shared_state.transition_to_armed()
+            logger.info("Reset to ARMED by command")
 
     # ------------------------------------------------------------------ #
     # Debug logging (enabled by SP_AGENT_DEBUG_METRICS=true)              #

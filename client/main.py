@@ -2,7 +2,6 @@
 Entry point. Wires all components together and starts all threads.
 """
 import csv
-import json
 import logging
 import os
 import queue
@@ -10,7 +9,7 @@ import threading
 import time
 
 from config import load_config, Config
-from shared_state import SharedState
+from shared_state import SharedState, CollectionState
 from inference.local_server import LocalServer
 from inference.remote_client import RemoteClient
 from metrics.dashboard_publisher import DashboardPublisher
@@ -27,107 +26,102 @@ logger = logging.getLogger(__name__)
 EXPERIMENT_PHASES = ["baseline", "gpu_load", "jitter_light", "bandwidth_50", "mixed"]
 
 
-def wait_for_first_phase(config: Config) -> tuple:
+def run_cycle_monitor(config: Config, shared_state: SharedState) -> None:
     """
-    Block until a phase message arrives on the Kafka phase topic.
-    Returns (starting_phase_name, kafka_consumer).
-    The consumer is returned so the monitor loop can reuse it.
+    Daemon thread that drives the collection state machine.
+
+    Polls shared_state.get_experiment_phase() to detect cycle boundaries
+    (transitions into baseline) and drives DISCONNECTED → ARMED → COLLECTING
+    → COMPLETE state transitions.
     """
-    from confluent_kafka import Consumer
+    logger.info("CycleMonitor started (sync_mode=%s)", config.sync_mode)
 
-    consumer = Consumer({
-        "bootstrap.servers": config.kafka_brokers,
-        "group.id": f"phase-monitor-group{config.group_id}",
-        "auto.offset.reset": "latest",
-    })
-    consumer.subscribe([config.kafka_phase_topic])
-    logger.info("Waiting for experiment phase to start...")
+    effective_mode = config.sync_mode
+    if effective_mode == "off" and config.auto_stop:
+        effective_mode = "wait_for_cycle"
+        logger.info("AUTO_STOP=true detected, treating as SYNC_MODE=wait_for_cycle")
 
-    while True:
-        msg = consumer.poll(timeout=2.0)
-        if msg is None:
-            continue
-        if msg.error():
-            logger.warning("Phase consumer error: %s", msg.error())
-            continue
-        try:
-            data = json.loads(msg.value().decode("utf-8"))
-            phase = data.get("phase")
-            if phase:
-                logger.info("Experiment started. First phase: %s", phase)
-                return phase, consumer
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            continue
+    if effective_mode == "wait_for_cycle":
+        shared_state.transition_to_armed()
+        shared_state.request_start_on_next_cycle()
+    elif effective_mode == "manual":
+        shared_state.transition_to_armed()
 
+    if effective_mode == "off":
+        shared_state.transition_to_armed()
+        shared_state.request_start_on_next_cycle()
+        shared_state.transition_to_collecting(time.time())
+        logger.info("SYNC_MODE=off: collecting indefinitely, no cycle detection")
+        return
 
-def monitor_phases(
-    consumer,
-    starting_phase: str,
-    shared_state: SharedState,
-    timeout_sec: float,
-):
-    """
-    Monitor phase transitions until one full cycle completes.
-    A full cycle means all configured phases have been observed and the
-    current phase transitions back to the starting phase.
-
-    Calls shared_state.request_shutdown() when complete.
-    """
-    all_phases = set(EXPERIMENT_PHASES)
-    phases_seen = {starting_phase}
-    current_phase = starting_phase
-
-    logger.info(
-        "Monitoring phases. Will stop after one full cycle (started on: %s, timeout: %.0fs).",
-        starting_phase,
-        timeout_sec,
-    )
-
-    start_time = time.monotonic()
+    all_phases = {"baseline", "gpu_load", "jitter_light", "bandwidth_50", "mixed"}
+    poll_interval = 0.5
+    cycle_timeout_sec = config.phase_timeout_sec if config.phase_timeout_sec > 0 else None
 
     while not shared_state.is_shutdown_requested():
-        if timeout_sec > 0 and time.monotonic() - start_time >= timeout_sec:
-            logger.warning(
-                "Phase monitor timed out after %.0fs before a full cycle completed. "
-                "Requesting graceful shutdown.",
-                timeout_sec,
+        time.sleep(poll_interval)
+
+        current_phase = shared_state.get_experiment_phase()
+        previous_phase = shared_state.get_previous_phase()
+        collection_state = shared_state.get_collection_state()
+
+        if current_phase != previous_phase:
+            shared_state.set_previous_phase(current_phase)
+            logger.info(
+                "Phase transition: %s -> %s (state=%s)",
+                previous_phase, current_phase, collection_state.value,
             )
-            shared_state.request_shutdown()
-            break
 
-        msg = consumer.poll(timeout=1.0)
-        if msg is None:
-            continue
-        if msg.error():
-            continue
-
-        try:
-            data = json.loads(msg.value().decode("utf-8"))
-            new_phase = data.get("phase")
-        except (json.JSONDecodeError, UnicodeDecodeError):
+        # ARMED → COLLECTING on cycle boundary (entering baseline from another phase)
+        if collection_state == CollectionState.ARMED:
+            if (
+                current_phase == "baseline"
+                and previous_phase is not None
+                and previous_phase != "baseline"
+            ):
+                if shared_state.transition_to_collecting(time.time()):
+                    logger.info("Cycle boundary detected, COLLECTING started")
             continue
 
-        if new_phase and new_phase != current_phase:
-            logger.info("Phase transition: %s -> %s", current_phase, new_phase)
-            current_phase = new_phase
+        # COLLECTING: track phases, detect cycle end, handle timeout
+        if collection_state == CollectionState.COLLECTING:
+            shared_state.add_phase_seen(current_phase)
 
-            # Check if we completed a full cycle:
-            # all configured phases seen AND we returned to the starting phase.
-            if current_phase == starting_phase and phases_seen >= all_phases:
+            phases_seen = shared_state.get_phases_seen()
+            if (
+                phases_seen >= all_phases
+                and current_phase == "baseline"
+                and previous_phase is not None
+                and previous_phase != "baseline"
+            ):
+                score_summary = shared_state.get_score_summary()
+                final_score = float(score_summary.get("cumulative_displacement", 0.0))
+                shared_state.transition_to_complete(time.time(), final_score)
                 logger.info(
-                    "Full cycle complete (all phases observed, returned to %s). "
-                    "Stopping experiment.",
-                    starting_phase,
+                    "Cycle complete. Final cumulative displacement: %.2f px", final_score
                 )
-                shared_state.request_shutdown()
-                break
+                write_phase_summary_csv(config, shared_state, EXPERIMENT_PHASES)
 
-            phases_seen.add(current_phase)
+                if effective_mode == "wait_for_cycle":
+                    logger.info("wait_for_cycle mode: requesting shutdown")
+                    shared_state.request_shutdown()
+                    return
+                continue
 
-    try:
-        consumer.close()
-    except Exception:
-        pass
+            if cycle_timeout_sec is not None:
+                snapshot = shared_state.get_collection_snapshot()
+                cycle_started = snapshot.get("cycle_started_at")
+                if cycle_started and (time.time() - cycle_started) > cycle_timeout_sec:
+                    logger.warning("Cycle timeout (%ds) exceeded, finalizing", cycle_timeout_sec)
+                    score_summary = shared_state.get_score_summary()
+                    final_score = float(score_summary.get("cumulative_displacement", 0.0))
+                    shared_state.transition_to_complete(time.time(), final_score)
+                    write_phase_summary_csv(config, shared_state, EXPERIMENT_PHASES)
+                    if effective_mode == "wait_for_cycle":
+                        shared_state.request_shutdown()
+                        return
+
+    logger.info("CycleMonitor stopped")
 
 
 def write_phase_summary_csv(
@@ -154,6 +148,9 @@ def write_phase_summary_csv(
                 "phase",
                 "frames_scored",
                 "mean_latency_ms",
+                "mean_jitter_ms",
+                "deadline_misses",
+                "deadline_miss_pct",
                 "mean_displacement_px",
                 "cumulative_displacement_px",
                 "local_frames",
@@ -167,20 +164,28 @@ def write_phase_summary_csv(
             stats = phase_summary.get(phase, {})
             frames = int(stats.get("frames", 0))
             latency_frames = int(stats.get("latency_frames", 0))
+            jitter_frames = int(stats.get("jitter_frames", 0))
             total_displacement = float(stats.get("total_displacement", 0.0))
             total_latency = float(stats.get("total_latency_ms", 0.0))
+            total_jitter = float(stats.get("total_jitter_ms", 0.0))
+            deadline_misses = int(stats.get("deadline_misses", 0))
             local_frames = int(stats.get("local_frames", 0))
             remote_frames = int(stats.get("remote_frames", 0))
             local_fallback_frames = int(stats.get("local_fallback_frames", 0))
             local_total_frames = local_frames + local_fallback_frames
             mean_latency = total_latency / latency_frames if latency_frames else 0.0
+            mean_jitter = total_jitter / jitter_frames if jitter_frames else 0.0
             mean_displacement = total_displacement / frames if frames else 0.0
             remote_pct = (remote_frames / frames * 100.0) if frames else 0.0
+            deadline_miss_pct = (deadline_misses / frames * 100.0) if frames else 0.0
             writer.writerow(
                 [
                     phase,
                     frames,
                     round(mean_latency, 2),
+                    round(mean_jitter, 2),
+                    deadline_misses,
+                    round(deadline_miss_pct, 2),
                     round(mean_displacement, 2),
                     round(total_displacement, 2),
                     local_frames,
@@ -246,7 +251,8 @@ def main() -> None:
     logger.info("  control_topic       : %s", config.kafka_control_topic)
     logger.info("  latency_probes      : %s", config.latency_probes_enabled)
     logger.info("  probe_interval_sec  : %.1f", config.latency_probe_interval_sec)
-    logger.info("  auto_stop            : %s", config.auto_stop)
+    logger.info("  sync_mode            : %s", config.sync_mode)
+    logger.info("  auto_stop            : %s (legacy)", config.auto_stop)
     logger.info("  phase_timeout_sec    : %.0f", config.phase_timeout_sec)
     logger.info("  miss_penalty_px      : %.1f", config.miss_penalty_px)
     logger.info("  dashboard_enabled    : %s", config.dashboard_enabled)
@@ -336,20 +342,7 @@ def main() -> None:
         else:
             logger.warning("LATENCY_PROBES_ENABLED=true but KAFKA_BROKERS is empty")
 
-    # 11. Phase-aware auto-stop
-    phase_consumer = None
-    starting_phase = None
-
-    if config.auto_stop and config.kafka_brokers:
-        starting_phase, phase_consumer = wait_for_first_phase(config)
-        shared_state.update_experiment_phase(starting_phase)
-    elif config.auto_stop and not config.kafka_brokers:
-        logger.warning(
-            "AUTO_STOP is enabled but KAFKA_BROKERS is empty. "
-            "Cannot monitor phases. Running until Ctrl+C instead."
-        )
-
-    # 12. Start threads
+    # 11. Start threads
     threads = [
         threading.Thread(target=frame_reader.run, name="FrameReader", daemon=False),
         threading.Thread(target=dispatcher.run, name="Dispatcher", daemon=False),
@@ -363,18 +356,19 @@ def main() -> None:
     for t in threads:
         t.start()
 
+    # 12. Cycle monitor (daemon thread drives state machine)
+    cycle_monitor_thread = threading.Thread(
+        target=run_cycle_monitor,
+        args=(config, shared_state),
+        daemon=True,
+        name="CycleMonitor",
+    )
+    cycle_monitor_thread.start()
+
     # 13. Wait for completion
     try:
-        if phase_consumer and starting_phase:
-            monitor_phases(
-                phase_consumer,
-                starting_phase,
-                shared_state,
-                config.phase_timeout_sec,
-            )
-        else:
-            for t in threads:
-                t.join()
+        while not shared_state.is_shutdown_requested():
+            time.sleep(0.5)
     except KeyboardInterrupt:
         logger.info("Shutdown requested (KeyboardInterrupt)")
         shared_state.request_shutdown()
@@ -395,13 +389,23 @@ def main() -> None:
     logger.info("Experiment complete. Results by phase:")
     logger.info("-" * 60)
     for phase_name in EXPERIMENT_PHASES:
-        ps = phase_summary.get(phase_name, {"total_displacement": 0, "frames": 0})
-        frames = ps["frames"]
-        total = ps["total_displacement"]
-        avg = total / frames if frames > 0 else 0.0
+        ps = phase_summary.get(phase_name, {})
+        frames = int(ps.get("frames", 0))
+        total_disp = float(ps.get("total_displacement", 0.0))
+        total_lat = float(ps.get("total_latency_ms", 0.0))
+        lat_frames = int(ps.get("latency_frames", 0))
+        total_jitter = float(ps.get("total_jitter_ms", 0.0))
+        jitter_frames = int(ps.get("jitter_frames", 0))
+        deadline_misses = int(ps.get("deadline_misses", 0))
+        avg_disp = total_disp / frames if frames > 0 else 0.0
+        avg_lat = total_lat / lat_frames if lat_frames > 0 else 0.0
+        avg_jitter = total_jitter / jitter_frames if jitter_frames > 0 else 0.0
+        miss_pct = deadline_misses / frames * 100.0 if frames > 0 else 0.0
         logger.info(
-            "  %-16s  avg displacement: %7.1f px  (%d frames)",
-            phase_name, avg, frames,
+            "  %-16s  disp: %6.1f px  lat: %6.1f ms  jitter: %5.1f ms"
+            "  misses: %d (%.1f%%)  frames: %d",
+            phase_name, avg_disp, avg_lat, avg_jitter,
+            deadline_misses, miss_pct, frames,
         )
     logger.info("-" * 60)
     logger.info(

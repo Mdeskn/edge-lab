@@ -90,6 +90,7 @@ class DashboardPublisher:
         displacement_px: float | None,
         cumulative_displacement_px: float,
         experiment_phase: str,
+        collection_state: dict | None = None,
     ) -> None:
         """Queue one scored record for direct low-latency dashboard updates."""
         if not self._enabled:
@@ -110,6 +111,8 @@ class DashboardPublisher:
             "predicted_y": round(predicted_y, 2),
             "cumulative_displacement_px": round(cumulative_displacement_px, 2),
         }
+        if collection_state is not None:
+            payload["collection_state"] = collection_state
         self._replace_queued(self._metric_queue, payload)
 
     def publish_preview(

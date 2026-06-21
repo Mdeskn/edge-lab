@@ -6,7 +6,11 @@ from contextlib import asynccontextmanager
 import json
 import logging
 import os
+import re
+import shutil
 import time
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
@@ -15,8 +19,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 
 from .kafka_consumer import DashboardKafkaConsumer
-from .schemas import AppMetric, FrameUpdate, PlacementControlRequest, PreviewUpdate
+from .schemas import AppMetric, CycleCommandRequest, FrameUpdate, PlacementControlRequest, PreviewUpdate, SaveRequest
 from .state import DashboardState
+
+SAVE_DIR = Path(os.environ.get("DASHBOARD_SAVE_DIR", "/data/saved"))
+RESULTS_LOG_PATH = Path(os.environ.get("RESULTS_LOG_PATH", "/data/results.csv"))
+RESULTS_BY_PHASE_PATH = Path(os.environ.get("RESULTS_BY_PHASE_PATH", "/data/results_by_phase.csv"))
 
 load_dotenv()
 
@@ -268,6 +276,63 @@ async def set_placement(command: PlacementControlRequest) -> dict[str, Any]:
         "mode": command.mode,
         "topic": placement_control_topic,
     }
+
+
+@app.post("/api/control/cycle")
+async def post_cycle_command(request: CycleCommandRequest) -> dict[str, Any]:
+    """Publish a state-machine command to the placement control topic."""
+    if placement_control_producer is None:
+        raise HTTPException(status_code=503, detail="Placement control producer not configured")
+
+    payload = {
+        "timestamp": time.time(),
+        "source": "dashboard",
+        "group_id": dashboard_state.group_id,
+        "action": request.action,
+    }
+    try:
+        placement_control_producer.produce(
+            placement_control_topic,
+            key=f"{dashboard_state.group_id}:cycle",
+            value=json.dumps(payload).encode("utf-8"),
+        )
+        placement_control_producer.poll(0)
+        placement_control_producer.flush(1.0)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Could not publish cycle command: {exc}") from exc
+
+    await socket_manager.broadcast()
+    return {"accepted": True, "action": request.action}
+
+
+@app.post("/api/save")
+async def post_save(request: SaveRequest) -> dict[str, Any]:
+    """Copy the current results CSVs into SAVE_DIR with a timestamp+label filename."""
+    label = (request.label or "").strip()
+    label = re.sub(r"[^A-Za-z0-9_-]", "-", label)[:40].strip("-")
+
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    stem = f"{timestamp}-{label}" if label else timestamp
+
+    SAVE_DIR.mkdir(parents=True, exist_ok=True)
+
+    saved_files = []
+    if RESULTS_LOG_PATH.exists():
+        dest = SAVE_DIR / f"results-{stem}.csv"
+        shutil.copy2(RESULTS_LOG_PATH, dest)
+        saved_files.append(str(dest))
+    if RESULTS_BY_PHASE_PATH.exists():
+        dest = SAVE_DIR / f"results_by_phase-{stem}.csv"
+        shutil.copy2(RESULTS_BY_PHASE_PATH, dest)
+        saved_files.append(str(dest))
+
+    if not saved_files:
+        raise HTTPException(
+            status_code=404,
+            detail="No result files exist yet. Complete a cycle before saving.",
+        )
+
+    return {"saved": True, "files": saved_files, "label": label, "stem": stem}
 
 
 @app.get("/api/frame")

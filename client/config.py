@@ -48,6 +48,7 @@ class Config:
     log_level: str
     auto_stop: bool
     phase_timeout_sec: float
+    sync_mode: str
     miss_penalty_px: float
     dashboard_enabled: bool
     dashboard_url: str
@@ -72,7 +73,7 @@ def load_config() -> Config:
         base, ext = os.path.splitext(results_log_path)
         results_by_phase_path = f"{base}_by_phase{ext or '.csv'}"
 
-    return Config(
+    config = Config(
         group_id=group_id,
         video_path=os.environ["VIDEO_PATH"],
         ground_truth_path=os.environ["GROUND_TRUTH_PATH"],
@@ -111,6 +112,7 @@ def load_config() -> Config:
         log_level=os.environ.get("LOG_LEVEL", "INFO"),
         auto_stop=os.environ.get("AUTO_STOP", "true").lower() == "true",
         phase_timeout_sec=float(os.environ.get("PHASE_TIMEOUT_SEC", "300")),
+        sync_mode=os.environ.get("SYNC_MODE", "manual").strip().lower(),
         miss_penalty_px=float(os.environ.get("MISS_PENALTY_PX", "100.0")),
         dashboard_enabled=os.environ.get("DASHBOARD_ENABLED", "false").lower() == "true",
         dashboard_url=os.environ.get("DASHBOARD_URL", "http://localhost:8080"),
@@ -125,6 +127,12 @@ def load_config() -> Config:
         latency_probe_interval_sec=float(os.environ.get("LATENCY_PROBE_INTERVAL_SEC", "2.0")),
         latency_deadline_ms=float(os.environ.get("LATENCY_DEADLINE_MS", "300.0")),
     )
+    if config.sync_mode not in ("manual", "wait_for_cycle", "off"):
+        raise ValueError(
+            f"Invalid SYNC_MODE: {config.sync_mode!r}. "
+            "Must be one of: manual, wait_for_cycle, off."
+        )
+    return config
 
 
 def _parse_target_class_filter(value: str) -> TargetClassFilter:

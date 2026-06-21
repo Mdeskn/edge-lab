@@ -103,22 +103,34 @@ class Scorer:
             # Deadline miss
             deadline_miss = latency_ms > self.config.latency_deadline_ms
 
-            has_ground_truth = gt_x is not None and gt_y is not None
-            # (0.0, 0.0) is the sentinel returned by both inference backends when
-            # no detection passes the confidence threshold.
+            # Current GT: where the car is RIGHT NOW, when this prediction arrives.
+            # Scoring against this (not the bundled capture-time GT) is what makes
+            # latency affect displacement: the longer inference takes, the further
+            # the car has moved, the higher the penalty.
+            _, current_gt_x, current_gt_y = self.shared_state.get_ground_truth()
+
+            # Bundled GT (gt_x, gt_y) only gates whether this frame is scored.
+            # If there was no target at capture time, skip the frame entirely.
+            frame_had_ground_truth = gt_x is not None and gt_y is not None
             has_prediction = pred_x != 0.0 or pred_y != 0.0
 
-            if has_ground_truth and has_prediction:
-                displacement_px = math.sqrt((gt_x - pred_x) ** 2 + (gt_y - pred_y) ** 2)
-            elif has_ground_truth:
-                # Detection failure: model returned no result but ball is visible.
-                # Score as a fixed penalty so the cumulative total reflects the
-                # dropout consistently, regardless of where the target is in the frame.
-                displacement_px = self.config.miss_penalty_px
+            if frame_had_ground_truth:
+                if has_prediction and current_gt_x is not None:
+                    displacement_px = math.sqrt(
+                        (current_gt_x - pred_x) ** 2 + (current_gt_y - pred_y) ** 2
+                    )
+                else:
+                    # YOLO missed detection, or current GT unavailable: fixed penalty.
+                    displacement_px = self.config.miss_penalty_px
             else:
-                displacement_px = None  # ball absent in ground truth, skip frame
+                displacement_px = None  # no target at capture time, skip frame
 
-            if displacement_px is not None:
+            # Only count frames toward the cumulative score when actively collecting.
+            # In ARMED/COMPLETE/DISCONNECTED the dashboard still shows live values for
+            # debugging but they do not influence the saved score.
+            is_collecting = self.shared_state.is_collecting()
+
+            if displacement_px is not None and is_collecting:
                 self.shared_state.add_displacement(displacement_px)
                 self.shared_state.add_phase_result(
                     current_phase,
@@ -130,28 +142,29 @@ class Scorer:
                 )
             score_summary = self.shared_state.get_score_summary()
 
-            try:
-                self._csv_writer.writerow(
-                    [
-                        result_time,
-                        frame_number,
-                        self.config.group_id,
-                        current_phase,
-                        mode,
-                        round(latency_ms, 2),
-                        round(jitter_ms, 2),
-                        int(deadline_miss),
-                        _round_optional(gt_x),
-                        _round_optional(gt_y),
-                        round(pred_x, 2),
-                        round(pred_y, 2),
-                        _round_optional(displacement_px),
-                        round(score_summary["cumulative_displacement"], 2),
-                    ]
-                )
-                self.results_file.flush()
-            except Exception as exc:
-                logger.error("CSV write error: %s", exc)
+            if is_collecting:
+                try:
+                    self._csv_writer.writerow(
+                        [
+                            result_time,
+                            frame_number,
+                            self.config.group_id,
+                            current_phase,
+                            mode,
+                            round(latency_ms, 2),
+                            round(jitter_ms, 2),
+                            int(deadline_miss),
+                            _round_optional(current_gt_x),
+                            _round_optional(current_gt_y),
+                            round(pred_x, 2),
+                            round(pred_y, 2),
+                            _round_optional(displacement_px),
+                            round(score_summary["cumulative_displacement"], 2),
+                        ]
+                    )
+                    self.results_file.flush()
+                except Exception as exc:
+                    logger.error("CSV write error: %s", exc)
 
             try:
                 self.kafka_publisher.publish(
@@ -162,8 +175,8 @@ class Scorer:
                     jitter_ms=round(jitter_ms, 2),
                     deadline_miss=bool(deadline_miss),
                     displacement_px=displacement_px,
-                    true_x=gt_x,
-                    true_y=gt_y,
+                    true_x=current_gt_x,
+                    true_y=current_gt_y,
                     predicted_x=pred_x,
                     predicted_y=pred_y,
                     cumulative_displacement_px=score_summary["cumulative_displacement"],
@@ -175,8 +188,9 @@ class Scorer:
             self.dashboard_publisher.publish_metric(
                 frame_number=frame_number,
                 timestamp=result_time,
-                true_x=gt_x,
-                true_y=gt_y,
+                true_x=current_gt_x,
+                true_y=current_gt_y,
+                collection_state=self.shared_state.get_collection_snapshot(),
                 predicted_x=pred_x,
                 predicted_y=pred_y,
                 processing_mode=mode,
@@ -188,7 +202,7 @@ class Scorer:
                 experiment_phase=current_phase,
             )
 
-            if displacement_px is not None and has_prediction:
+            if displacement_px is not None and has_prediction and current_gt_x is not None:
                 frame_h, frame_w = frame.shape[:2]
                 warn_threshold = math.sqrt(frame_w ** 2 + frame_h ** 2) * 0.05
                 if displacement_px > warn_threshold:

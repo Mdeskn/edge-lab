@@ -19,6 +19,8 @@ nohup.out
 
 # Local lab assets and generated output
 data/results*.csv
+data/saved/*
+!data/saved/.gitkeep
 
 # Runtime artifacts copied from deployed VMs
 scripts/net-vm/network_conditions_publisher.log
@@ -49,6 +51,7 @@ scripts/*
 !scripts/calibrate_phases.py
 !scripts/preflight.sh
 !scripts/cleanup_all.sh
+!scripts/random_load.py
 
 # VM-deployed script snapshots/copies stay local and should not be added.
 scripts/gpu-load-lc1/**

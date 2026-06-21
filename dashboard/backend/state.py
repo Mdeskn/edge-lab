@@ -138,6 +138,9 @@ class DashboardState:
             ),
             "updated_at": None,
         }
+        self._collection_state: dict | None = None
+        self._prev_collection_state_str: str | None = None
+        self._phase_summary: dict[str, dict] = {}
 
     def update_app_metric(self, metric: dict[str, Any]) -> bool:
         """Record one scored frame, returning True when it is a new sample."""
@@ -195,6 +198,16 @@ class DashboardState:
             cumulative = clean.get("cumulative_displacement_px")
             if cumulative is not None:
                 group.cumulative_displacement = float(cumulative)
+
+            cs = clean.get("collection_state")
+            if cs is not None:
+                curr = cs.get("state")
+                if self._prev_collection_state_str == "complete" and curr == "armed":
+                    self._phase_summary = {}
+                self._prev_collection_state_str = curr
+                self._collection_state = cs
+
+            self._update_phase_summary_locked(clean)
             return True
 
     def update_frame(self, metric: dict[str, Any], image: bytes) -> None:
@@ -262,6 +275,50 @@ class DashboardState:
             if detail is not None:
                 self._placement_control["detail"] = detail
             self._placement_control["updated_at"] = time.time()
+
+    def get_collection_state(self) -> dict | None:
+        with self._lock:
+            return deepcopy(self._collection_state) if self._collection_state else None
+
+    def set_collection_state(self, state: dict) -> None:
+        with self._lock:
+            self._collection_state = state
+
+    def reset_phase_summary(self) -> None:
+        with self._lock:
+            self._phase_summary = {}
+
+    def _update_phase_summary_locked(self, metric: dict[str, Any]) -> None:
+        """Accumulate per-phase totals. Caller must hold _lock."""
+        phase = metric.get("experiment_phase")
+        if not phase or phase == "unknown":
+            return
+        if phase not in self._phase_summary:
+            self._phase_summary[phase] = {
+                "frames": 0,
+                "total_displacement": 0.0,
+                "total_latency_ms": 0.0,
+                "latency_frames": 0,
+                "total_jitter_ms": 0.0,
+                "jitter_frames": 0,
+                "deadline_misses": 0,
+            }
+        s = self._phase_summary[phase]
+        disp = metric.get("displacement_px")
+        lat = metric.get("latency_ms")
+        jit = metric.get("jitter_ms")
+        miss = metric.get("deadline_miss")
+        if disp is not None:
+            s["frames"] += 1
+            s["total_displacement"] += float(disp)
+        if lat is not None:
+            s["total_latency_ms"] += float(lat)
+            s["latency_frames"] += 1
+        if jit is not None:
+            s["total_jitter_ms"] += float(jit)
+            s["jitter_frames"] += 1
+        if miss:
+            s["deadline_misses"] += 1
 
     def snapshot(self, include_history: bool = True) -> dict[str, Any]:
         """Return a JSON-ready immutable dashboard view."""
@@ -333,6 +390,8 @@ class DashboardState:
                 },
                 "summary": self._summary(group),
                 "placement_control": deepcopy(self._placement_control),
+                "collection_state": deepcopy(self._collection_state) if self._collection_state else None,
+                "phase_summary": deepcopy(self._phase_summary),
                 "history": history,
                 "updated_at": time.time(),
             }

@@ -24,6 +24,7 @@ class AppMetric(BaseModel):
     predicted_x: float | None = None
     predicted_y: float | None = None
     cumulative_displacement_px: float | None = None
+    collection_state: dict | None = None
 
 
 class FrameUpdate(AppMetric):
@@ -60,3 +61,15 @@ class PlacementControlRequest(BaseModel):
     """Manual local/remote placement command from the dashboard."""
 
     mode: Literal["local", "remote"]
+
+
+class CycleCommandRequest(BaseModel):
+    """State-machine command from the dashboard."""
+
+    action: Literal["start_on_next_cycle", "abort_current_cycle", "reset_to_armed"]
+
+
+class SaveRequest(BaseModel):
+    """Request to save the current results with a label."""
+
+    label: str | None = None

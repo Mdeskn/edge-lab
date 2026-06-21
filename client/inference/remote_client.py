@@ -58,6 +58,7 @@ class RemoteClient:
         self._client = None
         self._failure_cooldown = failure_cooldown
         self._last_failure_time: float | None = None
+        self._session = requests.Session()
 
         if self._mode == "http_jpeg":
             self._connect_http_gateway()
@@ -117,7 +118,7 @@ class RemoteClient:
     def _connect_http_gateway(self) -> None:
         """Connect to the VM2 JPEG inference API."""
         try:
-            resp = requests.get(
+            resp = self._session.get(
                 f"{self._remote_inference_url}/health",
                 timeout=self._timeout,
             )
@@ -173,10 +174,10 @@ class RemoteClient:
         if not ok:
             raise RuntimeError("Could not encode frame as JPEG")
 
-        resp = requests.post(
+        resp = self._session.post(
             f"{self._remote_inference_url}/infer",
             data=jpeg.tobytes(),
-            headers={"Content-Type": "image/jpeg"},
+            headers={"Content-Type": "image/jpeg", "Connection": "close"},
             timeout=self._timeout,
         )
         if not resp.ok:

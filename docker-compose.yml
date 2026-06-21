@@ -16,6 +16,12 @@ services:
       dockerfile: dashboard/backend/Dockerfile
     env_file:
       - .env
+    environment:
+      - DASHBOARD_SAVE_DIR=/data/saved
+      - RESULTS_LOG_PATH=/data/results.csv
+      - RESULTS_BY_PHASE_PATH=/data/results_by_phase.csv
+    volumes:
+      - ./data:/data
     ports:
       - "8080:8080"
     restart: unless-stopped

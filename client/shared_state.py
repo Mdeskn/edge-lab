@@ -4,7 +4,16 @@ Every field is accessed through getter/setter methods protected by a single lock
 """
 import threading
 from collections import deque
-from typing import Optional
+from enum import Enum
+from typing import Optional, Set
+
+
+class CollectionState(str, Enum):
+    """Lifecycle of the per-cycle data collection."""
+    DISCONNECTED = "disconnected"
+    ARMED = "armed"
+    COLLECTING = "collecting"
+    COMPLETE = "complete"
 
 
 REQUESTED_PROCESSING_MODES = ("local", "remote")
@@ -36,6 +45,16 @@ class SharedState:
         self._frames_processed: int = 0
 
         self._experiment_phase: str = "unknown"
+
+        # ─── Collection state machine ────────────────────────────────────────
+        self._collection_state: CollectionState = CollectionState.DISCONNECTED
+        self._cycle_started_at: float | None = None
+        self._cycle_completed_at: float | None = None
+        self._cycle_phases_seen: Set[str] = set()
+        self._cycles_completed: int = 0
+        self._previous_phase: str | None = None
+        self._armed_for_next_cycle: bool = False
+        self._final_cumulative_displacement: float | None = None
 
         self._phase_scores: dict = {}
         # Structure:
@@ -97,6 +116,103 @@ class SharedState:
         """Return (frame_number, gt_x, gt_y) as a tuple."""
         with self._lock:
             return (self._current_frame_number, self._current_gt_x, self._current_gt_y)
+
+    # ─── Collection state machine API ────────────────────────────────────
+
+    def get_collection_state(self) -> CollectionState:
+        with self._lock:
+            return self._collection_state
+
+    def is_collecting(self) -> bool:
+        """Return True only when scored frames should be counted toward the cycle."""
+        with self._lock:
+            return self._collection_state == CollectionState.COLLECTING
+
+    def get_collection_snapshot(self) -> dict:
+        """Return a thread-safe snapshot of all cycle state for the dashboard."""
+        with self._lock:
+            return {
+                "state": self._collection_state.value,
+                "cycle_started_at": self._cycle_started_at,
+                "cycle_completed_at": self._cycle_completed_at,
+                "phases_seen": sorted(self._cycle_phases_seen),
+                "cycles_completed": self._cycles_completed,
+                "armed_for_next_cycle": self._armed_for_next_cycle,
+                "final_cumulative_displacement": self._final_cumulative_displacement,
+            }
+
+    def transition_to_disconnected(self) -> None:
+        with self._lock:
+            self._collection_state = CollectionState.DISCONNECTED
+
+    def transition_to_armed(self) -> None:
+        """Move to ARMED. Reset per-cycle counters but keep cycles_completed."""
+        with self._lock:
+            self._collection_state = CollectionState.ARMED
+            self._cycle_started_at = None
+            self._cycle_completed_at = None
+            self._cycle_phases_seen = set()
+            self._armed_for_next_cycle = False
+            self._final_cumulative_displacement = None
+            self._previous_phase = None
+            self._reset_cycle_counters()
+
+    def request_start_on_next_cycle(self) -> None:
+        """Set the flag that triggers collection on the next baseline boundary."""
+        with self._lock:
+            if self._collection_state == CollectionState.ARMED:
+                self._armed_for_next_cycle = True
+
+    def cancel_pending_start(self) -> None:
+        with self._lock:
+            self._armed_for_next_cycle = False
+
+    def transition_to_collecting(self, started_at: float) -> bool:
+        """
+        Begin collection. Returns True if the transition happened, False if the
+        state machine was not in ARMED+armed_for_next_cycle.
+        """
+        with self._lock:
+            if self._collection_state != CollectionState.ARMED:
+                return False
+            if not self._armed_for_next_cycle:
+                return False
+            self._collection_state = CollectionState.COLLECTING
+            self._cycle_started_at = started_at
+            self._cycle_phases_seen = {"baseline"}
+            self._armed_for_next_cycle = False
+            return True
+
+    def add_phase_seen(self, phase: str) -> None:
+        with self._lock:
+            if self._collection_state == CollectionState.COLLECTING:
+                self._cycle_phases_seen.add(phase)
+
+    def get_phases_seen(self) -> Set[str]:
+        with self._lock:
+            return set(self._cycle_phases_seen)
+
+    def transition_to_complete(self, completed_at: float, final_score: float) -> None:
+        with self._lock:
+            self._collection_state = CollectionState.COMPLETE
+            self._cycle_completed_at = completed_at
+            self._cycles_completed += 1
+            self._final_cumulative_displacement = final_score
+
+    def get_previous_phase(self) -> str | None:
+        with self._lock:
+            return self._previous_phase
+
+    def set_previous_phase(self, phase: str) -> None:
+        with self._lock:
+            self._previous_phase = phase
+
+    def _reset_cycle_counters(self) -> None:
+        """Internal: clear per-cycle aggregates. Caller must hold the lock."""
+        self._cumulative_displacement = 0.0
+        self._frames_processed = 0
+        self._phase_scores = {}
+        self._recent_latencies = deque(maxlen=20)
 
     # --- Latest raw frame for optional latency probes ---
 

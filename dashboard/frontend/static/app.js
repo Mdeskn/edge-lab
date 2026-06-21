@@ -64,6 +64,39 @@ function bindElements() {
 function bindControls() {
   el["force-local"].addEventListener("click", () => requestPlacement("local"));
   el["force-remote"].addEventListener("click", () => requestPlacement("remote"));
+
+  el["cycle-start-btn"].addEventListener("click", async () => {
+    try { await postJson("/api/control/cycle", { action: "start_on_next_cycle" }); }
+    catch (e) { alert("Failed to start: " + e.message); }
+  });
+
+  el["cycle-abort-btn"].addEventListener("click", async () => {
+    if (!confirm("Abort the current cycle? All collected data will be discarded.")) return;
+    try { await postJson("/api/control/cycle", { action: "abort_current_cycle" }); }
+    catch (e) { alert("Failed to abort: " + e.message); }
+  });
+
+  el["results-save-btn"].addEventListener("click", async () => {
+    const label = el["results-label-input"].value;
+    const status = el["results-save-status"];
+    status.textContent = "Saving…";
+    try {
+      const result = await postJson("/api/save", { label });
+      status.textContent = `Saved as ${result.stem}. Files: ${result.files.join(", ")}`;
+    } catch (e) {
+      status.textContent = "Save failed: " + e.message;
+    }
+  });
+
+  el["results-rerun-btn"].addEventListener("click", async () => {
+    try {
+      await postJson("/api/control/cycle", { action: "reset_to_armed" });
+      el["results-modal"].hidden = true;
+      el["results-label-input"].value = "";
+      el["results-save-status"].textContent = "";
+      _lastShownComplete = false;
+    } catch (e) { alert("Failed to reset: " + e.message); }
+  });
 }
 
 function apiUrl(path) {
@@ -167,6 +200,8 @@ function render(state) {
   renderInterpretation(state);
   renderCharts(state);
   renderSummary(state);
+  renderCycleBanner(state);
+  maybeShowResultsModal(state);
 }
 
 function renderTopbar(state) {
@@ -507,4 +542,104 @@ function escapeHtml(value) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+async function postJson(url, body) {
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  if (!resp.ok) {
+    const txt = await resp.text();
+    throw new Error(`${resp.status}: ${txt}`);
+  }
+  return resp.json();
+}
+
+function renderCycleBanner(state) {
+  const cs = state.collection_state || { state: "disconnected" };
+  const phase = state.experiment_phase || "unknown";
+  const banner = el["cycle-banner"];
+  const startBtn = el["cycle-start-btn"];
+  const abortBtn = el["cycle-abort-btn"];
+  const progress = el["cycle-progress"];
+  const progressText = el["cycle-progress-text"];
+  const progressFill = el["cycle-progress-fill"];
+
+  banner.className = "cycle-banner cycle-banner-" + cs.state;
+  text("cycle-state-label", cs.state.toUpperCase());
+
+  startBtn.hidden = true;
+  abortBtn.hidden = true;
+  progress.hidden = true;
+
+  if (cs.state === "disconnected") {
+    text("cycle-state-detail", "Waiting for experiment infrastructure…");
+  } else if (cs.state === "armed") {
+    if (cs.armed_for_next_cycle) {
+      text("cycle-state-detail", `Armed. Waiting for next baseline boundary. Current phase: ${phase}.`);
+    } else {
+      text("cycle-state-detail", `Experiment running. Phase: ${phase}. Click Start to collect on next cycle.`);
+      startBtn.hidden = false;
+    }
+  } else if (cs.state === "collecting") {
+    const startedAt = cs.cycle_started_at || 0;
+    const elapsed = startedAt ? Math.max(0, (Date.now() / 1000) - startedAt) : 0;
+    const total = 75;
+    const pct = Math.min(100, (elapsed / total) * 100);
+    progress.hidden = false;
+    abortBtn.hidden = false;
+    if (progressText) progressText.textContent = `${Math.round(elapsed)} / ${total} s`;
+    if (progressFill) progressFill.style.width = pct + "%";
+    const seen = (cs.phases_seen || []).join(", ") || "none";
+    text("cycle-state-detail", `Collecting cycle ${(cs.cycles_completed || 0) + 1}. Phase: ${phase}. Seen: ${seen}.`);
+  } else if (cs.state === "complete") {
+    const final = cs.final_cumulative_displacement;
+    text("cycle-state-detail", `Cycle complete. Final score: ${final != null ? final.toFixed(2) + " px" : "N/A"}.`);
+  }
+}
+
+let _lastShownComplete = false;
+
+function maybeShowResultsModal(state) {
+  const cs = state.collection_state || {};
+  const modal = el["results-modal"];
+  if (!modal) return;
+  if (cs.state === "complete" && !_lastShownComplete) {
+    _lastShownComplete = true;
+    const score = cs.final_cumulative_displacement;
+    text("results-score", score != null ? score.toFixed(2) + " px" : "N/A");
+    renderResultsPhaseTable(state);
+    modal.hidden = false;
+  } else if (cs.state !== "complete") {
+    _lastShownComplete = false;
+    modal.hidden = true;
+  }
+}
+
+function renderResultsPhaseTable(state) {
+  const tbody = el["results-phase-tbody"];
+  if (!tbody) return;
+  const summary = state.phase_summary || {};
+  const phaseOrder = ["baseline", "gpu_load", "jitter_light", "bandwidth_50", "mixed"];
+  tbody.innerHTML = "";
+  for (const phase of phaseOrder) {
+    const s = summary[phase] || {};
+    const frames = s.frames || 0;
+    const meanLat = s.latency_frames > 0 ? (s.total_latency_ms / s.latency_frames).toFixed(1) : "—";
+    const meanJit = s.jitter_frames > 0 ? (s.total_jitter_ms / s.jitter_frames).toFixed(1) : "—";
+    const deadlineMisses = s.deadline_misses || 0;
+    const disp = (s.total_displacement || 0).toFixed(1);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(phase)}</td>
+      <td>${frames}</td>
+      <td>${escapeHtml(meanLat)} ms</td>
+      <td>${escapeHtml(meanJit)} ms</td>
+      <td>${deadlineMisses}</td>
+      <td>${escapeHtml(disp)} px</td>
+    `;
+    tbody.appendChild(tr);
+  }
 }
