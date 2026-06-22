@@ -589,6 +589,7 @@ function renderCycleBanner(state) {
   startBtn.hidden = true;
   abortBtn.hidden = true;
   progress.hidden = true;
+  progress.style.display = "none";
 
   if (cs.state === "disconnected") {
     text("cycle-state-detail", "Waiting for experiment infrastructure…");
@@ -610,6 +611,7 @@ function renderCycleBanner(state) {
         : 75;
     const pct = Math.min(100, (elapsed / total) * 100);
     progress.hidden = false;
+    progress.style.display = "flex";
     abortBtn.hidden = false;
     if (progressText) progressText.textContent = `${Math.round(elapsed)} / ${total} s`;
     if (progressFill) progressFill.style.width = pct + "%";
