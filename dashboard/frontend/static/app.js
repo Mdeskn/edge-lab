@@ -76,6 +76,22 @@ function bindControls() {
     catch (e) { alert("Failed to abort: " + e.message); }
   });
 
+  el["cycle-refresh-duration-btn"].addEventListener("click", async () => {
+    const button = el["cycle-refresh-duration-btn"];
+    button.disabled = true;
+    button.textContent = "Updating…";
+    try {
+      await postJson("/api/control/cycle", { action: "refresh_cycle_duration" });
+      button.textContent = "Update requested";
+      setTimeout(() => { button.textContent = "Update experiment time"; }, 1500);
+    } catch (e) {
+      button.textContent = "Update experiment time";
+      alert("Failed to update experiment time: " + e.message);
+    } finally {
+      button.disabled = false;
+    }
+  });
+
   el["results-save-btn"].addEventListener("click", async () => {
     const label = el["results-label-input"].value;
     const status = el["results-save-status"];
@@ -586,7 +602,9 @@ function renderCycleBanner(state) {
   } else if (cs.state === "collecting") {
     const startedAt = cs.cycle_started_at || 0;
     const elapsed = startedAt ? Math.max(0, (Date.now() / 1000) - startedAt) : 0;
-    const total = 75;
+    const total = (cs.cycle_duration_sec && cs.cycle_duration_sec > 0)
+        ? cs.cycle_duration_sec
+        : 75;
     const pct = Math.min(100, (elapsed / total) * 100);
     progress.hidden = false;
     abortBtn.hidden = false;

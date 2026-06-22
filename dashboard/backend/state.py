@@ -141,6 +141,7 @@ class DashboardState:
         self._collection_state: dict | None = None
         self._prev_collection_state_str: str | None = None
         self._phase_summary: dict[str, dict] = {}
+        self._cycle_duration_refresh_requested = False
 
     def update_app_metric(self, metric: dict[str, Any]) -> bool:
         """Record one scored frame, returning True when it is a new sample."""
@@ -287,6 +288,18 @@ class DashboardState:
     def reset_phase_summary(self) -> None:
         with self._lock:
             self._phase_summary = {}
+
+    def request_cycle_duration_refresh(self) -> None:
+        """Request that the client reload its scenario-derived cycle duration."""
+        with self._lock:
+            self._cycle_duration_refresh_requested = True
+
+    def consume_cycle_duration_refresh_request(self) -> bool:
+        """Return and clear the pending client cycle-duration refresh request."""
+        with self._lock:
+            requested = self._cycle_duration_refresh_requested
+            self._cycle_duration_refresh_requested = False
+            return requested
 
     def _update_phase_summary_locked(self, metric: dict[str, Any]) -> None:
         """Accumulate per-phase totals. Caller must hold _lock."""

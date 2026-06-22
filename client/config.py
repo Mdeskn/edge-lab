@@ -49,6 +49,7 @@ class Config:
     auto_stop: bool
     phase_timeout_sec: float
     sync_mode: str
+    scenario_path: str
     miss_penalty_px: float
     dashboard_enabled: bool
     dashboard_url: str
@@ -113,6 +114,7 @@ def load_config() -> Config:
         auto_stop=os.environ.get("AUTO_STOP", "true").lower() == "true",
         phase_timeout_sec=float(os.environ.get("PHASE_TIMEOUT_SEC", "300")),
         sync_mode=os.environ.get("SYNC_MODE", "manual").strip().lower(),
+        scenario_path=os.environ.get("SCENARIO_PATH", "/scenario/scenario.json").strip(),
         miss_penalty_px=float(os.environ.get("MISS_PENALTY_PX", "100.0")),
         dashboard_enabled=os.environ.get("DASHBOARD_ENABLED", "false").lower() == "true",
         dashboard_url=os.environ.get("DASHBOARD_URL", "http://localhost:8080"),

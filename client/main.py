@@ -9,6 +9,7 @@ import threading
 import time
 
 from config import load_config, Config
+from scenario_parser import load_cycle_duration_sec
 from shared_state import SharedState, CollectionState
 from inference.local_server import LocalServer
 from inference.remote_client import RemoteClient
@@ -267,6 +268,9 @@ def main() -> None:
 
     # 5. SharedState
     shared_state = SharedState(initial_mode=config.initial_processing_mode)
+    cycle_duration = load_cycle_duration_sec(config.scenario_path)
+    shared_state.set_cycle_duration_sec(cycle_duration)
+    logger.info("Cycle duration set to %.1fs", cycle_duration)
 
     # 6a. LocalServer: fails fast if model is missing
     local_server = LocalServer(
@@ -297,7 +301,7 @@ def main() -> None:
     kafka_publisher = AppMetricsPublisher(
         config.kafka_brokers, config.kafka_app_topic, config.group_id
     )
-    dashboard_publisher = DashboardPublisher(config)
+    dashboard_publisher = DashboardPublisher(config, shared_state)
 
     # 8. Results CSV
     results_dir = os.path.dirname(config.results_log_path)

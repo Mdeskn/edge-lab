@@ -66,7 +66,12 @@ class PlacementControlRequest(BaseModel):
 class CycleCommandRequest(BaseModel):
     """State-machine command from the dashboard."""
 
-    action: Literal["start_on_next_cycle", "abort_current_cycle", "reset_to_armed"]
+    action: Literal[
+        "start_on_next_cycle",
+        "abort_current_cycle",
+        "reset_to_armed",
+        "refresh_cycle_duration",
+    ]
 
 
 class SaveRequest(BaseModel):

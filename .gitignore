@@ -65,6 +65,9 @@ docs/*
 docs/archive/markdown-sources/root/edge-lab_project_inventory.md
 benchmark_inference*.py
 
+# Generated project inventory reports
+*_project_inventory.md
+
 # IDE
 .vscode/
 .idea/

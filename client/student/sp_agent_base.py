@@ -423,6 +423,12 @@ class SPAgentBase:
         elif action == "reset_to_armed":
             self._shared_state.transition_to_armed()
             logger.info("Reset to ARMED by command")
+        elif action == "refresh_cycle_duration":
+            from scenario_parser import load_cycle_duration_sec
+
+            duration = load_cycle_duration_sec(self._config.scenario_path)
+            self._shared_state.set_cycle_duration_sec(duration)
+            logger.info("Cycle duration refreshed from scenario: %.1fs", duration)
 
     # ------------------------------------------------------------------ #
     # Debug logging (enabled by SP_AGENT_DEBUG_METRICS=true)              #

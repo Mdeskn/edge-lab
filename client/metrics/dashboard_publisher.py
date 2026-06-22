@@ -9,6 +9,8 @@ import cv2
 import numpy as np
 
 from config import Config
+from scenario_parser import load_cycle_duration_sec
+from shared_state import SharedState
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +25,10 @@ _DARK = (12, 20, 20)
 class DashboardPublisher:
     """Publish current video frames with current GT and latest completed YOLO result."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, shared_state: SharedState):
         self._enabled = config.dashboard_enabled
+        self._scenario_path = config.scenario_path
+        self._shared_state = shared_state
         base_url = config.dashboard_url.rstrip("/")
         self._preview_url = f"{base_url}/api/preview"
         self._metric_url = f"{base_url}/api/metric"
@@ -207,6 +211,10 @@ class DashboardPublisher:
                     timeout=0.75,
                 )
                 response.raise_for_status()
+                if response.json().get("refresh_cycle_duration"):
+                    duration = load_cycle_duration_sec(self._scenario_path)
+                    self._shared_state.set_cycle_duration_sec(duration)
+                    logger.info("Cycle duration refreshed from scenario: %.1fs", duration)
             except Exception as exc:
                 logger.debug("Dashboard metrics unavailable: %s", exc)
 

@@ -55,6 +55,7 @@ class SharedState:
         self._previous_phase: str | None = None
         self._armed_for_next_cycle: bool = False
         self._final_cumulative_displacement: float | None = None
+        self._cycle_duration_sec: float = 75.0
 
         self._phase_scores: dict = {}
         # Structure:
@@ -128,6 +129,15 @@ class SharedState:
         with self._lock:
             return self._collection_state == CollectionState.COLLECTING
 
+    def set_cycle_duration_sec(self, duration: float) -> None:
+        """Set the expected duration of one cycle, derived from the scenario file."""
+        with self._lock:
+            self._cycle_duration_sec = float(duration) if duration > 0 else 75.0
+
+    def get_cycle_duration_sec(self) -> float:
+        with self._lock:
+            return self._cycle_duration_sec
+
     def get_collection_snapshot(self) -> dict:
         """Return a thread-safe snapshot of all cycle state for the dashboard."""
         with self._lock:
@@ -138,6 +148,7 @@ class SharedState:
                 "phases_seen": sorted(self._cycle_phases_seen),
                 "cycles_completed": self._cycles_completed,
                 "armed_for_next_cycle": self._armed_for_next_cycle,
+                "cycle_duration_sec": self._cycle_duration_sec,
                 "final_cumulative_displacement": self._final_cumulative_displacement,
             }
 
