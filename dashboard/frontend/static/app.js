@@ -582,6 +582,9 @@ function renderCycleBanner(state) {
   const progress = el["cycle-progress"];
   const progressText = el["cycle-progress-text"];
   const progressFill = el["cycle-progress-fill"];
+  const total = (cs.cycle_duration_sec && cs.cycle_duration_sec > 0)
+    ? cs.cycle_duration_sec
+    : 75;
 
   banner.className = "cycle-banner cycle-banner-" + cs.state;
   text("cycle-state-label", cs.state.toUpperCase());
@@ -594,9 +597,11 @@ function renderCycleBanner(state) {
   if (cs.state === "disconnected") {
     text("cycle-state-detail", "Waiting for experiment infrastructure…");
   } else if (cs.state === "armed") {
-    const duration = (cs.cycle_duration_sec && cs.cycle_duration_sec > 0)
-      ? `${cs.cycle_duration_sec} s`
-      : "75 s";
+    const duration = `${total} s`;
+    progress.hidden = false;
+    progress.style.display = "flex";
+    if (progressText) progressText.textContent = `0 / ${total} s`;
+    if (progressFill) progressFill.style.width = "0%";
     if (cs.armed_for_next_cycle) {
       text("cycle-state-detail", `Armed. Waiting for next baseline boundary. Current phase: ${phase}. Cycle duration: ${duration}.`);
     } else {
@@ -606,9 +611,6 @@ function renderCycleBanner(state) {
   } else if (cs.state === "collecting") {
     const startedAt = cs.cycle_started_at || 0;
     const elapsed = startedAt ? Math.max(0, (Date.now() / 1000) - startedAt) : 0;
-    const total = (cs.cycle_duration_sec && cs.cycle_duration_sec > 0)
-        ? cs.cycle_duration_sec
-        : 75;
     const pct = Math.min(100, (elapsed / total) * 100);
     progress.hidden = false;
     progress.style.display = "flex";
