@@ -789,6 +789,7 @@ dd {
 .cycle-banner-right { display: flex; align-items: center; gap: 12px; }
 
 .cycle-progress { display: flex; align-items: center; gap: 8px; min-width: 200px; }
+.cycle-progress[hidden] { display: none; }
 .cycle-progress-bar {
   flex: 1; height: 8px; background: rgba(0,0,0,0.1);
   border-radius: 4px; overflow: hidden;

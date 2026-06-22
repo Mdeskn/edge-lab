@@ -593,10 +593,13 @@ function renderCycleBanner(state) {
   if (cs.state === "disconnected") {
     text("cycle-state-detail", "Waiting for experiment infrastructure…");
   } else if (cs.state === "armed") {
+    const duration = (cs.cycle_duration_sec && cs.cycle_duration_sec > 0)
+      ? `${cs.cycle_duration_sec} s`
+      : "75 s";
     if (cs.armed_for_next_cycle) {
-      text("cycle-state-detail", `Armed. Waiting for next baseline boundary. Current phase: ${phase}.`);
+      text("cycle-state-detail", `Armed. Waiting for next baseline boundary. Current phase: ${phase}. Cycle duration: ${duration}.`);
     } else {
-      text("cycle-state-detail", `Experiment running. Phase: ${phase}. Click Start to collect on next cycle.`);
+      text("cycle-state-detail", `Experiment running. Phase: ${phase}. Cycle duration: ${duration}. Click Start to collect on next cycle.`);
       startBtn.hidden = false;
     }
   } else if (cs.state === "collecting") {
