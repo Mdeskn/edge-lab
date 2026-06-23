@@ -16,7 +16,7 @@
 
     {
 
-      "command": "ssh router net-vm bash /home/mae/network_load/set_phase.sh baseline",
+      "command": "ssh router net-vm bash /home/mae/network_load/set_phase.sh cycle_start",
 
       "executionTime": 0
 
@@ -88,7 +88,7 @@
 
     {
 
-      "command": "ssh router net-vm bash /home/mae/network_load/set_phase.sh baseline",
+      "command": "ssh router net-vm bash /home/mae/network_load/set_phase.sh cycle_end",
 
       "executionTime": 70000
 

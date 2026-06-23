@@ -20,11 +20,10 @@ from threads.frame_reader import FrameReader
 from threads.dispatcher import Dispatcher
 from threads.scorer import Scorer
 from threads.latency_probe import LatencyProbe
-from student.sp_agent import SPAgent
 
 logger = logging.getLogger(__name__)
 
-EXPERIMENT_PHASES = ["baseline", "gpu_load", "jitter_light", "bandwidth_50", "mixed"]
+EXPERIMENT_PHASES = ["cycle_start", "gpu_load", "jitter_light", "bandwidth_50", "mixed", "cycle_end"]
 
 
 def run_cycle_monitor(config: Config, shared_state: SharedState) -> None:
@@ -32,7 +31,7 @@ def run_cycle_monitor(config: Config, shared_state: SharedState) -> None:
     Daemon thread that drives the collection state machine.
 
     Polls shared_state.get_experiment_phase() to detect cycle boundaries
-    (transitions into baseline) and drives DISCONNECTED → ARMED → COLLECTING
+    (transitions into cycle_start) and drives DISCONNECTED → ARMED → COLLECTING
     → COMPLETE state transitions.
     """
     logger.info("CycleMonitor started (sync_mode=%s)", config.sync_mode)
@@ -55,7 +54,7 @@ def run_cycle_monitor(config: Config, shared_state: SharedState) -> None:
         logger.info("SYNC_MODE=off: collecting indefinitely, no cycle detection")
         return
 
-    all_phases = {"baseline", "gpu_load", "jitter_light", "bandwidth_50", "mixed"}
+    all_phases = {"cycle_start", "gpu_load", "jitter_light", "bandwidth_50", "mixed", "cycle_end"}
     poll_interval = 0.5
     cycle_timeout_sec = config.phase_timeout_sec if config.phase_timeout_sec > 0 else None
 
@@ -73,15 +72,15 @@ def run_cycle_monitor(config: Config, shared_state: SharedState) -> None:
                 previous_phase, current_phase, collection_state.value,
             )
 
-        # ARMED → COLLECTING on cycle boundary (entering baseline from another phase)
+        # ARMED → COLLECTING on cycle boundary (entering cycle_start from another phase)
         if collection_state == CollectionState.ARMED:
             if (
-                current_phase == "baseline"
+                current_phase == "cycle_start"
                 and previous_phase is not None
-                and previous_phase != "baseline"
+                and previous_phase != "cycle_start"
             ):
                 if shared_state.transition_to_collecting(time.time()):
-                    logger.info("Cycle boundary detected, COLLECTING started")
+                    logger.info("cycle_start detected, COLLECTING started")
             continue
 
         # COLLECTING: track phases, detect cycle end, handle timeout
@@ -89,12 +88,8 @@ def run_cycle_monitor(config: Config, shared_state: SharedState) -> None:
             shared_state.add_phase_seen(current_phase)
 
             phases_seen = shared_state.get_phases_seen()
-            if (
-                phases_seen >= all_phases
-                and current_phase == "baseline"
-                and previous_phase is not None
-                and previous_phase != "baseline"
-            ):
+            phase_based_done = (current_phase == "cycle_end")
+            if phase_based_done:
                 score_summary = shared_state.get_score_summary()
                 final_score = float(score_summary.get("cumulative_displacement", 0.0))
                 shared_state.transition_to_complete(time.time(), final_score)
@@ -200,6 +195,23 @@ def write_phase_summary_csv(
     logger.info("Wrote per-phase summary CSV: %s", config.results_by_phase_path)
 
 
+def _load_sp_agent_class(class_name: str):
+    """Import and return the SPAgent class indicated by config.sp_agent_class.
+
+    class_name="student"  loads SPAgent from student.sp_agent
+    class_name="example"  loads ExampleSPAgent from student.sp_agent_example
+    (the example module also exports SPAgent as an alias)
+    """
+    import importlib
+    if class_name == "student":
+        module = importlib.import_module("student.sp_agent")
+    elif class_name == "example":
+        module = importlib.import_module("student.sp_agent_example")
+    else:
+        raise ValueError(f"Unknown sp_agent_class: {class_name!r}")
+    return getattr(module, "SPAgent")
+
+
 def main() -> None:
     """
     Start-up sequence:
@@ -249,6 +261,7 @@ def main() -> None:
     logger.info("  target_conf_threshold: %.2f", config.target_conf_threshold)
     logger.info("  sp_agent_interval_ms : %d", config.sp_agent_interval_ms)
     logger.info("  manual_placement    : %s", config.manual_placement_control)
+    logger.info("  sp_agent_class      : %s", config.sp_agent_class)
     logger.info("  control_topic       : %s", config.kafka_control_topic)
     logger.info("  latency_probes      : %s", config.latency_probes_enabled)
     logger.info("  probe_interval_sec  : %.1f", config.latency_probe_interval_sec)
@@ -332,7 +345,13 @@ def main() -> None:
         dashboard_publisher,
         results_file,
     )
-    sp_agent = SPAgent(config, shared_state)
+    SPAgentClass = _load_sp_agent_class(config.sp_agent_class)
+    sp_agent = SPAgentClass(config, shared_state)
+    logger.info(
+        "Loaded SP-Agent: %s (from SP_AGENT_CLASS=%s)",
+        SPAgentClass.__name__,
+        config.sp_agent_class,
+    )
     latency_probe = None
     if config.latency_probes_enabled:
         if config.kafka_brokers:

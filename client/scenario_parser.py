@@ -1,10 +1,10 @@
 """
 Parses a SeQaM scenario file to derive the cycle duration in seconds.
 
-The cycle duration is the time between the first 'baseline' phase event and the
-next 'baseline' phase event (one full rotation through all phases). If the
-scenario only contains one baseline event, the duration is the timestamp of the
-final event in the file.
+The cycle duration is the time between the first 'cycle_start' phase event and
+the next 'cycle_start' phase event (one full rotation through all phases). If
+the scenario only contains one cycle_start event, the duration is the timestamp
+of the final event in the file.
 
 This lets the app and dashboard adapt automatically when the scenario changes,
 without requiring anyone to update a separate CYCLE_DURATION_SEC env var.
@@ -63,7 +63,7 @@ def load_cycle_duration_sec(scenario_path: str | Path) -> float:
         )
         return DEFAULT_CYCLE_DURATION_SEC
 
-    baseline_times: list[float] = []
+    cycle_start_times: list[float] = []
     last_event_time: float = 0.0
 
     for event in events:
@@ -84,16 +84,16 @@ def load_cycle_duration_sec(scenario_path: str | Path) -> float:
 
         cmd = event.get("command") or ""
         match = _SET_PHASE_RE.search(cmd)
-        if match and match.group(1) == "baseline":
-            baseline_times.append(t)
+        if match and match.group(1) == "cycle_start":
+            cycle_start_times.append(t)
 
-    # Two baselines means a complete cycle (start + return). Duration is delta.
-    if len(baseline_times) >= 2:
-        baseline_times.sort()
-        duration = baseline_times[1] - baseline_times[0]
+    # Two cycle_starts mean a complete loop. Duration is the delta.
+    if len(cycle_start_times) >= 2:
+        cycle_start_times.sort()
+        duration = cycle_start_times[1] - cycle_start_times[0]
         if duration > 0:
             logger.info(
-                "Cycle duration from scenario %s: %.1fs (baseline-to-baseline)",
+                "Cycle duration from scenario %s: %.1fs (cycle_start-to-cycle_start)",
                 path, duration,
             )
             return duration

@@ -89,3 +89,4 @@ class ExampleSPAgent(SPAgentBase):
             self._pending_count = 0
 
         return self._last_decision
+SPAgent = ExampleSPAgent

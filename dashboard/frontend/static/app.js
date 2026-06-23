@@ -1,7 +1,8 @@
 "use strict";
 
 const phaseDescriptions = {
-  baseline: "No artificial load",
+  cycle_start: "Clean conditions; cycle begins",
+  cycle_end: "Clean conditions; cycle ends",
   bandwidth_200: "Bandwidth capped at 200 mbit",
   bandwidth_50: "Bandwidth capped at 50 mbit",
   bandwidth_5: "Bandwidth capped at 5 mbit",
@@ -603,7 +604,7 @@ function renderCycleBanner(state) {
     if (progressText) progressText.textContent = `0 / ${total} s`;
     if (progressFill) progressFill.style.width = "0%";
     if (cs.armed_for_next_cycle) {
-      text("cycle-state-detail", `Armed. Waiting for next baseline boundary. Current phase: ${phase}. Cycle duration: ${duration}.`);
+      text("cycle-state-detail", `Armed. Waiting for next cycle_start boundary. Current phase: ${phase}. Cycle duration: ${duration}.`);
     } else {
       text("cycle-state-detail", `Experiment running. Phase: ${phase}. Cycle duration: ${duration}. Click Start to collect on next cycle.`);
       startBtn.hidden = false;
@@ -647,7 +648,7 @@ function renderResultsPhaseTable(state) {
   const tbody = el["results-phase-tbody"];
   if (!tbody) return;
   const summary = state.phase_summary || {};
-  const phaseOrder = ["baseline", "gpu_load", "jitter_light", "bandwidth_50", "mixed"];
+  const phaseOrder = ["cycle_start", "gpu_load", "jitter_light", "bandwidth_50", "mixed", "cycle_end"];
   tbody.innerHTML = "";
   for (const phase of phaseOrder) {
     const s = summary[phase] || {};

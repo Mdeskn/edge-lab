@@ -33,6 +33,7 @@ class Config:
     kafka_phase_topic: str
     kafka_control_topic: str
     manual_placement_control: bool
+    sp_agent_class: str
     otlp_endpoint: str
     initial_processing_mode: str
     frame_interval_ms: int
@@ -96,6 +97,7 @@ def load_config() -> Config:
         kafka_phase_topic=os.environ.get("KAFKA_PHASE_TOPIC", "edgelab.phase"),
         kafka_control_topic=os.environ.get("KAFKA_CONTROL_TOPIC", "edgelab.placement.control"),
         manual_placement_control=manual_placement_control,
+        sp_agent_class=os.environ.get("SP_AGENT_CLASS", "student").strip().lower(),
         otlp_endpoint=os.environ.get("OTLP_ENDPOINT", ""),
         initial_processing_mode=os.environ.get("INITIAL_PROCESSING_MODE", "local"),
         frame_interval_ms=int(os.environ.get("FRAME_INTERVAL_MS", "100")),
@@ -129,6 +131,11 @@ def load_config() -> Config:
         latency_probe_interval_sec=float(os.environ.get("LATENCY_PROBE_INTERVAL_SEC", "2.0")),
         latency_deadline_ms=float(os.environ.get("LATENCY_DEADLINE_MS", "300.0")),
     )
+    if config.sp_agent_class not in ("student", "example"):
+        raise ValueError(
+            f"Invalid SP_AGENT_CLASS: {config.sp_agent_class!r}. "
+            f"Must be one of: student, example."
+        )
     if config.sync_mode not in ("manual", "wait_for_cycle", "off"):
         raise ValueError(
             f"Invalid SYNC_MODE: {config.sync_mode!r}. "
