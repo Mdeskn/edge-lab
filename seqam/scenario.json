@@ -82,7 +82,7 @@
 
       "command": "ssh router load-vm bash /home/lc1/edgelab-load-client/run_gpu_load.sh stop",
 
-      "executionTime": 70000
+      "executionTime": 100000
 
     },
 
@@ -90,7 +90,7 @@
 
       "command": "ssh router net-vm bash /home/mae/network_load/set_phase.sh cycle_end",
 
-      "executionTime": 70000
+      "executionTime": 100000
 
     },
 
@@ -98,7 +98,7 @@
 
       "command": "exit",
 
-      "executionTime": 75000
+      "executionTime": 105000
 
     }
 
