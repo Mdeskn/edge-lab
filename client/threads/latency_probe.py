@@ -2,8 +2,9 @@
 Optional low-rate latency probes for the inactive inference backend.
 
 Probe samples are published to Kafka as event_type="latency_probe". They keep
-the dashboard latency cards live for both placements, but are ignored by
-scoring, CSV output, and SP-Agent decisions.
+the dashboard latency cards live for both placements and let the example
+SP-Agent decide whether it is safe to recover from local to remote. They are
+ignored by scoring and CSV output.
 """
 import logging
 import time

@@ -68,10 +68,26 @@ METRICS AVAILABLE IN YOUR decide() METHOD:
     self.avg_latency  (float | None):
         Mean of recent_latencies. None if no measurements have arrived yet.
 
+    self.avg_remote_latency  (float | None):
+        Mean of recent active remote-inference samples. This is separate from
+        avg_latency so local samples cannot trigger a move away from remote.
+
+    self.last_remote_probe_latency (float | None):
+        The latest inactive-backend remote latency probe. Probe samples are not
+        mixed into avg_latency because they are used to decide whether it is
+        safe to switch back to remote processing.
+
+    self.last_remote_probe_status (str):
+        Status of the latest remote probe: "ok", "failed", or "unavailable".
+
+    self.last_remote_probe_age_sec (float | None):
+        Age of the latest remote probe in seconds.
+
     self.experiment_phase  (str):
-        Current load phase. Defaults to "baseline" until a phase message arrives.
-        Values from the current SeQaM scenario are "baseline", "gpu_load",
-        "jitter_light", "bandwidth_50", and "mixed".
+        Current load phase. Defaults to "cycle_start" until a phase message
+        arrives. Values from the current SeQaM scenario are "cycle_start",
+        "gpu_load", "jitter_light", "bandwidth_50", "mixed", and
+        "cycle_end".
 
     self.current_mode  (str):
         The processing mode currently active ("local" or "remote").
@@ -139,8 +155,12 @@ class SPAgentBase:
         self._metrics_lock = threading.Lock()
         self._gpu_metrics: dict = {}
         self._net_metrics: dict = dict(_DEFAULT_NET_METRICS)
-        self._experiment_phase: str = "baseline"
+        self._experiment_phase: str = "cycle_start"
         self._recent_latencies: deque = deque(maxlen=20)
+        self._recent_remote_latencies: deque = deque(maxlen=20)
+        self._last_remote_probe_latency: float | None = None
+        self._last_remote_probe_status: str = "unavailable"
+        self._last_remote_probe_at: float | None = None
 
         self._debug_metrics: bool = getattr(config, "sp_agent_debug_metrics", False)
         self._manual_control_enabled: bool = getattr(config, "manual_placement_control", False)
@@ -200,7 +220,7 @@ class SPAgentBase:
 
     @property
     def experiment_phase(self) -> str:
-        """Current experiment phase. Defaults to 'baseline' until a phase message arrives."""
+        """Current experiment phase. Defaults to 'cycle_start' until a phase message arrives."""
         with self._metrics_lock:
             return self._experiment_phase
 
@@ -217,6 +237,34 @@ class SPAgentBase:
             if not self._recent_latencies:
                 return None
             return sum(self._recent_latencies) / len(self._recent_latencies)
+
+    @property
+    def avg_remote_latency(self) -> Optional[float]:
+        """Mean of recent active remote-inference samples, or None if unavailable."""
+        with self._metrics_lock:
+            if not self._recent_remote_latencies:
+                return None
+            return sum(self._recent_remote_latencies) / len(self._recent_remote_latencies)
+
+    @property
+    def last_remote_probe_latency(self) -> float | None:
+        """Return the latest successful inactive-backend remote probe latency."""
+        with self._metrics_lock:
+            return self._last_remote_probe_latency
+
+    @property
+    def last_remote_probe_status(self) -> str:
+        """Return the status of the latest inactive-backend remote probe."""
+        with self._metrics_lock:
+            return self._last_remote_probe_status
+
+    @property
+    def last_remote_probe_age_sec(self) -> float | None:
+        """Return the age of the latest inactive-backend remote probe."""
+        with self._metrics_lock:
+            if self._last_remote_probe_at is None:
+                return None
+            return max(0.0, time.time() - self._last_remote_probe_at)
 
     @property
     def current_mode(self) -> str:
@@ -238,6 +286,10 @@ class SPAgentBase:
         prev = self.current_mode
         self._shared_state.set_processing_mode(mode)
         if prev != mode:
+            # Samples from the previous placement must not immediately undo a
+            # later probe-driven recovery to remote processing.
+            with self._metrics_lock:
+                self._recent_remote_latencies.clear()
             logger.info("SP-Agent mode change: %s -> %s", prev, mode)
 
     # ------------------------------------------------------------------ #
@@ -360,13 +412,28 @@ class SPAgentBase:
                         logger.warning("Failed to parse phase message: %s", exc)
 
                 elif topic == self._config.kafka_app_topic:
-                    if payload.get("event_type") == "latency_probe":
+                    if str(payload.get("group_id", "")) != str(self._config.group_id):
                         continue
-                    if str(payload.get("group_id", "")) == str(self._config.group_id):
-                        latency = payload.get("latency_ms")
-                        if latency is not None:
+                    if payload.get("event_type") == "latency_probe":
+                        if payload.get("probe_mode") == "remote":
+                            status = str(payload.get("status", "ok"))
+                            latency = payload.get("latency_ms")
                             with self._metrics_lock:
-                                self._recent_latencies.append(float(latency))
+                                self._last_remote_probe_status = status
+                                self._last_remote_probe_latency = (
+                                    float(latency)
+                                    if status == "ok" and latency is not None
+                                    else None
+                                )
+                                self._last_remote_probe_at = time.time()
+                        continue
+                    latency = payload.get("latency_ms")
+                    if latency is not None:
+                        with self._metrics_lock:
+                            latency_value = float(latency)
+                            self._recent_latencies.append(latency_value)
+                            if payload.get("processing_mode") == "remote":
+                                self._recent_remote_latencies.append(latency_value)
 
                 elif (
                     self._manual_control_enabled

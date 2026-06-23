@@ -11,14 +11,16 @@ from student.sp_agent_base import SPAgentBase
 
 class ExampleSPAgent(SPAgentBase):
     """
-    Phase-and-metric hybrid placement strategy.
+    Metric-driven placement strategy with remote-probe recovery.
 
-    The phase signal reacts early because SeQaM announces a phase before the
-    measured GPU/network metrics fully move. The metric checks catch unexpected
-    behavior and recover when conditions are better than expected.
+    A stress phase initially keeps a local agent local until it has a fresh
+    remote probe. A healthy probe lets the agent return to remote instead of
+    remaining local for the rest of the phase after one startup spike.
     """
 
     BAD_PHASES = {"gpu_load", "jitter_light", "bandwidth_50", "mixed"}
+    REMOTE_LATENCY_LIMIT_MS = 250.0
+    REMOTE_PROBE_MAX_AGE_SEC = 20.0
 
     def __init__(self, config: Config, shared_state: SharedState):
         """Keep a little state so the strategy avoids switching too rapidly."""
@@ -42,27 +44,46 @@ class ExampleSPAgent(SPAgentBase):
         )
         bandwidth = str(self.net_metrics.get("bandwidth", "unlimited")).lower()
 
-        avg_latency = self.avg_latency or 0
+        live_metrics_require_local = (
+            yolo_queue > 50
+            or gpu_util > 85
+            or total_pending > 10
+            or net_delay > 30
+            or net_jitter > 10
+            or packet_loss >= 1
+            or (bandwidth not in ("unlimited", "none", "") and "gbit" not in bandwidth)
+        )
 
-        desired = "remote"
+        desired = "local" if live_metrics_require_local else "remote"
 
-        # Predictive phase signal from SeQaM.
-        if phase in self.BAD_PHASES:
+        # Only active remote inference latency can force an immediate move to
+        # local. Local samples should not prevent a later remote recovery.
+        if (
+            self.current_mode == "remote"
+            and (self.avg_remote_latency or 0) > self.REMOTE_LATENCY_LIMIT_MS
+        ):
             desired = "local"
 
-        # Reactive server-side signals.
-        if yolo_queue > 50 or gpu_util > 85 or total_pending > 10:
-            desired = "local"
-
-        # Reactive network-side signals.
-        if net_delay > 30 or net_jitter > 10 or packet_loss >= 1:
-            desired = "local"
-        if bandwidth not in ("unlimited", "none", "") and "gbit" not in bandwidth:
-            desired = "local"
-
-        # Lagging end-to-end signal. Tune this after running benchmark_inference.py.
-        if avg_latency > 250:
-            desired = "local"
+        if self.current_mode == "local" and not live_metrics_require_local:
+            probe_age = self.last_remote_probe_age_sec
+            has_fresh_probe = (
+                probe_age is not None
+                and probe_age <= self.REMOTE_PROBE_MAX_AGE_SEC
+            )
+            if has_fresh_probe:
+                desired = (
+                    "remote"
+                    if (
+                        self.last_remote_probe_status == "ok"
+                        and self.last_remote_probe_latency is not None
+                        and self.last_remote_probe_latency <= self.REMOTE_LATENCY_LIMIT_MS
+                    )
+                    else "local"
+                )
+            elif phase in self.BAD_PHASES:
+                # Wait for the first remote probe rather than repeatedly
+                # reintroducing remote traffic after a bad-phase spike.
+                desired = "local"
 
         return self._stable_decision(desired)
 

@@ -37,7 +37,11 @@ class SPAgent(SPAgentBase):
         self.net_metrics.get("jitter_ms", 0)           # delay variation
         self.net_metrics.get("packet_loss_pct", 0)     # 0-100
         self.avg_latency                               # rolling mean of recent
+        self.avg_remote_latency                        # rolling active-remote mean
         self.recent_latencies                          # deque of last samples
+        self.last_remote_probe_latency                 # inactive remote probe
+        self.last_remote_probe_status                  # ok, failed, unavailable
+        self.last_remote_probe_age_sec                 # seconds since that probe
         self.current_mode                              # "local" or "remote"
     """
 

@@ -67,6 +67,7 @@ def load_config() -> Config:
     """Load and return a Config instance from environment variables."""
     group_id = os.environ.get("GROUP_ID", "1")
     manual_placement_control = os.environ.get("MANUAL_PLACEMENT_CONTROL", "false").lower() == "true"
+    sp_agent_class = os.environ.get("SP_AGENT_CLASS", "student").strip().lower()
     target_class_value = os.environ.get("TARGET_CLASS_ID", "").strip()
     conf_threshold = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.3"))
     results_log_path = os.environ.get("RESULTS_LOG_PATH", "results.csv")
@@ -97,7 +98,7 @@ def load_config() -> Config:
         kafka_phase_topic=os.environ.get("KAFKA_PHASE_TOPIC", "edgelab.phase"),
         kafka_control_topic=os.environ.get("KAFKA_CONTROL_TOPIC", "edgelab.placement.control"),
         manual_placement_control=manual_placement_control,
-        sp_agent_class=os.environ.get("SP_AGENT_CLASS", "student").strip().lower(),
+        sp_agent_class=sp_agent_class,
         otlp_endpoint=os.environ.get("OTLP_ENDPOINT", ""),
         initial_processing_mode=os.environ.get("INITIAL_PROCESSING_MODE", "local"),
         frame_interval_ms=int(os.environ.get("FRAME_INTERVAL_MS", "100")),
@@ -126,9 +127,9 @@ def load_config() -> Config:
         sp_agent_debug_metrics=os.environ.get("SP_AGENT_DEBUG_METRICS", "false").lower() == "true",
         latency_probes_enabled=os.environ.get(
             "LATENCY_PROBES_ENABLED",
-            "true" if manual_placement_control else "false",
+            "true" if sp_agent_class == "example" else "false",
         ).lower() == "true",
-        latency_probe_interval_sec=float(os.environ.get("LATENCY_PROBE_INTERVAL_SEC", "2.0")),
+        latency_probe_interval_sec=float(os.environ.get("LATENCY_PROBE_INTERVAL_SEC", "10.0")),
         latency_deadline_ms=float(os.environ.get("LATENCY_DEADLINE_MS", "300.0")),
     )
     if config.sp_agent_class not in ("student", "example"):
