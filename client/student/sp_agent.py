@@ -42,6 +42,7 @@ class SPAgent(SPAgentBase):
         self.last_remote_probe_latency                 # inactive remote probe
         self.last_remote_probe_status                  # ok, failed, unavailable
         self.last_remote_probe_age_sec                 # seconds since that probe
+        self.last_remote_probe_received_at             # Unix time of that probe
         self.current_mode                              # "local" or "remote"
     """
 

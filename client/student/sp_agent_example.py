@@ -4,9 +4,14 @@ Reference SP-Agent strategy for students to study.
 Do not submit this file as-is. Copy ideas from it into sp_agent.py and tune the
 thresholds using your own benchmark results.
 """
+import logging
+import time
+
 from config import Config
 from shared_state import SharedState
 from student.sp_agent_base import SPAgentBase
+
+logger = logging.getLogger(__name__)
 
 
 class ExampleSPAgent(SPAgentBase):
@@ -28,9 +33,19 @@ class ExampleSPAgent(SPAgentBase):
         self._last_decision = self.current_mode
         self._pending_decision = self.current_mode
         self._pending_count = 0
+        self._last_observed_mode = self.current_mode
+        self._remote_recovery_required_since: float | None = None
 
     def decide(self) -> str:
         """Return "local" or "remote" based on phase, metrics, and hysteresis."""
+        current_mode = self.current_mode
+        if self._last_observed_mode == "remote" and current_mode == "local":
+            self._remote_recovery_required_since = time.time()
+            logger.info(
+                "Remote recovery locked: waiting for a healthy remote probe"
+            )
+        self._last_observed_mode = current_mode
+
         phase = self.experiment_phase
         gpu_util = self.gpu_metrics.get("gpu_util_pct", 0)
         yolo_queue = self.gpu_metrics.get("yolo_queue_ms", 0)
@@ -59,25 +74,40 @@ class ExampleSPAgent(SPAgentBase):
         # Only active remote inference latency can force an immediate move to
         # local. Local samples should not prevent a later remote recovery.
         if (
-            self.current_mode == "remote"
+            current_mode == "remote"
             and (self.avg_remote_latency or 0) > self.REMOTE_LATENCY_LIMIT_MS
         ):
             desired = "local"
 
-        if self.current_mode == "local" and not live_metrics_require_local:
+        if current_mode == "local" and not live_metrics_require_local:
             probe_age = self.last_remote_probe_age_sec
             has_fresh_probe = (
                 probe_age is not None
                 and probe_age <= self.REMOTE_PROBE_MAX_AGE_SEC
             )
-            if has_fresh_probe:
+            healthy_remote_probe = (
+                has_fresh_probe
+                and self.last_remote_probe_status == "ok"
+                and self.last_remote_probe_latency is not None
+                and self.last_remote_probe_latency <= self.REMOTE_LATENCY_LIMIT_MS
+            )
+
+            if self._remote_recovery_required_since is not None:
+                probe_after_local_transition = (
+                    self.last_remote_probe_received_at is not None
+                    and self.last_remote_probe_received_at
+                    >= self._remote_recovery_required_since
+                )
+                if healthy_remote_probe and probe_after_local_transition:
+                    desired = "remote"
+                    self._remote_recovery_required_since = None
+                    logger.info("Remote recovery unlocked by healthy probe")
+                else:
+                    desired = "local"
+            elif has_fresh_probe:
                 desired = (
                     "remote"
-                    if (
-                        self.last_remote_probe_status == "ok"
-                        and self.last_remote_probe_latency is not None
-                        and self.last_remote_probe_latency <= self.REMOTE_LATENCY_LIMIT_MS
-                    )
+                    if healthy_remote_probe
                     else "local"
                 )
             elif phase in self.BAD_PHASES:

@@ -83,6 +83,9 @@ METRICS AVAILABLE IN YOUR decide() METHOD:
     self.last_remote_probe_age_sec (float | None):
         Age of the latest remote probe in seconds.
 
+    self.last_remote_probe_received_at (float | None):
+        Unix timestamp for when the client received the latest remote probe.
+
     self.experiment_phase  (str):
         Current load phase. Defaults to "cycle_start" until a phase message
         arrives. Values from the current SeQaM scenario are "cycle_start",
@@ -265,6 +268,12 @@ class SPAgentBase:
             if self._last_remote_probe_at is None:
                 return None
             return max(0.0, time.time() - self._last_remote_probe_at)
+
+    @property
+    def last_remote_probe_received_at(self) -> float | None:
+        """Return when the latest inactive-backend remote probe was received."""
+        with self._metrics_lock:
+            return self._last_remote_probe_at
 
     @property
     def current_mode(self) -> str:
