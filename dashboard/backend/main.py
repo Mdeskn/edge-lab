@@ -215,6 +215,7 @@ async def post_metric(update: AppMetric) -> dict[str, Any]:
     """Accept scored data directly; Kafka duplicates are safely deduplicated."""
     is_new = dashboard_state.update_app_metric(update.model_dump())
     refresh_cycle_duration = dashboard_state.consume_cycle_duration_refresh_request()
+    cycle_command = dashboard_state.consume_cycle_command()
     if is_new:
         await socket_manager.broadcast()
     return {
@@ -222,6 +223,7 @@ async def post_metric(update: AppMetric) -> dict[str, Any]:
         "new_sample": is_new,
         "group_id": dashboard_state.group_id,
         "refresh_cycle_duration": refresh_cycle_duration,
+        "cycle_command": cycle_command,
     }
 
 
@@ -282,14 +284,16 @@ async def set_placement(command: PlacementControlRequest) -> dict[str, Any]:
 
 @app.post("/api/control/cycle")
 async def post_cycle_command(request: CycleCommandRequest) -> dict[str, Any]:
-    """Request a duration refresh or publish a state-machine command."""
+    """Request a duration refresh or send a cycle command to the client."""
     if request.action == "refresh_cycle_duration":
         dashboard_state.request_cycle_duration_refresh()
         await socket_manager.broadcast()
         return {"accepted": True, "action": request.action}
 
     if placement_control_producer is None:
-        raise HTTPException(status_code=503, detail="Placement control producer not configured")
+        dashboard_state.request_cycle_command(request.action)
+        await socket_manager.broadcast()
+        return {"accepted": True, "action": request.action, "transport": "dashboard"}
 
     payload = {
         "timestamp": time.time(),

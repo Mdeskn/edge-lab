@@ -10,7 +10,7 @@ import numpy as np
 
 from config import Config
 from scenario_parser import load_cycle_duration_sec
-from shared_state import SharedState
+from shared_state import CollectionState, SharedState
 
 logger = logging.getLogger(__name__)
 
@@ -211,12 +211,40 @@ class DashboardPublisher:
                     timeout=0.75,
                 )
                 response.raise_for_status()
-                if response.json().get("refresh_cycle_duration"):
+                command = response.json()
+                if command.get("refresh_cycle_duration"):
                     duration = load_cycle_duration_sec(self._scenario_path)
                     self._shared_state.set_cycle_duration_sec(duration)
                     logger.info("Cycle duration refreshed from scenario: %.1fs", duration)
+                cycle_command = command.get("cycle_command")
+                if cycle_command:
+                    self._apply_cycle_command(cycle_command)
             except Exception as exc:
                 logger.debug("Dashboard metrics unavailable: %s", exc)
+
+    def _apply_cycle_command(self, action: str) -> None:
+        """Apply a dashboard cycle command without affecting placement control."""
+        if action == "start_on_next_cycle":
+            if self._shared_state.get_collection_state() == CollectionState.ARMED:
+                self._shared_state.request_start_on_next_cycle()
+                logger.info("Received start_on_next_cycle dashboard command")
+            else:
+                logger.warning(
+                    "Ignoring start_on_next_cycle dashboard command: state is %s",
+                    self._shared_state.get_collection_state().value,
+                )
+        elif action == "abort_current_cycle":
+            if self._shared_state.get_collection_state() == CollectionState.COLLECTING:
+                self._shared_state.transition_to_armed()
+                logger.info("Cycle aborted by dashboard command")
+            else:
+                logger.warning(
+                    "Ignoring abort_current_cycle dashboard command: state is %s",
+                    self._shared_state.get_collection_state().value,
+                )
+        elif action == "reset_to_armed":
+            self._shared_state.transition_to_armed()
+            logger.info("Reset to ARMED by dashboard command")
 
     def _draw_preview(self, frame: np.ndarray, item: dict, prediction: dict | None) -> None:
         true_x = item["true_x"]
