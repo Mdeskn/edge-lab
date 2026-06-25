@@ -103,10 +103,11 @@ class Scorer:
             # Deadline miss
             deadline_miss = latency_ms > self.config.latency_deadline_ms
 
-            # Current GT: where the car is RIGHT NOW, when this prediction arrives.
+            # Current GT: where the tracked object is RIGHT NOW, when this
+            # prediction arrives.
             # Scoring against this (not the bundled capture-time GT) is what makes
             # latency affect displacement: the longer inference takes, the further
-            # the car has moved, the higher the penalty.
+            # the tracked object has moved, the higher the penalty.
             _, current_gt_x, current_gt_y = self.shared_state.get_ground_truth()
 
             # Bundled GT (gt_x, gt_y) only gates whether this frame is scored.

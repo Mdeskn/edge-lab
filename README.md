@@ -1,8 +1,8 @@
 # EdgeLab
 
 EdgeLab is a hands-on edge-computing lab for the IoT and Edge Computing course
-at FH Dortmund. A Raspberry Pi processes a pre-recorded drone-view video and
-tracks one target car frame by frame. For every frame, the student service
+at FH Dortmund. A Raspberry Pi processes a pre-recorded video and tracks one
+target suitcase frame by frame. For every frame, the student service
 placement agent decides whether to run YOLO locally on the Pi CPU or send the
 frame through the network to a remote GPU server.
 
@@ -23,7 +23,7 @@ Minimize cumulative displacement: the total pixel distance between the predicted
 target center and the ground-truth target center over all scored frames. Lower
 is better.
 
-Fast inference matters because the car is moving. A late prediction can be
+Fast inference matters because the suitcase is moving. A late prediction can be
 technically correct for the frame that was processed, but stale by the time the
 result arrives. The lab teaches when remote GPU inference is worth the network
 trip, and when local edge inference is safer.
@@ -341,7 +341,7 @@ Main features:
 
 | Feature | What it shows |
 | --- | --- |
-| Annotated video | Ground-truth car center, predicted box, displacement line |
+| Annotated video | Ground-truth suitcase center, predicted box, displacement line |
 | Processing mode | `LOCAL`, `REMOTE`, or `LOCAL_FALLBACK` |
 | Latency | Current, average, min, max, p95 |
 | Displacement | Current, rolling average, cumulative score |
@@ -402,7 +402,7 @@ The generator:
 1. Converts each frame to HSV.
 2. Masks both red hue bands, 0-10 and 160-179.
 3. Cleans the mask with morphological open and close operations.
-4. Selects the largest red blob within car-sized bounds.
+4. Selects the largest red blob within suitcase-sized bounds.
 5. Writes the bounding-box center to CSV.
 6. Linearly interpolates remaining missing rows.
 
@@ -411,11 +411,11 @@ CSV columns:
 | Column | Description |
 | --- | --- |
 | `frame_number` | 1-indexed frame counter |
-| `center_x` | Car center X coordinate |
-| `center_y` | Car center Y coordinate |
+| `center_x` | Suitcase center X coordinate |
+| `center_y` | Suitcase center Y coordinate |
 | `confidence` | Always `1.0` for color segmentation |
-| `class_id` | Always `2` |
-| `class_name` | Always `car` |
+| `class_id` | Always `28` |
+| `class_name` | Always `suitcase` |
 
 To export the ONNX model for inference:
 
@@ -908,11 +908,11 @@ cd /home/lc1/edgelab-load-client
 
 ### Very low detection rate
 
-Use the current car-tracking settings:
+Use the current suitcase-tracking settings:
 
 ```dotenv
-TARGET_CLASS_ID=2,5,7
-TARGET_CONFIDENCE_THRESHOLD=0.1
+TARGET_CLASS_ID=28
+TARGET_CONFIDENCE_THRESHOLD=0.0001
 ```
 
 Also verify that `ground_truth.csv` matches the video.

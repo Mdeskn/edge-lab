@@ -1,9 +1,9 @@
 """
-Generate ground truth car coordinates from a drone-view video using OpenCV only.
+Generate ground truth suitcase coordinates from a video using OpenCV only.
 
-Uses HSV colour segmentation to locate the red car in each frame.
-Works regardless of camera motion (drone, pan, tilt) because it is not a
-background model — it looks for the car's colour directly.
+Uses HSV colour segmentation to locate the red suitcase in each frame.
+Works regardless of camera motion because it is not a background model — it
+looks for the suitcase's colour directly.
 
 Ground truth is kept independent of YOLO so that YOLO misses remain measurable.
 
@@ -24,10 +24,11 @@ import cv2
 import numpy as np
 
 
-CAR_CLASS = 2
+SUITCASE_CLASS = 28
+SUITCASE_NAME = "suitcase"
 
-# HSV ranges for red.  Red wraps around hue 0 in OpenCV (0-179), so we
-# need two bands and OR them together.
+# HSV ranges for red. Red wraps around hue 0 in OpenCV (0-179), so we need
+# two bands and OR them together.
 _RED_LO1 = np.array([  0,  80,  50], dtype=np.uint8)
 _RED_HI1 = np.array([ 10, 255, 255], dtype=np.uint8)
 _RED_LO2 = np.array([160,  80,  50], dtype=np.uint8)
@@ -35,20 +36,20 @@ _RED_HI2 = np.array([179, 255, 255], dtype=np.uint8)
 
 # Morphological kernels
 _OPEN_K  = 7    # removes small noise speckles
-_CLOSE_K = 25   # fills holes inside the car blob
+_CLOSE_K = 25   # fills holes inside the suitcase blob
 
-# Car size relative to frame area
-_MIN_AREA_FRAC = 0.0003   # at least 0.03 % of frame
-_MAX_AREA_FRAC = 0.40     # at most 40 % of frame
+# Suitcase size relative to frame area
+_MIN_AREA_FRAC = 0.001    # at least 0.1 % of frame
+_MAX_AREA_FRAC = 0.60     # at most 60 % of frame
 
 
-def _detect_car(frame: np.ndarray):
+def _detect_suitcase(frame: np.ndarray):
     """
-    Return (cx, cy, 1.0, CAR_CLASS) for the largest red blob in the frame,
-    or (None, None, 0.0, -1) when no plausible car-sized red region is found.
+    Return (cx, cy, 1.0, SUITCASE_CLASS) for the largest red blob in the
+    frame, or (None, None, 0.0, -1) when no plausible suitcase-sized red
+    region is found.
     """
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-
     mask = cv2.bitwise_or(
         cv2.inRange(hsv, _RED_LO1, _RED_HI1),
         cv2.inRange(hsv, _RED_LO2, _RED_HI2),
@@ -75,9 +76,9 @@ def _detect_car(frame: np.ndarray):
     if not candidates:
         return None, None, 0.0, -1
 
-    # Largest red blob = the car
+    # Largest red blob = the suitcase
     _, x, y, w, h = max(candidates)
-    return x + w / 2.0, y + h / 2.0, 1.0, CAR_CLASS
+    return x + w / 2.0, y + h / 2.0, 1.0, SUITCASE_CLASS
 
 
 def _interpolate_gaps(rows: list) -> list:
@@ -96,11 +97,17 @@ def _interpolate_gaps(rows: list) -> list:
 
     # Fill leading gap
     for i in range(first):
-        rows[i][1:6] = [rows[first][1], rows[first][2], 1.0, CAR_CLASS, "car"]
+        rows[i][1:6] = [
+            rows[first][1], rows[first][2], 1.0,
+            SUITCASE_CLASS, SUITCASE_NAME,
+        ]
 
     # Fill trailing gap
     for i in range(last + 1, n):
-        rows[i][1:6] = [rows[last][1], rows[last][2], 1.0, CAR_CLASS, "car"]
+        rows[i][1:6] = [
+            rows[last][1], rows[last][2], 1.0,
+            SUITCASE_CLASS, SUITCASE_NAME,
+        ]
 
     # Fill interior gaps
     i = 0
@@ -117,7 +124,9 @@ def _interpolate_gaps(rows: list) -> list:
                     t = (k - (i - 1)) / gap
                     rows[k][1] = round(x0 + t * (x1 - x0), 2)
                     rows[k][2] = round(y0 + t * (y1 - y0), 2)
-                    rows[k][3], rows[k][4], rows[k][5] = 1.0, CAR_CLASS, "car"
+                    rows[k][3], rows[k][4], rows[k][5] = (
+                        1.0, SUITCASE_CLASS, SUITCASE_NAME
+                    )
             i = j
         else:
             i += 1
@@ -127,7 +136,7 @@ def _interpolate_gaps(rows: list) -> list:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate car GT from a drone-view video via HSV colour detection."
+        description="Generate suitcase GT from a video via HSV colour detection."
     )
     parser.add_argument("--video",  required=True, help="Path to the video file.")
     parser.add_argument("--output", default="ground_truth.csv", help="Output CSV path.")
@@ -140,7 +149,7 @@ def main():
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     print(f"Video  : {args.video} ({total_frames} frames)")
-    print("Tracker: HSV red-car colour segmentation (camera-motion robust)")
+    print("Tracker: HSV red-suitcase colour segmentation")
 
     frame_num = 0
     detected  = 0
@@ -152,13 +161,16 @@ def main():
             break
         frame_num += 1
 
-        cx, cy, conf, cls_id = _detect_car(frame)
+        cx, cy, conf, cls_id = _detect_suitcase(frame)
 
         if cx is None:
             rows.append([frame_num, None, None, 0.0, -1, "none"])
         else:
             detected += 1
-            rows.append([frame_num, round(cx, 2), round(cy, 2), round(conf, 4), cls_id, "car"])
+            rows.append([
+                frame_num, round(cx, 2), round(cy, 2),
+                round(conf, 4), cls_id, SUITCASE_NAME,
+            ])
 
         if frame_num % 100 == 0:
             print(f"  Progress: {frame_num}/{total_frames}")
