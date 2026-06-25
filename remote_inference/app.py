@@ -8,7 +8,7 @@ from typing import Any
 import cv2
 import numpy as np
 import tritonclient.grpc as grpcclient
-from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi import Body, FastAPI, HTTPException, Query, Request
 
 from inference.yolo_postprocess import TargetClassFilter, best_detection_box
 
@@ -88,12 +88,13 @@ class TritonGateway:
         self.settings = settings
         self._client = grpcclient.InferenceServerClient(url=settings.triton_url)
         logger.info(
-            "Remote inference gateway configured triton_url=%s model=%s input=%dx%d target_class=%s triton_timeout=%.2fs",
+            "Remote inference gateway configured triton_url=%s model=%s input=%dx%d target_class=%s target_conf_threshold=%.4g triton_timeout=%.2fs",
             settings.triton_url,
             settings.model_name,
             settings.input_width,
             settings.input_height,
             settings.target_class_id if settings.target_class_id is not None else "any",
+            settings.target_conf_threshold,
             settings.triton_timeout,
         )
 
@@ -109,10 +110,19 @@ class TritonGateway:
             "model_ready": model_ready,
             "triton_url": self.settings.triton_url,
             "model_name": self.settings.model_name,
+            "target_class_id": self.settings.target_class_id,
+            "target_conf_threshold": self.settings.target_conf_threshold,
             "triton_timeout_sec": self.settings.triton_timeout,
         }
 
-    def infer(self, preprocessed_frame: np.ndarray, original_shape: tuple[int, ...]) -> tuple:
+    def infer(
+        self,
+        preprocessed_frame: np.ndarray,
+        original_shape: tuple[int, ...],
+        conf_threshold: float | None = None,
+        target_class_id: TargetClassFilter = None,
+        target_conf_threshold: float | None = None,
+    ) -> tuple:
         """Send an FP32 tensor to local Triton and post-process the YOLO output."""
         _, _, input_h, input_w = preprocessed_frame.shape
         infer_input = grpcclient.InferInput(
@@ -137,9 +147,21 @@ class TritonGateway:
             orig_w=orig_w,
             input_h=input_h,
             input_w=input_w,
-            conf_threshold=self.settings.conf_threshold,
-            target_class_id=self.settings.target_class_id,
-            target_conf_threshold=self.settings.target_conf_threshold,
+            conf_threshold=(
+                conf_threshold
+                if conf_threshold is not None
+                else self.settings.conf_threshold
+            ),
+            target_class_id=(
+                target_class_id
+                if target_class_id is not None
+                else self.settings.target_class_id
+            ),
+            target_conf_threshold=(
+                target_conf_threshold
+                if target_conf_threshold is not None
+                else self.settings.target_conf_threshold
+            ),
         )
 
 
@@ -165,6 +187,9 @@ def health() -> dict[str, Any]:
 def infer(
     request: Request,
     jpeg_bytes: bytes = Body(..., media_type="image/jpeg"),
+    target_class_id: str | None = Query(default=None),
+    conf_threshold: float | None = Query(default=None),
+    target_conf_threshold: float | None = Query(default=None),
 ) -> dict[str, Any]:
     """
     Accept one JPEG image, decode/preprocess on the GPU server, and return YOLO box JSON.
@@ -185,9 +210,20 @@ def infer(
         raise HTTPException(status_code=400, detail="Could not decode JPEG image")
 
     preprocessed = preprocess(frame, settings.input_width, settings.input_height)
+    request_target_class_id = (
+        _parse_target_class_filter(target_class_id.strip())
+        if target_class_id is not None
+        else settings.target_class_id
+    )
 
     try:
-        cx, cy, x1, y1, x2, y2 = gateway.infer(preprocessed, frame.shape)
+        cx, cy, x1, y1, x2, y2 = gateway.infer(
+            preprocessed,
+            frame.shape,
+            conf_threshold=conf_threshold,
+            target_class_id=request_target_class_id,
+            target_conf_threshold=target_conf_threshold,
+        )
     except Exception as exc:
         logger.warning("Triton inference failed: %s", exc)
         raise HTTPException(status_code=502, detail=f"Triton inference failed: {exc}") from exc
@@ -207,4 +243,10 @@ def infer(
         "jpeg_bytes": len(jpeg_bytes),
         "latency_ms": round(latency_ms, 3),
         "model_name": settings.model_name,
+        "target_class_id": request_target_class_id,
+        "target_conf_threshold": (
+            target_conf_threshold
+            if target_conf_threshold is not None
+            else settings.target_conf_threshold
+        ),
     }

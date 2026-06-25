@@ -176,6 +176,7 @@ class RemoteClient:
 
         resp = self._session.post(
             f"{self._remote_inference_url}/infer",
+            params=self._target_query_params(),
             data=jpeg.tobytes(),
             headers={"Content-Type": "image/jpeg", "Connection": "close"},
             timeout=self._timeout,
@@ -197,6 +198,21 @@ class RemoteClient:
             float(prediction.get("x2", 0.0)),
             float(prediction.get("y2", 0.0)),
         )
+
+    def _target_query_params(self) -> dict[str, str]:
+        """Return per-request target filtering settings for the JPEG gateway."""
+        params = {
+            "conf_threshold": str(self.conf_threshold),
+            "target_conf_threshold": str(self.target_conf_threshold),
+        }
+        if self.target_class_id is not None:
+            if isinstance(self.target_class_id, int):
+                params["target_class_id"] = str(self.target_class_id)
+            else:
+                params["target_class_id"] = ",".join(
+                    str(class_id) for class_id in self.target_class_id
+                )
+        return params
 
     def _infer_triton_grpc(self, preprocessed_frame: np.ndarray, original_shape: tuple) -> tuple:
         """
@@ -261,7 +277,7 @@ class RemoteClient:
         )
         if result[0] == 0.0 and result[1] == 0.0:
             logger.debug(
-                "Triton: no target detection for class=%s above confidence threshold %.2f",
+                "Triton: no target detection for class=%s above confidence threshold %.4g",
                 self.target_class_id if self.target_class_id is not None else "any",
                 (
                     self.target_conf_threshold

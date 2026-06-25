@@ -105,7 +105,7 @@ class LocalServer:
         )
         if result[0] == 0.0 and result[1] == 0.0:
             logger.debug(
-                "No target detection for class=%s above confidence threshold %.2f",
+                "No target detection for class=%s above confidence threshold %.4g",
                 self.target_class_id if self.target_class_id is not None else "any",
                 (
                     self.target_conf_threshold

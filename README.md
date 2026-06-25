@@ -129,8 +129,8 @@ KAFKA_NET_TOPIC=edgelab.network.metrics
 KAFKA_PHASE_TOPIC=edgelab.phase
 APP_METRICS_TOPIC=dnn_partition.client_metrics
 
-TARGET_CLASS_ID=2,5,7
-TARGET_CONFIDENCE_THRESHOLD=0.1
+TARGET_CLASS_ID=28
+TARGET_CONFIDENCE_THRESHOLD=0.0001
 
 DISPLAY_OUTPUT=false
 AUTO_STOP=false
@@ -964,7 +964,7 @@ DASHBOARD_FRAME_WIDTH=640
 | `DISPLAY_OUTPUT` | OpenCV display window |
 | `AUTO_STOP` | Wait for phase cycle and exit automatically |
 | `CONFIDENCE_THRESHOLD` | YOLO detection threshold |
-| `TARGET_CLASS_ID` | Target class filter, `2,5,7` for this video |
+| `TARGET_CLASS_ID` | Target class filter, `28` for the suitcase video |
 | `TARGET_CONFIDENCE_THRESHOLD` | Target-specific confidence threshold |
 | `SP_AGENT_INTERVAL_MS` | How often `decide()` runs |
 | `MISS_PENALTY_PX` | Fixed score penalty for missed detections |

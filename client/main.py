@@ -258,7 +258,7 @@ def main() -> None:
     logger.info("  results_by_phase_path: %s", config.results_by_phase_path)
     logger.info("  conf_threshold       : %.2f", config.conf_threshold)
     logger.info("  target_class_id      : %s", config.target_class_id)
-    logger.info("  target_conf_threshold: %.2f", config.target_conf_threshold)
+    logger.info("  target_conf_threshold: %.4g", config.target_conf_threshold)
     logger.info("  sp_agent_interval_ms : %d", config.sp_agent_interval_ms)
     logger.info("  manual_placement    : %s", config.manual_placement_control)
     logger.info("  sp_agent_class      : %s", config.sp_agent_class)
