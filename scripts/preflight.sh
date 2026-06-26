@@ -5,7 +5,7 @@ set -u
 VM1_SSH="${VM1_SSH:-mae@172.22.174.149}"
 VM2_SSH="${VM2_SSH:-mae@172.22.174.145}"
 VM3_SSH="${VM3_SSH:-mae@172.22.174.148}"
-LC1_SSH="${LC1_SSH:-lc1@172.22.229.169}"
+LC1_SSH="${LC1_SSH:-emulate@172.22.229.235}"
 PI_SSH="${PI_SSH:-mae@172.22.229.167}"
 
 VM2_HOST="${VM2_HOST:-172.22.174.145}"
@@ -150,7 +150,7 @@ else:
 check_ssh "VM1 Kafka/Grafana" "$VM1_SSH"
 check_ssh "VM2 GPU server" "$VM2_SSH"
 check_ssh "VM3 router/network" "$VM3_SSH"
-check_ssh "LC1 GPU load client" "$LC1_SSH"
+check_ssh "Load VM GPU load client" "$LC1_SSH"
 
 check_kafka_topics
 for topic in $KAFKA_TOPICS; do

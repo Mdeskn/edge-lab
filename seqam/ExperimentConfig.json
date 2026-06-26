@@ -8,7 +8,7 @@
 
     {
 
-      "command": "ssh router load-vm bash /home/lc1/edgelab-load-client/run_gpu_load.sh stop",
+      "command": "ssh router load-vm bash /home/emulate/edgelab-load-client/run_gpu_load.sh stop",
 
       "executionTime": 0
 
@@ -32,7 +32,7 @@
 
     {
 
-      "command": "ssh router load-vm bash /home/lc1/edgelab-load-client/run_gpu_load.sh start 8 0",
+      "command": "ssh router load-vm bash /home/emulate/edgelab-load-client/run_gpu_load.sh start 32 0",
 
       "executionTime": 10000
 
@@ -40,7 +40,7 @@
 
     {
 
-      "command": "ssh router load-vm bash /home/lc1/edgelab-load-client/run_gpu_load.sh stop",
+      "command": "ssh router load-vm bash /home/emulate/edgelab-load-client/run_gpu_load.sh stop",
 
       "executionTime": 25000
 
@@ -56,7 +56,7 @@
 
     {
 
-      "command": "ssh router net-vm bash /home/mae/network_load/set_phase.sh bandwidth_50",
+      "command": "ssh router net-vm bash /home/mae/network_load/set_phase.sh bandwidth_20",
 
       "executionTime": 40000
 
@@ -72,7 +72,7 @@
 
     {
 
-      "command": "ssh router load-vm bash /home/lc1/edgelab-load-client/run_gpu_load.sh start 8 0",
+      "command": "ssh router load-vm bash /home/emulate/edgelab-load-client/run_gpu_load.sh start 16 0",
 
       "executionTime": 55000
 
@@ -80,9 +80,9 @@
 
     {
 
-      "command": "ssh router load-vm bash /home/lc1/edgelab-load-client/run_gpu_load.sh stop",
+      "command": "ssh router load-vm bash /home/emulate/edgelab-load-client/run_gpu_load.sh stop",
 
-      "executionTime": 100000
+      "executionTime": 70000
 
     },
 
@@ -90,7 +90,7 @@
 
       "command": "ssh router net-vm bash /home/mae/network_load/set_phase.sh cycle_end",
 
-      "executionTime": 100000
+      "executionTime": 70000
 
     },
 
@@ -98,7 +98,7 @@
 
       "command": "exit",
 
-      "executionTime": 105000
+      "executionTime": 75000
 
     }
 

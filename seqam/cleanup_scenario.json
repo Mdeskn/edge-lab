@@ -8,7 +8,7 @@
 
     {
 
-      "command": "ssh router load-vm bash /home/lc1/edgelab-load-client/force_stop_gpu_load.sh",
+      "command": "ssh router load-vm bash /home/emulate/edgelab-load-client/force_stop_gpu_load.sh",
 
       "executionTime": 0
 

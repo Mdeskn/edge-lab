@@ -2,12 +2,12 @@
 """
 Random GPU load generator for EdgeLab Task 4.
 
-Runs on LC1 (lc1@172.22.229.169). Generates bursts of random-concurrency
+Runs on the load VM (emulate@172.22.229.235). Generates bursts of random-concurrency
 GPU load against resnet50_full on Triton, separated by random idle gaps.
 The SP-Agent cannot predict load from phase name alone — it must react to
 observed Triton queue and utilisation metrics.
 
-Usage (on LC1):
+Usage (on the load VM):
     python3 random_load.py
     python3 random_load.py --duration 120 --max-concurrency 8
     python3 random_load.py --duration 0          # run until Ctrl+C

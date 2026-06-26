@@ -23,7 +23,7 @@ class ExampleSPAgent(SPAgentBase):
     remaining local for the rest of the phase after one startup spike.
     """
 
-    BAD_PHASES = {"gpu_load", "jitter_light", "bandwidth_50", "mixed"}
+    BAD_PHASES = {"gpu_load", "jitter_light", "bandwidth_20", "mixed"}
     REMOTE_LATENCY_LIMIT_MS = 250.0
     REMOTE_PROBE_MAX_AGE_SEC = 20.0
 

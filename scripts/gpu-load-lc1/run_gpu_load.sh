@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# EdgeLab GPU load wrapper for LC1, using perf_analyzer (Eldiyar's tool).
+# EdgeLab GPU load wrapper for the load VM, using perf_analyzer.
 #
 # SeQaM-callable with colon-free arguments. The Triton URL contains a colon and
 # SeQaM's command parser breaks on colons, so the URL stays inside this script
@@ -19,7 +19,7 @@
 # levels default = 30,80. step default = 7 seconds.
 #
 # SeQaM event example (no colons anywhere):
-#   ssh router load-vm bash /home/lc1/edgelab-load-client/run_gpu_load.sh pattern 30,80 7 0
+#   ssh router load-vm bash /home/emulate/edgelab-load-client/run_gpu_load.sh pattern 30,80 7 0
 set -u
 
 IMAGE="nvcr.io/nvidia/tritonserver:26.01-py3-sdk"

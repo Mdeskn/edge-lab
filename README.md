@@ -35,7 +35,7 @@ trip, and when local edge inference is safer.
 | VM1 | `172.22.174.149` | Kafka broker, Kafka UI, Grafana/Prometheus, SeQaM API when enabled |
 | VM2 | `172.22.174.145` | GPU server, Triton, JPEG inference API, GPU metrics publisher |
 | VM3 | `172.22.174.148` | Network/router VM, traffic shaping, network metrics, phase controller |
-| LC1 | `172.22.229.169` | External GPU load client |
+| Load VM | `172.22.229.235` | External GPU load client |
 | Raspberry Pi | `172.22.229.167` | Student client app, local inference, dashboard |
 
 Primary inference path:
@@ -244,7 +244,7 @@ Example strategy:
 def decide(self) -> str:
     phase = self.experiment_phase
 
-    if phase in ("gpu_load", "jitter_light", "bandwidth_50", "mixed"):
+    if phase in ("gpu_load", "jitter_light", "bandwidth_20", "mixed"):
         return "local"
 
     if self.gpu_metrics.get("yolo_queue_ms", 0) > 50:
@@ -303,29 +303,30 @@ The current SeQaM scenario emits these phase names:
 
 | Phase | Index | Network action | GPU load |
 | --- | ---: | --- | --- |
-| `baseline` | 0 | clear | no |
+| `cycle_start` | 8 | clear | no |
 | `gpu_load` | 4 | clear | yes, triggered externally |
-| `jitter_light` | 3 | `netem_tbf 0.1ms 0.4ms 1gbit 2mbit 50ms` | no |
-| `bandwidth_50` | 2 | `tbf 50mbit 2mbit 50ms` | no |
-| `mixed` | 5 | `netem_loss_tbf 0ms 0ms 2% 5mbit 256kb 50ms` | yes, triggered externally |
+| `jitter_light` | 3 | `netem_tbf 25ms 15ms 1gbit 2mbit 50ms` | no |
+| `bandwidth_20` | 7 | `tbf 20mbit 512kb 50ms` | no |
+| `mixed` | 5 | `tbf 20mbit 512kb 50ms` | yes, triggered externally |
+| `cycle_end` | 9 | clear | no |
 
 Phase rules stay active until the next phase. Do not pass a duration to
 `tc_control.sh` from automated phase control; SeQaM controls timing.
 
-`tc_controller.py` also accepts legacy operator phases such as `bandwidth_200`
-and `bandwidth_5`, but they are not emitted by the current SeQaM scenario.
+`tc_controller.py` also accepts legacy operator phases such as `baseline`,
+`bandwidth_200`, `bandwidth_50`, and `bandwidth_5`, but they are not emitted by the current SeQaM scenario.
 Student-facing examples should use only the current scenario phases above.
 
 The current checked-in SeQaM scenario is a short heavy-load cycle:
 
 | Time | Action |
 | ---: | --- |
-| 0 s | Stop GPU load; set `baseline` |
-| 10 s | Set `gpu_load`; start LC1 GPU load at concurrency 8 |
+| 0 s | Stop GPU load; set `cycle_start` |
+| 10 s | Set `gpu_load`; start load-VM GPU load at concurrency 32 |
 | 25 s | Stop GPU load; set `jitter_light` |
-| 40 s | Set `bandwidth_50` |
-| 55 s | Set `mixed`; start LC1 GPU load at concurrency 8 |
-| 70 s | Stop GPU load; set `baseline` |
+| 40 s | Set `bandwidth_20` |
+| 55 s | Set `mixed`; start load-VM GPU load at concurrency 16 |
+| 70 s | Stop GPU load; set `cycle_end` |
 | 75 s | Exit |
 
 If the SeQaM scenario changes, update `client/student/sp_agent.py`,
@@ -438,7 +439,7 @@ Use this order for a demo or lab session:
 1. VM1 central Kafka/Grafana/SeQaM stack
 2. VM2 Triton GPU server and GPU metrics publisher
 3. VM3 network publisher and tc_controller
-4. LC1 GPU load client ready and stopped
+4. Load VM GPU load client ready and stopped
 5. Raspberry Pi app and dashboard
 6. SeQaM experiment dispatcher
 ```
@@ -568,8 +569,8 @@ The VM3 interface is `ens18`. `tc_control.sh` supports:
 ```bash
 sudo /home/mae/network_load/tc_control.sh show
 sudo /home/mae/network_load/tc_control.sh clear
-sudo /home/mae/network_load/tc_control.sh tbf 50mbit 2mbit 50ms
-sudo /home/mae/network_load/tc_control.sh netem_tbf 0.1ms 0.4ms 1gbit 2mbit 50ms
+sudo /home/mae/network_load/tc_control.sh tbf 20mbit 512kb 50ms
+sudo /home/mae/network_load/tc_control.sh netem_tbf 25ms 15ms 1gbit 2mbit 50ms
 ```
 
 Passwordless sudo for the tc script is required:
@@ -595,11 +596,11 @@ nc -vz 172.22.174.145 8001
 A missing `ss` listener on `8001` on VM3 is normal when forwarding is handled by
 iptables DNAT rather than a user-space process.
 
-### LC1: GPU Load Client
+### Load VM: GPU Load Client
 
 ```bash
-ssh lc1@172.22.229.169
-cd /home/lc1/edgelab-load-client
+ssh emulate@172.22.229.235
+cd /home/emulate/edgelab-load-client
 ./run_gpu_load.sh stop
 ./run_gpu_load.sh status
 ```
@@ -612,10 +613,10 @@ Manual test:
 ./run_gpu_load.sh stop
 ```
 
-LC1 should load the GPU server directly, not through VM3:
+The load VM should load the GPU server directly, not through VM3:
 
 ```text
-LC1 -> 172.22.174.145:8001
+Load VM -> 172.22.174.145:8001
 ```
 
 This stresses the server, not the shaped student network path.
@@ -655,7 +656,7 @@ Current targets:
 | --- | --- | --- |
 | `net-vm` | `172.22.174.148` | `mae` |
 | `gpu-server` | `172.22.174.145` | `mae` |
-| `load-vm` | `172.22.229.169` | `lc1` |
+| `load-vm` | `172.22.229.235` | `emulate` |
 
 In this SeQaM setup, these targets live under `router` in `ScenarioConfig.json`.
 
@@ -664,7 +665,7 @@ Run a one-shot scenario:
 ```bash
 curl -X POST http://172.22.174.149:8000/config/ExperimentConfig.json \
   -H "Content-Type: application/json" \
-  -d @seqam/scenario.json
+  -d @seqam/ExperimentConfig.json
 ```
 
 Or use the SeQaM console:
@@ -758,9 +759,9 @@ ssh mae@<pi-ip>
 cd ~/edge-lab
 docker compose -f docker-compose.pi.yml down
 
-# LC1
-ssh lc1@172.22.229.169
-cd /home/lc1/edgelab-load-client
+# Load VM
+ssh emulate@172.22.229.235
+cd /home/emulate/edgelab-load-client
 ./run_gpu_load.sh stop
 
 # VM3
@@ -847,7 +848,7 @@ Then compare with `PHASE_MAP` in:
 publishers/network_conditions/tc_controller.py
 ```
 
-Every phase emitted by `seqam/scenario.json` must be accepted by VM3
+Every phase emitted by `seqam/ExperimentConfig.json` must be accepted by VM3
 `set_phase.sh` and defined in `PHASE_MAP`.
 
 ### Network publisher always reports clear
@@ -906,8 +907,8 @@ ps aux | grep tc_controller | grep -v grep
 ### GPU load keeps running
 
 ```bash
-ssh lc1@172.22.229.169
-cd /home/lc1/edgelab-load-client
+ssh emulate@172.22.229.235
+cd /home/emulate/edgelab-load-client
 ./run_gpu_load.sh stop
 ./run_gpu_load.sh status
 ```

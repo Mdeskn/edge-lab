@@ -89,7 +89,7 @@ METRICS AVAILABLE IN YOUR decide() METHOD:
     self.experiment_phase  (str):
         Current load phase. Defaults to "cycle_start" until a phase message
         arrives. Values from the current SeQaM scenario are "cycle_start",
-        "gpu_load", "jitter_light", "bandwidth_50", "mixed", and
+        "gpu_load", "jitter_light", "bandwidth_20", "mixed", and
         "cycle_end".
 
     self.current_mode  (str):

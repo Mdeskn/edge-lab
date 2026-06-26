@@ -27,8 +27,11 @@ Designed to run as a plain Python script directly on the Network VM:
 
     Manual phase tests:
         echo baseline      > /tmp/edgelab_phase
+        echo cycle_start   > /tmp/edgelab_phase
+        echo cycle_end     > /tmp/edgelab_phase
         echo bandwidth_200 > /tmp/edgelab_phase
         echo bandwidth_50  > /tmp/edgelab_phase
+        echo bandwidth_20  > /tmp/edgelab_phase
         echo bandwidth_5   > /tmp/edgelab_phase
         echo jitter_light  > /tmp/edgelab_phase
         echo gpu_load      > /tmp/edgelab_phase
@@ -126,6 +129,34 @@ PHASE_MAP: dict[str, dict] = {
             "duration_seconds": None,
         },
     },
+    "cycle_start": {
+        "index": 8,
+        "description": "Cycle boundary. Clear traffic control rules.",
+        "tc_args": ["clear"],
+        "tc_parameters": {
+            "mode": "clear",
+            "bandwidth": "unlimited",
+            "delay_ms": 0.0,
+            "jitter_ms": 0.0,
+            "packet_loss_percent": 0.0,
+            "tbf_latency": None,
+            "duration_seconds": None,
+        },
+    },
+    "cycle_end": {
+        "index": 9,
+        "description": "Cycle finished. Clear traffic control rules.",
+        "tc_args": ["clear"],
+        "tc_parameters": {
+            "mode": "clear",
+            "bandwidth": "unlimited",
+            "delay_ms": 0.0,
+            "jitter_ms": 0.0,
+            "packet_loss_percent": 0.0,
+            "tbf_latency": None,
+            "duration_seconds": None,
+        },
+    },
     "bandwidth_200": {
         "index": 1,
         "description": "Limit bandwidth to 200mbit.",
@@ -156,6 +187,21 @@ PHASE_MAP: dict[str, dict] = {
             "duration_seconds": None,
         },
     },
+    "bandwidth_20": {
+        "index": 7,
+        "description": "Limit bandwidth to 20mbit for the JPEG remote inference path.",
+        "tc_args": ["tbf", "20mbit", "512kb", "50ms"],
+        "tc_parameters": {
+            "mode": "tbf",
+            "bandwidth": "20mbit",
+            "burst": "512kb",
+            "tbf_latency": "50ms",
+            "delay_ms": 0.0,
+            "jitter_ms": 0.0,
+            "packet_loss_percent": 0.0,
+            "duration_seconds": None,
+        },
+    },
     "bandwidth_5": {
         "index": 6,
         "description": "Limit bandwidth to 5mbit for the JPEG remote inference path.",
@@ -173,15 +219,15 @@ PHASE_MAP: dict[str, dict] = {
     },
     "jitter_light": {
         "index": 3,
-        "description": "Apply light netem delay/jitter with high bandwidth.",
-        "tc_args": ["netem_tbf", "0.1ms", "0.4ms", "1gbit", "2mbit", "50ms"],
+        "description": "Apply visible netem delay/jitter with high bandwidth.",
+        "tc_args": ["netem_tbf", "25ms", "15ms", "1gbit", "2mbit", "50ms"],
         "tc_parameters": {
             "mode": "netem_tbf",
             "bandwidth": "1gbit",
             "burst": "2mbit",
             "tbf_latency": "50ms",
-            "delay_ms": 0.1,
-            "jitter_ms": 0.4,
+            "delay_ms": 25.0,
+            "jitter_ms": 15.0,
             "packet_loss_percent": 0.0,
             "duration_seconds": None,
         },
@@ -202,16 +248,16 @@ PHASE_MAP: dict[str, dict] = {
     },
     "mixed": {
         "index": 5,
-        "description": "Mixed phase. Apply 5mbit shaping plus 2% packet loss; GPU load may be triggered externally.",
-        "tc_args": ["netem_loss_tbf", "0ms", "0ms", "2%", "5mbit", "256kb", "50ms"],
+        "description": "Mixed phase. Apply 20mbit shaping; GPU load is triggered externally.",
+        "tc_args": ["tbf", "20mbit", "512kb", "50ms"],
         "tc_parameters": {
-            "mode": "netem_loss_tbf",
-            "bandwidth": "5mbit",
-            "burst": "256kb",
+            "mode": "tbf",
+            "bandwidth": "20mbit",
+            "burst": "512kb",
             "tbf_latency": "50ms",
             "delay_ms": 0.0,
             "jitter_ms": 0.0,
-            "packet_loss_percent": 2.0,
+            "packet_loss_percent": 0.0,
             "duration_seconds": None,
         },
     },

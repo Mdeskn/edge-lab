@@ -35,7 +35,7 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument("--vm3-ssh", default=os.environ.get("VM3_SSH", "mae@172.22.174.148"))
-    parser.add_argument("--lc1-ssh", default=os.environ.get("LC1_SSH", "lc1@172.22.229.169"))
+    parser.add_argument("--lc1-ssh", default=os.environ.get("LC1_SSH", "emulate@172.22.229.235"))
     parser.add_argument(
         "--tc-script",
         default=os.environ.get("TC_SCRIPT", "/home/mae/network_load/tc_control.sh"),
@@ -44,7 +44,7 @@ def parse_args() -> argparse.Namespace:
         "--gpu-load-script",
         default=os.environ.get(
             "GPU_LOAD_SCRIPT",
-            "/home/lc1/edgelab-load-client/run_gpu_load.sh",
+            "/home/emulate/edgelab-load-client/run_gpu_load.sh",
         ),
     )
     parser.add_argument(

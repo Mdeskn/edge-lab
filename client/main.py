@@ -23,7 +23,7 @@ from threads.latency_probe import LatencyProbe
 
 logger = logging.getLogger(__name__)
 
-EXPERIMENT_PHASES = ["cycle_start", "gpu_load", "jitter_light", "bandwidth_50", "mixed", "cycle_end"]
+EXPERIMENT_PHASES = ["cycle_start", "gpu_load", "jitter_light", "bandwidth_20", "mixed", "cycle_end"]
 
 
 def run_cycle_monitor(config: Config, shared_state: SharedState) -> None:
@@ -54,7 +54,7 @@ def run_cycle_monitor(config: Config, shared_state: SharedState) -> None:
         logger.info("SYNC_MODE=off: collecting indefinitely, no cycle detection")
         return
 
-    all_phases = {"cycle_start", "gpu_load", "jitter_light", "bandwidth_50", "mixed", "cycle_end"}
+    all_phases = {"cycle_start", "gpu_load", "jitter_light", "bandwidth_20", "mixed", "cycle_end"}
     poll_interval = 0.5
     cycle_timeout_sec = config.phase_timeout_sec if config.phase_timeout_sec > 0 else None
 
