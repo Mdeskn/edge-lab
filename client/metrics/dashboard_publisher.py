@@ -315,7 +315,12 @@ class DashboardPublisher:
             _WHITE,
             1,
         )
-        lag_text = "waiting" if lag is None else f"{lag} frame(s)"
+        if mode == "warming_up":
+            lag_text = "warming up"
+        elif lag is None:
+            lag_text = "waiting"
+        else:
+            lag_text = f"{lag} frame(s)"
         cv2.putText(frame, f"Prediction lag: {lag_text}", (10, 80), _FONT, 0.6, _WHITE, 1)
 
     def _resize(self, frame: np.ndarray) -> np.ndarray:
