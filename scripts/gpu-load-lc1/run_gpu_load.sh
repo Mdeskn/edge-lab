@@ -29,11 +29,32 @@ NAME="edgelab_gpu_load"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOGFILE="$SCRIPT_DIR/gpu_load.log"
 PATTERN_PID_FILE="$SCRIPT_DIR/gpu_load_pattern.pid"
+LOG_PID_FILE="$SCRIPT_DIR/gpu_load_logs.pid"
 
 action="${1:-}"
 
 running() {
   docker ps --format '{{.Names}}' | grep -qx "$NAME"
+}
+
+log_pid() {
+  if [ -f "$LOG_PID_FILE" ]; then
+    cat "$LOG_PID_FILE" 2>/dev/null || true
+  fi
+}
+
+stop_log_stream() {
+  pid="$(log_pid)"
+  if [ -n "${pid:-}" ] && kill -0 "$pid" >/dev/null 2>&1; then
+    kill "$pid" >/dev/null 2>&1 || true
+  fi
+  rm -f "$LOG_PID_FILE"
+}
+
+start_log_stream() {
+  stop_log_stream
+  nohup docker logs -f "$NAME" >> "$LOGFILE" 2>&1 &
+  echo "$!" > "$LOG_PID_FILE"
 }
 
 stop_sdk_containers() {
@@ -61,13 +82,21 @@ stop_pattern() {
 
 start_load_container() {
   load_concurrency="$1"
+  stop_log_stream
   docker rm -f "$NAME" >/dev/null 2>&1 || true
-  docker run --rm --name "$NAME" --net=host "$IMAGE" \
+  echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') starting gpu load concurrency $load_concurrency" >> "$LOGFILE"
+  docker run -d --name "$NAME" --net=host "$IMAGE" \
     perf_analyzer -m "$MODEL" -i grpc -u "$TRITON_URL" \
     --input-data random \
     --concurrency-range "$load_concurrency" \
     --measurement-interval 999999 \
-    >> "$LOGFILE" 2>&1 &
+    >> "$LOGFILE" 2>&1
+  start_log_stream
+  sleep 1
+  if ! running; then
+    echo "gpu load failed to stay running; check $LOGFILE"
+    return 1
+  fi
 }
 
 start_fixed_load() {
@@ -79,15 +108,11 @@ start_fixed_load() {
     echo "gpu load already running"
     exit 0
   fi
-  docker rm -f "$NAME" >/dev/null 2>&1 || true
-  nohup docker run --rm --name "$NAME" --net=host "$IMAGE" \
-    perf_analyzer -m "$MODEL" -i grpc -u "$TRITON_URL" \
-    --input-data random \
-    --concurrency-range "$load_concurrency" \
-    --measurement-interval 999999 \
-    >> "$LOGFILE" 2>&1 &
+  if ! start_load_container "$load_concurrency"; then
+    exit 1
+  fi
   if [ "${load_duration:-0}" -gt 0 ] 2>/dev/null; then
-    ( sleep "${load_duration}"; docker rm -f "$NAME" >/dev/null 2>&1 || true ) &
+    ( sleep "${load_duration}"; docker rm -f "$NAME" >/dev/null 2>&1 || true; stop_log_stream ) &
   fi
   echo "started gpu load (perf_analyzer) concurrency $load_concurrency duration $load_duration"
 }
@@ -113,6 +138,7 @@ run_pattern_worker() {
   fi
 
   cleanup() {
+    stop_log_stream
     docker rm -f "$NAME" >/dev/null 2>&1 || true
     rm -f "$PATTERN_PID_FILE"
   }
@@ -134,6 +160,7 @@ run_pattern_worker() {
     if ! [ "$load_concurrency" -ge 0 ] 2>/dev/null; then
       echo "skipping invalid concurrency level: ${levels[$index]}"
     elif [ "$load_concurrency" -eq 0 ]; then
+      stop_log_stream
       docker rm -f "$NAME" >/dev/null 2>&1 || true
       echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') gpu load idle"
     else
@@ -175,6 +202,7 @@ case "$action" in
     ;;
   stop)
     stop_pattern
+    stop_log_stream
     if running || [ -n "$(docker ps -q --filter "ancestor=$IMAGE")" ]; then
       docker rm -f "$NAME" >/dev/null 2>&1 || true
       stop_sdk_containers
