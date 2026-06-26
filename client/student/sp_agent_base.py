@@ -189,7 +189,7 @@ class SPAgentBase:
                     config.kafka_phase_topic,
                     config.kafka_app_topic,
                 ]
-                if self._manual_control_enabled:
+                if config.kafka_control_topic not in topics:
                     topics.append(config.kafka_control_topic)
 
                 self._consumer.subscribe(topics)
@@ -341,13 +341,19 @@ class SPAgentBase:
         while not self._shared_state.is_shutdown_requested():
             loop_start = time.time()
 
-            try:
-                result = self.decide()
-                self.set_mode(result)
-            except NotImplementedError:
-                logger.error("decide() not implemented: SPAgent is a no-op")
-            except Exception:
-                logger.exception("Unhandled exception in SPAgent.decide()")
+            if self._shared_state.is_processing_mode_locked():
+                logger.debug(
+                    "SPAgent automatic decision skipped; manual placement is locked to %s",
+                    self.current_mode,
+                )
+            else:
+                try:
+                    result = self.decide()
+                    self.set_mode(result)
+                except NotImplementedError:
+                    logger.error("decide() not implemented: SPAgent is a no-op")
+                except Exception:
+                    logger.exception("Unhandled exception in SPAgent.decide()")
 
             elapsed = time.time() - loop_start
             time.sleep(max(0.0, interval_s - elapsed))
@@ -444,10 +450,7 @@ class SPAgentBase:
                             if payload.get("processing_mode") == "remote":
                                 self._recent_remote_latencies.append(latency_value)
 
-                elif (
-                    self._manual_control_enabled
-                    and topic == self._config.kafka_control_topic
-                ):
+                elif topic == self._config.kafka_control_topic:
                     self._handle_manual_control(payload)
 
         except Exception:
@@ -468,9 +471,13 @@ class SPAgentBase:
             if mode not in REQUESTED_PROCESSING_MODES:
                 logger.warning("Ignoring invalid manual placement mode: %r", mode)
             else:
-                self.set_mode(mode)
+                prev = self.current_mode
+                self._shared_state.lock_processing_mode(mode)
+                if prev != mode:
+                    with self._metrics_lock:
+                        self._recent_remote_latencies.clear()
                 logger.info(
-                    "Manual placement command applied: mode=%s source=%s",
+                    "Manual placement command applied and locked: mode=%s source=%s",
                     mode,
                     payload.get("source", "unknown"),
                 )

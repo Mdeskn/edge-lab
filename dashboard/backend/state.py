@@ -40,7 +40,10 @@ def _percentile(values: list[float], percentile: float) -> float | None:
 def _mode_latency_summary(items: deque, mode: str, source: str = "scored") -> dict[str, Any]:
     mode_items = [
         item for item in items
-        if str(item.get("processing_mode", "")).lower() == mode
+        if (
+            str(item.get("processing_mode", "")).lower() == mode
+            or str(item.get("processing_mode", "")).lower().startswith(f"{mode}_")
+        )
         and item.get("latency_ms") is not None
     ]
     values = [float(item["latency_ms"]) for item in mode_items]
@@ -64,7 +67,7 @@ def _latency_summary_for_mode(group: "GroupState", mode: str) -> dict[str, Any]:
     probe = _mode_latency_summary(probes, mode, source="probe")
 
     latest_mode = str(group.latest_metric.get("processing_mode", "")).lower()
-    active = latest_mode == mode or (mode == "local" and latest_mode.startswith("local"))
+    active = latest_mode == mode or latest_mode.startswith(f"{mode}_")
     if active and scored["sample_count"]:
         return scored
     if probe["sample_count"]:
@@ -170,7 +173,7 @@ class DashboardState:
             mode = str(clean.get("processing_mode", "")).lower()
             if mode.startswith("local"):
                 group.local_frames += 1
-            elif mode == "remote":
+            elif mode.startswith("remote"):
                 group.remote_frames += 1
 
             latency = clean.get("latency_ms")

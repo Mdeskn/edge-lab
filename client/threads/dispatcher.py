@@ -95,12 +95,14 @@ class Dispatcher:
 
             dispatch_start = time.time()
             requested_mode = self.shared_state.get_processing_mode()
+            manual_mode_locked = self.shared_state.is_processing_mode_locked()
 
             try:
                 with self.tracer.start_as_current_span("frame_pipeline") as span:
                     span.set_attribute("frame.number", frame_number)
                     span.set_attribute("processing.mode", requested_mode)
                     span.set_attribute("processing.requested_mode", requested_mode)
+                    span.set_attribute("processing.manual_locked", manual_mode_locked)
 
                     preprocessed = None
 
@@ -117,6 +119,10 @@ class Dispatcher:
                         requested_mode == "remote"
                         and self.remote_client is not None
                         and self.remote_client.is_available()
+                    )
+                    allow_remote_fallback = (
+                        self.config.remote_fallback_to_local
+                        and not (manual_mode_locked and requested_mode == "remote")
                     )
 
                     if remote_ok:
@@ -139,7 +145,7 @@ class Dispatcher:
                                         tensor, frame.shape
                                     )
                             except Exception as exc:
-                                if self.config.remote_fallback_to_local:
+                                if allow_remote_fallback:
                                     logger.warning(
                                         "Remote inference failed: %s, falling back to local", exc
                                     )
@@ -154,14 +160,26 @@ class Dispatcher:
                                     result_mode = "local_fallback"
                                 else:
                                     logger.warning(
-                                        "Remote inference failed: %s, skipping local fallback",
+                                        "Remote inference failed: %s, keeping forced remote mode",
                                         exc,
                                     )
                                     pred_x = pred_y = pred_x1 = pred_y1 = pred_x2 = pred_y2 = 0.0
                                     result_mode = "remote_unavailable"
-                    elif requested_mode == "remote" and not self.config.remote_fallback_to_local:
-                        result_mode = "remote_unavailable"
-                        pred_x = pred_y = pred_x1 = pred_y1 = pred_x2 = pred_y2 = 0.0
+                    elif requested_mode == "remote":
+                        if allow_remote_fallback:
+                            result_mode = "local_fallback"
+                            tensor = preprocess_once("preprocess_fallback")
+                            with self.tracer.start_as_current_span(
+                                "local_inference_fallback"
+                            ) as fb_span:
+                                fb_span.set_attribute("model.name", "yolov10n")
+                                fb_span.set_attribute("reason", "remote_unavailable")
+                                pred_x, pred_y, pred_x1, pred_y1, pred_x2, pred_y2 = self.local_server.infer(
+                                    tensor, frame.shape
+                                )
+                        else:
+                            result_mode = "remote_unavailable"
+                            pred_x = pred_y = pred_x1 = pred_y1 = pred_x2 = pred_y2 = 0.0
                     else:
                         result_mode = "local"
                         tensor = preprocess_once()

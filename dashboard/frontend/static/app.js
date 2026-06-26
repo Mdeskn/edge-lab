@@ -265,12 +265,12 @@ function renderMetrics(state) {
   const mode = String(state.latest?.processing_mode || "unknown").toUpperCase();
   const modeCard = el["mode-card"];
   modeCard.classList.toggle("mode-local", mode.startsWith("LOCAL"));
-  modeCard.classList.toggle("mode-remote", mode === "REMOTE");
+  modeCard.classList.toggle("mode-remote", mode.startsWith("REMOTE"));
   text("processing-mode", mode);
 
   renderPlacement(state);
   renderLatency("local", state.latency?.local, mode === "LOCAL" || mode.startsWith("LOCAL"));
-  renderLatency("remote", state.latency?.remote, mode === "REMOTE");
+  renderLatency("remote", state.latency?.remote, mode.startsWith("REMOTE"));
 
   text("frame-displacement", metric(state.latest?.displacement_px, " px"));
   text("rolling-displacement", `Rolling avg ${metric(state.displacement?.rolling_average_px, " px")}`);
@@ -293,7 +293,7 @@ function renderPlacement(state) {
   const manualEnabled = Boolean(control.enabled);
   const mode = String(state.latest?.processing_mode || "unknown").toUpperCase();
   const localActive = mode.startsWith("LOCAL");
-  const remoteActive = mode === "REMOTE";
+  const remoteActive = mode.startsWith("REMOTE");
   const buttonsDisabled = !manualEnabled || Boolean(pendingMode);
 
   el["force-local"].disabled = buttonsDisabled;
@@ -404,7 +404,7 @@ function valuesForChart(def, state) {
       return {
         ...series,
         values: (history.frames || []).map((frame) => {
-          if (frame.processing_mode === "remote") return 1;
+          if (String(frame.processing_mode || "").startsWith("remote")) return 1;
           if (frame.processing_mode === "local_fallback") return 0.5;
           if (frame.processing_mode === "local") return 0;
           return null;
@@ -479,7 +479,7 @@ function interpretation(state) {
   ) {
     return "Displacement is rising: recent frames are tracking further from ground truth.";
   }
-  if (state.latest?.processing_mode === "remote") {
+  if (state.latest?.processing_mode?.startsWith("remote")) {
     return `Remote inference active. GPU: ${utilization.toFixed(0)}%, delay: ${delay.toFixed(0)} ms, loss: ${loss.toFixed(1)}%.`;
   }
   if (state.latest?.processing_mode?.startsWith("local")) {

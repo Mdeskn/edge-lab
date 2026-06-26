@@ -38,6 +38,7 @@ class SharedState:
         self._latest_prediction: dict | None = None
 
         self._processing_mode: str = self._validate_processing_mode(initial_mode)
+        self._manual_processing_lock: bool = False
 
         self._recent_latencies: deque = deque(maxlen=20)
 
@@ -83,6 +84,22 @@ class SharedState:
         """
         with self._lock:
             self._processing_mode = self._validate_processing_mode(mode)
+
+    def lock_processing_mode(self, mode: str) -> None:
+        """Force a user-selected placement until another manual command changes it."""
+        with self._lock:
+            self._processing_mode = self._validate_processing_mode(mode)
+            self._manual_processing_lock = True
+
+    def unlock_processing_mode(self) -> None:
+        """Allow SP-Agent decisions to update placement again."""
+        with self._lock:
+            self._manual_processing_lock = False
+
+    def is_processing_mode_locked(self) -> bool:
+        """Return True when a dashboard/manual placement command owns placement."""
+        with self._lock:
+            return self._manual_processing_lock
 
     def get_processing_mode(self) -> str:
         """Return the requested inference placement ('local' or 'remote')."""
@@ -357,7 +374,7 @@ class SharedState:
             stats["jitter_frames"] += 1
             if deadline_miss:
                 stats["deadline_misses"] += 1
-            if processing_mode == "remote":
+            if processing_mode.startswith("remote"):
                 stats["remote_frames"] += 1
             elif processing_mode == "local_fallback":
                 stats["local_fallback_frames"] += 1
