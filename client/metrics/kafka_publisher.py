@@ -62,6 +62,7 @@ class AppMetricsPublisher:
         timestamp: float | None = None,
         jitter_ms: float = 0.0,
         deadline_miss: bool = False,
+        collection_state: dict | None = None,
     ) -> None:
         """
         Serialize metrics to JSON and produce to the configured topic.
@@ -88,6 +89,8 @@ class AppMetricsPublisher:
             "predicted_y": round(predicted_y, 2),
             "cumulative_displacement_px": round(cumulative_displacement_px, 2),
         }
+        if collection_state is not None:
+            payload["collection_state"] = collection_state
 
         try:
             self._producer.produce(

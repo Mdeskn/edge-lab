@@ -319,6 +319,10 @@ class DashboardState:
 
     def _update_phase_summary_locked(self, metric: dict[str, Any]) -> None:
         """Accumulate per-phase totals. Caller must hold _lock."""
+        collection_state = metric.get("collection_state") or self._collection_state or {}
+        if collection_state.get("state") != "collecting":
+            return
+
         phase = metric.get("experiment_phase")
         if not phase or phase == "unknown":
             return

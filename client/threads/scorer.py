@@ -167,6 +167,8 @@ class Scorer:
                 except Exception as exc:
                     logger.error("CSV write error: %s", exc)
 
+            collection_state = self.shared_state.get_collection_snapshot()
+
             try:
                 self.kafka_publisher.publish(
                     frame_number=frame_number,
@@ -182,6 +184,7 @@ class Scorer:
                     predicted_y=pred_y,
                     cumulative_displacement_px=score_summary["cumulative_displacement"],
                     timestamp=result_time,
+                    collection_state=collection_state,
                 )
             except Exception as exc:
                 logger.error("Kafka publish error in Scorer: %s", exc)
@@ -191,7 +194,7 @@ class Scorer:
                 timestamp=result_time,
                 true_x=current_gt_x,
                 true_y=current_gt_y,
-                collection_state=self.shared_state.get_collection_snapshot(),
+                collection_state=collection_state,
                 predicted_x=pred_x,
                 predicted_y=pred_y,
                 processing_mode=mode,

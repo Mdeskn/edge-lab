@@ -323,11 +323,11 @@ The current checked-in SeQaM scenario is a short heavy-load cycle:
 | ---: | --- |
 | 0 s | Stop GPU load; set `cycle_start` |
 | 10 s | Set `gpu_load`; start load-VM GPU load at concurrency 32 |
-| 25 s | Stop GPU load; set `jitter_light` |
-| 40 s | Set `bandwidth_20` |
-| 55 s | Set `mixed`; start load-VM GPU load at concurrency 16 |
-| 70 s | Stop GPU load; set `cycle_end` |
-| 75 s | Exit |
+| 35 s | Stop GPU load; set `jitter_light` |
+| 60 s | Set `bandwidth_20` |
+| 85 s | Set `mixed`; start load-VM GPU load at concurrency 8 |
+| 110 s | Stop GPU load; set `cycle_end` |
+| 115 s | Exit |
 
 If the SeQaM scenario changes, update `client/student/sp_agent.py`,
 `client/student/sp_agent_base.py`, and `client/main.py` at the same time.
