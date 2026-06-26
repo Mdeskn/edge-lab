@@ -22,51 +22,8 @@ data/results*.csv
 data/saved/*
 !data/saved/.gitkeep
 
-# Runtime artifacts copied from deployed VMs
-scripts/net-vm/network_conditions_publisher.log
-scripts/net-vm/tc_controller.log
-scripts/net-vm/nohup.out
-scripts/gpu-server/server/nohup.out
-scripts/gpu-load-lc1/gpu_load.log
-
-# Non-student compose files (gpu-server, netvm, local dev, dashboard standalone)
-deploy/
-
-# Personal files
-lab_project_roadmap*.md
-export_project_inventory*.py
-calibrate_selection*.py
-edgelab_full_roadmap*.md
-edgelab_explained_from_zero*.md
-edgelab_roadmap_explained*.md
-Edgelab explained from zero*.pdf
-edge-lab_project_inventory.*md
-EdgeLab machines*.md
-edgelab_startup_instructions_with_troubleshooting*.md
-Documentation and testing/
-docs/edgelab_starter_instructions*.md
-scripts/
-!scripts/
-scripts/*
-!scripts/calibrate_phases.py
-!scripts/preflight.sh
-!scripts/cleanup_all.sh
-!scripts/random_load.py
-
-# VM-deployed script snapshots/copies stay local and should not be added.
-scripts/gpu-load-lc1/**
-scripts/gpu-server/**
-scripts/net-vm/**
-docs/
-!docs/
-docs/*
-!docs/archive/
-!docs/archive/**
-docs/archive/markdown-sources/root/edge-lab_project_inventory.md
-benchmark_inference*.py
-
-# Generated project inventory reports
-*_project_inventory.md
+# Local handoff bundle for non-Pi VMs/docs. Keep this out of the final Pi app branch.
+distributed-materials/
 
 # IDE
 .vscode/
