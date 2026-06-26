@@ -39,6 +39,8 @@ class FrameReader:
         self.frame_counter: int = 0
         self._video_cycle: int = 0
         self._ground_truth: Dict[int, Tuple[Optional[float], Optional[float]]] = {}
+        self._preview_has_prediction: bool = False
+        self._preview_wait_started_at: Optional[float] = None
 
     def _load_ground_truth(self) -> Dict[int, Tuple[Optional[float], Optional[float]]]:
         """
@@ -148,14 +150,25 @@ class FrameReader:
                     and latest_prediction.get("video_cycle") != self._video_cycle
                 ):
                     latest_prediction = None
-                self.dashboard_publisher.publish_preview(
-                    frame=frame,
-                    frame_number=self.frame_counter,
-                    timestamp=time.time(),
-                    true_x=gt_x,
-                    true_y=gt_y,
-                    prediction=latest_prediction,
-                )
+                if latest_prediction is not None:
+                    self._preview_has_prediction = True
+
+                publish_preview = True
+                if latest_prediction is None and not self._preview_has_prediction:
+                    now = time.time()
+                    if self._preview_wait_started_at is None:
+                        self._preview_wait_started_at = now
+                    publish_preview = now - self._preview_wait_started_at >= 2.0
+
+                if publish_preview:
+                    self.dashboard_publisher.publish_preview(
+                        frame=frame,
+                        frame_number=self.frame_counter,
+                        timestamp=time.time(),
+                        true_x=gt_x,
+                        true_y=gt_y,
+                        prediction=latest_prediction,
+                    )
 
                 if self.frame_counter % 100 == 0:
                     logger.debug("FrameReader: frame %d", self.frame_counter)

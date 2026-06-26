@@ -202,21 +202,6 @@ class Scorer:
                 cumulative_displacement_px=score_summary["cumulative_displacement"],
                 experiment_phase=current_phase,
             )
-            self.dashboard_publisher.publish_preview(
-                frame=frame,
-                frame_number=frame_number,
-                timestamp=result_time,
-                true_x=current_gt_x,
-                true_y=current_gt_y,
-                prediction={
-                    "frame_number": frame_number,
-                    "predicted_x": pred_x,
-                    "predicted_y": pred_y,
-                    "processing_mode": mode,
-                    "latency_ms": latency_ms,
-                },
-                force=True,
-            )
 
             if displacement_px is not None and has_prediction and current_gt_x is not None:
                 frame_h, frame_w = frame.shape[:2]

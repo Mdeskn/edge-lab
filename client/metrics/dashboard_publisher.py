@@ -127,14 +127,13 @@ class DashboardPublisher:
         true_x: float | None,
         true_y: float | None,
         prediction: dict | None,
-        force: bool = False,
     ) -> None:
         """Queue the latest source frame without blocking the frame reader."""
         if not self._enabled:
             return
 
         now = time.monotonic()
-        if not force and now - self._last_publish_time < 1.0 / self._fps:
+        if now - self._last_publish_time < 1.0 / self._fps:
             return
         self._last_publish_time = now
 
