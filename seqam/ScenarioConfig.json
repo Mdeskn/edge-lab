@@ -20,8 +20,8 @@
       {
         "name": "load-vm",
         "description": "GPU load client VM",
-        "host": "172.22.229.169",
-        "ssh_user": "lc1",
+        "host": "172.22.229.235",
+        "ssh_user": "emulate",
         "ssh_port": 22
       }
     ]

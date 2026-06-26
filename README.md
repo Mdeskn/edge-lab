@@ -2,7 +2,7 @@
 
 EdgeLab is a hands-on edge-computing lab for the IoT and Edge Computing course
 at FH Dortmund. A Raspberry Pi processes a pre-recorded video and tracks one
-target suitcase frame by frame. For every frame, the student service
+target red car frame by frame. For every frame, the student service
 placement agent decides whether to run YOLO locally on the Pi CPU or send the
 frame through the network to a remote GPU server.
 
@@ -23,7 +23,7 @@ Minimize cumulative displacement: the total pixel distance between the predicted
 target center and the ground-truth target center over all scored frames. Lower
 is better.
 
-Fast inference matters because the suitcase is moving. A late prediction can be
+Fast inference matters because the car is moving. A late prediction can be
 technically correct for the frame that was processed, but stale by the time the
 result arrives. The lab teaches when remote GPU inference is worth the network
 trip, and when local edge inference is safer.
@@ -76,7 +76,7 @@ Pi frame results     -> dnn_partition.client_metrics
 | `client/student/sp_agent.py` | The only file students edit |
 | `client/student/sp_agent_base.py` | Base class exposing Kafka metrics and latency history |
 | `dashboard/` | Per-group FastAPI + React live dashboard |
-| `ground_truth/` | HSV-based ground-truth CSV generator |
+| `ground_truth/` | YOLO-derived and HSV-based ground-truth CSV generators |
 | `publishers/network_conditions/` | VM3 network metrics publisher and phase controller |
 | `remote_inference/` | VM2 JPEG-to-Triton gateway API |
 | `seqam/` | SeQaM scenario and SSH target configuration |
@@ -96,13 +96,13 @@ mkdir -p data
 Copy the supplied files into `data/`:
 
 ```text
-data/video.mp4
+data/test_video.mp4
 data/ground_truth.csv
 data/yolov10n.onnx
 ```
 
-Some older notes refer to `data/test_video.mp4`; the current default
-configuration uses `data/video.mp4`. Use whatever file name is set in `.env`.
+The current default configuration uses `data/test_video.mp4`. Use whatever file
+name is set in `.env`.
 
 2. Configure the environment:
 
@@ -115,7 +115,7 @@ Minimum student settings:
 ```dotenv
 GROUP_ID=1
 
-VIDEO_PATH=data/video.mp4
+VIDEO_PATH=data/test_video.mp4
 GROUND_TRUTH_PATH=data/ground_truth.csv
 MODEL_PATH=data/yolov10n.onnx
 
@@ -129,8 +129,9 @@ KAFKA_NET_TOPIC=edgelab.network.metrics
 KAFKA_PHASE_TOPIC=edgelab.phase
 APP_METRICS_TOPIC=dnn_partition.client_metrics
 
-TARGET_CLASS_ID=28
-TARGET_CONFIDENCE_THRESHOLD=0.0001
+CONFIDENCE_THRESHOLD=0.25
+TARGET_CLASS_ID=2,7
+TARGET_CONFIDENCE_THRESHOLD=0.1
 
 DISPLAY_OUTPUT=false
 AUTO_STOP=false
@@ -341,7 +342,7 @@ Main features:
 
 | Feature | What it shows |
 | --- | --- |
-| Annotated video | Ground-truth suitcase center, predicted box, displacement line |
+| Annotated video | Ground-truth car center, predicted box, displacement line |
 | Processing mode | `LOCAL`, `REMOTE`, or `LOCAL_FALLBACK` |
 | Latency | Current, average, min, max, p95 |
 | Displacement | Current, rolling average, cumulative score |
@@ -388,34 +389,39 @@ client logs for dashboard publisher startup.
 
 ## Ground Truth
 
-Ground truth is generated offline with HSV color segmentation. It does not use
-YOLO, so YOLO misses remain measurable.
+For the current red-car clip, ground truth is generated from the same YOLOv10
+ONNX model used by the client. This makes the score compare against the exact
+car/truck detection target used during inference.
 
 ```bash
-python ground_truth/generate_ground_truth.py \
-    --video data/video.mp4 \
+.venv-yolo/bin/python ground_truth/generate_yolo_ground_truth.py \
+    --video data/test_video.mp4 \
+    --model data/yolov10n.onnx \
+    --conf 0.1 \
+    --target-class-id 2,7 \
     --output data/ground_truth.csv
 ```
 
 The generator:
 
-1. Converts each frame to HSV.
-2. Masks both red hue bands, 0-10 and 160-179.
-3. Cleans the mask with morphological open and close operations.
-4. Selects the largest red blob within suitcase-sized bounds.
-5. Writes the bounding-box center to CSV.
-6. Linearly interpolates remaining missing rows.
+1. Runs YOLO on every frame.
+2. Filters detections to COCO `car` and `truck`, class ids `2,7`.
+3. Selects the highest-confidence filtered detection.
+4. Writes the YOLO box center to CSV.
+
+The HSV generator remains available at `ground_truth/generate_ground_truth.py`
+when model-independent red-object ground truth is needed.
 
 CSV columns:
 
 | Column | Description |
 | --- | --- |
 | `frame_number` | 1-indexed frame counter |
-| `center_x` | Suitcase center X coordinate |
-| `center_y` | Suitcase center Y coordinate |
-| `confidence` | Always `1.0` for color segmentation |
-| `class_id` | Always `28` |
-| `class_name` | Always `suitcase` |
+| `center_x` | YOLO box center X coordinate |
+| `center_y` | YOLO box center Y coordinate |
+| `confidence` | YOLO confidence for the selected detection |
+| `class_id` | `2` for car or `7` for truck |
+| `class_name` | `car` or `truck` |
 
 To export the ONNX model for inference:
 
@@ -726,7 +732,7 @@ Use this before writing strategy:
 ```bash
 python scripts/benchmark_inference.py --mode local \
   --model data/yolov10n.onnx \
-  --video data/video.mp4
+  --video data/test_video.mp4
 
 python scripts/benchmark_inference.py --mode remote \
   --model data/yolov10n.onnx \
@@ -734,7 +740,7 @@ python scripts/benchmark_inference.py --mode remote \
 
 python scripts/benchmark_inference.py --mode both \
   --model data/yolov10n.onnx \
-  --video data/video.mp4 \
+  --video data/test_video.mp4 \
   --remote-inference-url http://172.22.174.148:8100
 ```
 
@@ -908,11 +914,12 @@ cd /home/lc1/edgelab-load-client
 
 ### Very low detection rate
 
-Use the current suitcase-tracking settings:
+Use the current red-car tracking settings:
 
 ```dotenv
-TARGET_CLASS_ID=28
-TARGET_CONFIDENCE_THRESHOLD=0.0001
+CONFIDENCE_THRESHOLD=0.25
+TARGET_CLASS_ID=2,7
+TARGET_CONFIDENCE_THRESHOLD=0.1
 ```
 
 Also verify that `ground_truth.csv` matches the video.
@@ -964,7 +971,7 @@ DASHBOARD_FRAME_WIDTH=640
 | `DISPLAY_OUTPUT` | OpenCV display window |
 | `AUTO_STOP` | Wait for phase cycle and exit automatically |
 | `CONFIDENCE_THRESHOLD` | YOLO detection threshold |
-| `TARGET_CLASS_ID` | Target class filter, `28` for the suitcase video |
+| `TARGET_CLASS_ID` | Target class filter, `2,7` for the red-car video |
 | `TARGET_CONFIDENCE_THRESHOLD` | Target-specific confidence threshold |
 | `SP_AGENT_INTERVAL_MS` | How often `decide()` runs |
 | `MISS_PENALTY_PX` | Fixed score penalty for missed detections |

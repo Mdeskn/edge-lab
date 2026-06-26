@@ -1,9 +1,9 @@
 """
-Generate ground truth suitcase coordinates from a video using OpenCV only.
+Generate ground truth red-car coordinates from a video using OpenCV only.
 
-Uses HSV colour segmentation to locate the red suitcase in each frame.
+Uses HSV colour segmentation to locate the red car in each frame.
 Works regardless of camera motion because it is not a background model — it
-looks for the suitcase's colour directly.
+looks for the target colour directly.
 
 Ground truth is kept independent of YOLO so that YOLO misses remain measurable.
 
@@ -24,8 +24,8 @@ import cv2
 import numpy as np
 
 
-SUITCASE_CLASS = 28
-SUITCASE_NAME = "suitcase"
+TARGET_CLASS = 2
+TARGET_NAME = "car"
 
 # HSV ranges for red. Red wraps around hue 0 in OpenCV (0-179), so we need
 # two bands and OR them together.
@@ -36,17 +36,17 @@ _RED_HI2 = np.array([179, 255, 255], dtype=np.uint8)
 
 # Morphological kernels
 _OPEN_K  = 7    # removes small noise speckles
-_CLOSE_K = 25   # fills holes inside the suitcase blob
+_CLOSE_K = 25   # fills holes inside the target blob
 
-# Suitcase size relative to frame area
+# Target size relative to frame area
 _MIN_AREA_FRAC = 0.001    # at least 0.1 % of frame
 _MAX_AREA_FRAC = 0.60     # at most 60 % of frame
 
 
-def _detect_suitcase(frame: np.ndarray):
+def _detect_target(frame: np.ndarray):
     """
-    Return (cx, cy, 1.0, SUITCASE_CLASS) for the largest red blob in the
-    frame, or (None, None, 0.0, -1) when no plausible suitcase-sized red
+    Return (cx, cy, 1.0, TARGET_CLASS) for the largest red blob in the
+    frame, or (None, None, 0.0, -1) when no plausible target-sized red
     region is found.
     """
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -76,9 +76,9 @@ def _detect_suitcase(frame: np.ndarray):
     if not candidates:
         return None, None, 0.0, -1
 
-    # Largest red blob = the suitcase
+    # Largest red blob = the target vehicle.
     _, x, y, w, h = max(candidates)
-    return x + w / 2.0, y + h / 2.0, 1.0, SUITCASE_CLASS
+    return x + w / 2.0, y + h / 2.0, 1.0, TARGET_CLASS
 
 
 def _interpolate_gaps(rows: list) -> list:
@@ -99,14 +99,14 @@ def _interpolate_gaps(rows: list) -> list:
     for i in range(first):
         rows[i][1:6] = [
             rows[first][1], rows[first][2], 1.0,
-            SUITCASE_CLASS, SUITCASE_NAME,
+            TARGET_CLASS, TARGET_NAME,
         ]
 
     # Fill trailing gap
     for i in range(last + 1, n):
         rows[i][1:6] = [
             rows[last][1], rows[last][2], 1.0,
-            SUITCASE_CLASS, SUITCASE_NAME,
+            TARGET_CLASS, TARGET_NAME,
         ]
 
     # Fill interior gaps
@@ -125,7 +125,7 @@ def _interpolate_gaps(rows: list) -> list:
                     rows[k][1] = round(x0 + t * (x1 - x0), 2)
                     rows[k][2] = round(y0 + t * (y1 - y0), 2)
                     rows[k][3], rows[k][4], rows[k][5] = (
-                        1.0, SUITCASE_CLASS, SUITCASE_NAME
+                        1.0, TARGET_CLASS, TARGET_NAME
                     )
             i = j
         else:
@@ -136,7 +136,7 @@ def _interpolate_gaps(rows: list) -> list:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate suitcase GT from a video via HSV colour detection."
+        description="Generate red-car GT from a video via HSV colour detection."
     )
     parser.add_argument("--video",  required=True, help="Path to the video file.")
     parser.add_argument("--output", default="ground_truth.csv", help="Output CSV path.")
@@ -149,7 +149,7 @@ def main():
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     print(f"Video  : {args.video} ({total_frames} frames)")
-    print("Tracker: HSV red-suitcase colour segmentation")
+    print("Tracker: HSV red-car colour segmentation")
 
     frame_num = 0
     detected  = 0
@@ -161,7 +161,7 @@ def main():
             break
         frame_num += 1
 
-        cx, cy, conf, cls_id = _detect_suitcase(frame)
+        cx, cy, conf, cls_id = _detect_target(frame)
 
         if cx is None:
             rows.append([frame_num, None, None, 0.0, -1, "none"])
@@ -169,7 +169,7 @@ def main():
             detected += 1
             rows.append([
                 frame_num, round(cx, 2), round(cy, 2),
-                round(conf, 4), cls_id, SUITCASE_NAME,
+                round(conf, 4), cls_id, TARGET_NAME,
             ])
 
         if frame_num % 100 == 0:

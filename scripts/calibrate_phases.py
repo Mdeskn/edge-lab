@@ -52,7 +52,7 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("REMOTE_INFERENCE_URL", "http://172.22.174.148:8100"),
         help="Router-facing JPEG gateway URL.",
     )
-    parser.add_argument("--video", default=os.environ.get("VIDEO_PATH", "data/video.mp4"))
+    parser.add_argument("--video", default=os.environ.get("VIDEO_PATH", "data/test_video.mp4"))
     parser.add_argument("--output", default="data/phase_calibration.csv")
     parser.add_argument("--seconds", type=float, default=30.0)
     parser.add_argument("--request-timeout", type=float, default=8.0)

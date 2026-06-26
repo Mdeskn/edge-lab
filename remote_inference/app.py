@@ -49,8 +49,8 @@ def _parse_target_class_filter(value: str) -> TargetClassFilter:
 
 def load_settings() -> Settings:
     """Load gateway settings from the process environment."""
-    conf_threshold = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.3"))
-    target_class_value = os.environ.get("TARGET_CLASS_ID", "").strip()
+    conf_threshold = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.25"))
+    target_class_value = os.environ.get("TARGET_CLASS_ID", "2,7").strip()
     return Settings(
         triton_url=os.environ.get("TRITON_URL", "localhost:8001"),
         model_name=os.environ.get("TRITON_MODEL_NAME", "yolov10n"),
@@ -60,9 +60,7 @@ def load_settings() -> Settings:
         input_height=int(os.environ.get("MODEL_INPUT_HEIGHT", "640")),
         conf_threshold=conf_threshold,
         target_class_id=_parse_target_class_filter(target_class_value),
-        target_conf_threshold=float(
-            os.environ.get("TARGET_CONFIDENCE_THRESHOLD", str(conf_threshold))
-        ),
+        target_conf_threshold=float(os.environ.get("TARGET_CONFIDENCE_THRESHOLD", "0.1")),
         triton_timeout=float(os.environ.get("TRITON_TIMEOUT_SEC", "1.4")),
     )
 
@@ -110,6 +108,7 @@ class TritonGateway:
             "model_ready": model_ready,
             "triton_url": self.settings.triton_url,
             "model_name": self.settings.model_name,
+            "conf_threshold": self.settings.conf_threshold,
             "target_class_id": self.settings.target_class_id,
             "target_conf_threshold": self.settings.target_conf_threshold,
             "triton_timeout_sec": self.settings.triton_timeout,
@@ -243,6 +242,7 @@ def infer(
         "jpeg_bytes": len(jpeg_bytes),
         "latency_ms": round(latency_ms, 3),
         "model_name": settings.model_name,
+        "conf_threshold": conf_threshold if conf_threshold is not None else settings.conf_threshold,
         "target_class_id": request_target_class_id,
         "target_conf_threshold": (
             target_conf_threshold
