@@ -61,7 +61,7 @@ def load_settings() -> Settings:
         conf_threshold=conf_threshold,
         target_class_id=_parse_target_class_filter(target_class_value),
         target_conf_threshold=float(os.environ.get("TARGET_CONFIDENCE_THRESHOLD", "0.1")),
-        triton_timeout=float(os.environ.get("TRITON_TIMEOUT_SEC", "1.4")),
+        triton_timeout=float(os.environ.get("TRITON_TIMEOUT_SEC", "10.0")),
     )
 
 

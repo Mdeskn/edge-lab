@@ -85,7 +85,7 @@ def load_config() -> Config:
         triton_model_name=os.environ.get("TRITON_MODEL_NAME", "yolov10n"),
         remote_inference_url=os.environ.get("REMOTE_INFERENCE_URL", "").strip(),
         remote_jpeg_quality=int(os.environ.get("REMOTE_JPEG_QUALITY", "80")),
-        remote_inference_timeout=float(os.environ.get("REMOTE_INFERENCE_TIMEOUT_SEC", "1.5")),
+        remote_inference_timeout=float(os.environ.get("REMOTE_INFERENCE_TIMEOUT_SEC", "12.0")),
         remote_failure_cooldown_sec=float(os.environ.get("REMOTE_FAILURE_COOLDOWN_SEC", "3.0")),
         remote_fallback_to_local=os.environ.get(
             "REMOTE_FALLBACK_TO_LOCAL", "true"

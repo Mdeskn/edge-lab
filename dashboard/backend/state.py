@@ -6,6 +6,16 @@ from threading import RLock
 import time
 from typing import Any
 
+CURRENT_PHASE_ORDER = [
+    "cycle_start",
+    "gpu_load",
+    "jitter_light",
+    "bandwidth_20",
+    "mixed",
+    "cycle_end",
+]
+CURRENT_PHASES = set(CURRENT_PHASE_ORDER)
+
 
 def normalize_group_id(group_id: str | int | None) -> str:
     """Return a stable groupN identifier for topics and dashboard state."""
@@ -156,6 +166,9 @@ class DashboardState:
                 return self._update_latency_probe(group, clean)
 
             group.latest_metric = clean
+            app_phase = clean.get("experiment_phase")
+            if app_phase in CURRENT_PHASES:
+                self._phase = app_phase
 
             sample_key = self._sample_key(clean)
             if sample_key in group.seen_sample_set:
@@ -249,7 +262,8 @@ class DashboardState:
 
     def update_phase(self, phase: str) -> None:
         with self._lock:
-            self._phase = phase or "unknown"
+            if phase in CURRENT_PHASES:
+                self._phase = phase
 
     def update_kafka_status(self, connected: bool, detail: str) -> None:
         with self._lock:
@@ -324,7 +338,7 @@ class DashboardState:
             return
 
         phase = metric.get("experiment_phase")
-        if not phase or phase == "unknown":
+        if phase not in CURRENT_PHASES:
             return
         if phase not in self._phase_summary:
             self._phase_summary[phase] = {
@@ -425,6 +439,7 @@ class DashboardState:
                 "placement_control": deepcopy(self._placement_control),
                 "collection_state": deepcopy(self._collection_state) if self._collection_state else None,
                 "phase_summary": deepcopy(self._phase_summary),
+                "phase_order": list(CURRENT_PHASE_ORDER),
                 "history": history,
                 "updated_at": time.time(),
             }

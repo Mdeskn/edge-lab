@@ -65,7 +65,7 @@ class RemoteClient:
         else:
             self._connect_triton_grpc(triton_url)
 
-    def is_available(self) -> bool:
+    def is_available(self, ignore_cooldown: bool = False) -> bool:
         """
         Return True if the remote endpoint is reachable and has not failed
         recently. If the startup check failed, retry after the cooldown window.
@@ -77,11 +77,16 @@ class RemoteClient:
         the Dispatcher skip straight to local without waiting on that timeout
         again, and the client retries remote on its own once the cooldown
         elapses.
+
+        Forced-manual remote mode passes ignore_cooldown=True so a slow frame
+        does not turn into a multi-second "remote unavailable" gap.
         """
         if not self._available:
             now = time.time()
             if (
-                self._last_failure_time is None
+                ignore_cooldown
+                or self._failure_cooldown <= 0
+                or self._last_failure_time is None
                 or now - self._last_failure_time >= self._failure_cooldown
             ):
                 if self._mode == "http_jpeg":
@@ -90,6 +95,8 @@ class RemoteClient:
                     self._connect_triton_grpc(self._triton_url)
             return self._available
         if self._last_failure_time is not None:
+            if ignore_cooldown or self._failure_cooldown <= 0:
+                return True
             if time.time() - self._last_failure_time < self._failure_cooldown:
                 return False
         return True

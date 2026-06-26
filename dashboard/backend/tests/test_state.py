@@ -5,7 +5,7 @@ def metric(timestamp: float = 1.0, mode: str = "local") -> dict:
     return {
         "timestamp": timestamp,
         "frame_number": 7,
-        "experiment_phase": "baseline",
+        "experiment_phase": "cycle_start",
         "processing_mode": mode,
         "latency_ms": 12.0,
         "displacement_px": 4.0,
@@ -35,24 +35,24 @@ def test_missing_infrastructure_metrics_are_empty() -> None:
     assert snapshot["frame"]["url"] is None
 
 
-def test_app_metrics_do_not_overwrite_phase_topic() -> None:
+def test_legacy_phase_topic_is_ignored_and_app_metric_sets_phase() -> None:
     state = DashboardState(max_history=10, group_id="1")
-    state.update_phase("bandwidth_5")
+    state.update_phase("legacy_phase")
 
     state.update_app_metric(metric())
 
     snapshot = state.snapshot()
-    assert snapshot["experiment_phase"] == "bandwidth_5"
-    assert snapshot["latest"]["experiment_phase"] == "baseline"
+    assert snapshot["experiment_phase"] == "cycle_start"
+    assert snapshot["latest"]["experiment_phase"] == "cycle_start"
 
 
-def test_app_metrics_do_not_set_dashboard_phase_before_phase_topic() -> None:
+def test_app_metrics_set_dashboard_phase_before_phase_topic() -> None:
     state = DashboardState(max_history=10, group_id="1")
 
     state.update_app_metric(metric())
 
     snapshot = state.snapshot()
-    assert snapshot["experiment_phase"] == "unknown"
+    assert snapshot["experiment_phase"] == "cycle_start"
 
 
 def test_latency_snapshot_keeps_local_and_remote_separate() -> None:

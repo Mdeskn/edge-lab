@@ -72,7 +72,7 @@
 
     {
 
-      "command": "ssh router load-vm bash /home/emulate/edgelab-load-client/run_gpu_load.sh start 8 0",
+      "command": "ssh router load-vm bash /home/emulate/edgelab-load-client/run_gpu_load.sh start 12 0",
 
       "executionTime": 85000
 

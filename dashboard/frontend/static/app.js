@@ -3,10 +3,7 @@
 const phaseDescriptions = {
   cycle_start: "Clean conditions; cycle begins",
   cycle_end: "Clean conditions; cycle ends",
-  bandwidth_200: "Bandwidth capped at 200 mbit",
-  bandwidth_50: "Bandwidth capped at 50 mbit",
   bandwidth_20: "Bandwidth capped at 20 mbit",
-  bandwidth_5: "Bandwidth capped at 5 mbit",
   jitter_light: "Light delay and jitter applied",
   gpu_load: "GPU and Triton server under load",
   mixed: "20 mbit cap and GPU load active",
@@ -649,7 +646,7 @@ function renderResultsPhaseTable(state) {
   const tbody = el["results-phase-tbody"];
   if (!tbody) return;
   const summary = state.phase_summary || {};
-  const phaseOrder = ["cycle_start", "gpu_load", "jitter_light", "bandwidth_20", "mixed", "cycle_end"];
+  const phaseOrder = state.phase_order || ["cycle_start", "gpu_load", "jitter_light", "bandwidth_20", "mixed", "cycle_end"];
   tbody.innerHTML = "";
   for (const phase of phaseOrder) {
     const s = summary[phase] || {};

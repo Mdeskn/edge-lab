@@ -115,14 +115,17 @@ class Dispatcher:
                         return preprocessed
 
                     result_mode = requested_mode
+                    forced_remote = manual_mode_locked and requested_mode == "remote"
                     remote_ok = (
                         requested_mode == "remote"
                         and self.remote_client is not None
-                        and self.remote_client.is_available()
+                        and self.remote_client.is_available(
+                            ignore_cooldown=forced_remote
+                        )
                     )
                     allow_remote_fallback = (
                         self.config.remote_fallback_to_local
-                        and not (manual_mode_locked and requested_mode == "remote")
+                        and not forced_remote
                     )
 
                     if remote_ok:

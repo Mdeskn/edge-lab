@@ -313,9 +313,8 @@ The current SeQaM scenario emits these phase names:
 Phase rules stay active until the next phase. Do not pass a duration to
 `tc_control.sh` from automated phase control; SeQaM controls timing.
 
-`tc_controller.py` also accepts legacy operator phases such as `baseline`,
-`bandwidth_200`, `bandwidth_50`, and `bandwidth_5`, but they are not emitted by the current SeQaM scenario.
-Student-facing examples should use only the current scenario phases above.
+Student-facing examples and dashboard summaries should use only the current
+scenario phases above.
 
 The current checked-in SeQaM scenario is a short heavy-load cycle:
 
@@ -325,7 +324,7 @@ The current checked-in SeQaM scenario is a short heavy-load cycle:
 | 10 s | Set `gpu_load`; start load-VM GPU load at concurrency 32 |
 | 35 s | Stop GPU load; set `jitter_light` |
 | 60 s | Set `bandwidth_20` |
-| 85 s | Set `mixed`; start load-VM GPU load at concurrency 8 |
+| 85 s | Set `mixed`; start load-VM GPU load at concurrency 12 |
 | 110 s | Stop GPU load; set `cycle_end` |
 | 115 s | Exit |
 
@@ -958,10 +957,11 @@ DASHBOARD_FRAME_WIDTH=640
 | `MODEL_PATH` | Local ONNX model path |
 | `REMOTE_INFERENCE_URL` | Preferred JPEG API, normally `http://172.22.174.148:8100` |
 | `REMOTE_JPEG_QUALITY` | JPEG quality for remote inference |
-| `REMOTE_INFERENCE_TIMEOUT_SEC` | Remote API timeout |
+| `REMOTE_INFERENCE_TIMEOUT_SEC` | Remote API timeout; keep higher than `TRITON_TIMEOUT_SEC` so latency spikes are measured instead of timed out |
 | `REMOTE_FAILURE_COOLDOWN_SEC` | After a remote failure, how long `is_available()` reports unavailable |
 | `TRITON_URL` | Legacy gRPC fallback, normally `172.22.174.148:8001` |
 | `TRITON_MODEL_NAME` | Triton model name, normally `yolov10n` |
+| `TRITON_TIMEOUT_SEC` | GPU-server gateway timeout for the Triton request |
 | `KAFKA_BROKERS` | Kafka broker list |
 | `KAFKA_GPU_TOPIC` | GPU metrics topic |
 | `KAFKA_NET_TOPIC` | Network metrics topic |
