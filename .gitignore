@@ -3,37 +3,37 @@
 
 # Python
 __pycache__/
-*.pyc
-venv/
-.venv*/
-.env
+*.py[cod]
 .pytest_cache/
+.venv*/
+venv/
 
-# Node
+# Node / frontend builds
 node_modules/
 dist/
 
-# Docker
+# Runtime logs
 *.log
 nohup.out
 
-# Local lab assets and generated output
+# Local environment and secrets
+.env*
+!.env.example
+secrets/
+
+# Generated experiment output
 data/results*.csv
 data/saved/*
 !data/saved/.gitkeep
 
-# Local handoff bundle for non-Pi VMs/docs. Keep this out of the final Pi app branch.
+# Non-Pi VM handoff bundle and local development leftovers
 distributed-materials/
-export_project_inventory*.py
 
-# Generated project inventory reports
+# Generated local reports/tools
 *_project_inventory.md
+benchmark_inference*.py
+export_project_inventory*.py
 
 # IDE
 .vscode/
 .idea/
-
-# Secrets
-.env*
-!.env.example
-secrets/
