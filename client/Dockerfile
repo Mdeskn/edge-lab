@@ -8,10 +8,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY client/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# The client uses flat imports, so its own modules land directly in /app.
+# `common` is shared with the dashboard backend and is imported as a package.
+COPY client/ /app/
+COPY common/ /app/common/
 
 ENV PYTHONUNBUFFERED=1
 

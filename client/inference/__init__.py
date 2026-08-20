@@ -1,5 +1,4 @@
-"""Inference backends: local ONNX and remote Triton."""
-from inference.local_server import LocalServer
-from inference.remote_client import RemoteClient
-
-__all__ = ["LocalServer", "RemoteClient"]
+"""Inference backends: local ONNX and remote Triton/JPEG."""
+# Modules are imported by their full path (e.g. `from threads.scorer import
+# Scorer`), so nothing is re-exported here. Eager re-exports made importing
+# any one module pull in onnxruntime, tritonclient, and OpenCV.

@@ -2,11 +2,15 @@
 All configuration loaded from environment variables.
 Import Config from here everywhere. Never read os.environ directly elsewhere.
 """
+import logging
 import os
 from dataclasses import dataclass
+
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 TargetClassFilter = int | tuple[int, ...] | None
 
@@ -47,7 +51,6 @@ class Config:
     target_conf_threshold: float
     sp_agent_interval_ms: int
     log_level: str
-    auto_stop: bool
     phase_timeout_sec: float
     sync_mode: str
     scenario_path: str
@@ -65,6 +68,7 @@ class Config:
     warmup_spike_settle_sec: float
     warmup_spike_multiplier: float
     warmup_spike_floor_ms: float
+    warmup_spike_phases: tuple[str, ...]
 
 
 def load_config() -> Config:
@@ -73,7 +77,7 @@ def load_config() -> Config:
     manual_placement_control = os.environ.get("MANUAL_PLACEMENT_CONTROL", "false").lower() == "true"
     sp_agent_class = os.environ.get("SP_AGENT_CLASS", "student").strip().lower()
     target_class_value = os.environ.get("TARGET_CLASS_ID", "").strip()
-    conf_threshold = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.3"))
+    conf_threshold = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.25"))
     results_log_path = os.environ.get("RESULTS_LOG_PATH", "results.csv")
     results_by_phase_path = os.environ.get("RESULTS_BY_PHASE_PATH", "").strip()
     if not results_by_phase_path:
@@ -118,7 +122,6 @@ def load_config() -> Config:
         ),
         sp_agent_interval_ms=int(os.environ.get("SP_AGENT_INTERVAL_MS", "500")),
         log_level=os.environ.get("LOG_LEVEL", "INFO"),
-        auto_stop=os.environ.get("AUTO_STOP", "true").lower() == "true",
         phase_timeout_sec=float(os.environ.get("PHASE_TIMEOUT_SEC", "300")),
         sync_mode=os.environ.get("SYNC_MODE", "manual").strip().lower(),
         scenario_path=os.environ.get("SCENARIO_PATH", "/scenario/ExperimentConfig.json").strip(),
@@ -129,9 +132,13 @@ def load_config() -> Config:
         dashboard_jpeg_quality=int(os.environ.get("DASHBOARD_JPEG_QUALITY", "60")),
         dashboard_frame_width=int(os.environ.get("DASHBOARD_FRAME_WIDTH", "640")),
         sp_agent_debug_metrics=os.environ.get("SP_AGENT_DEBUG_METRICS", "false").lower() == "true",
+        # Probes must default the same way for every agent. They used to
+        # default on only for SP_AGENT_CLASS=example, so a student who copied
+        # the reference strategy's probe-based recovery got last_remote_probe_*
+        # values of None forever and an agent that silently never returned to
+        # remote.
         latency_probes_enabled=os.environ.get(
-            "LATENCY_PROBES_ENABLED",
-            "true" if sp_agent_class == "example" else "false",
+            "LATENCY_PROBES_ENABLED", "true"
         ).lower() == "true",
         latency_probe_interval_sec=float(os.environ.get("LATENCY_PROBE_INTERVAL_SEC", "10.0")),
         latency_deadline_ms=float(os.environ.get("LATENCY_DEADLINE_MS", "300.0")),
@@ -141,6 +148,12 @@ def load_config() -> Config:
         warmup_spike_settle_sec=float(os.environ.get("WARMUP_SPIKE_SETTLE_SEC", "2.0")),
         warmup_spike_multiplier=float(os.environ.get("WARMUP_SPIKE_MULTIPLIER", "3.0")),
         warmup_spike_floor_ms=float(os.environ.get("WARMUP_SPIKE_FLOOR_MS", "150.0")),
+        # Empty means "every phase transition", which is the defensible
+        # default: a transition artifact that justifies exclusion in one phase
+        # justifies it in all of them.
+        warmup_spike_phases=_parse_phase_list(
+            os.environ.get("WARMUP_SPIKE_PHASES", "")
+        ),
     )
     if config.sp_agent_class not in ("student", "example"):
         raise ValueError(
@@ -152,7 +165,25 @@ def load_config() -> Config:
             f"Invalid SYNC_MODE: {config.sync_mode!r}. "
             "Must be one of: manual, wait_for_cycle, off."
         )
+    # Caught here rather than inside SharedState so a typo in .env produces a
+    # named-variable error at startup instead of a bare mode ValueError.
+    if config.initial_processing_mode not in ("local", "remote"):
+        raise ValueError(
+            f"Invalid INITIAL_PROCESSING_MODE: {config.initial_processing_mode!r}. "
+            "Must be one of: local, remote."
+        )
+    if os.environ.get("AUTO_STOP"):
+        logger.warning(
+            "AUTO_STOP is set but no longer used. SYNC_MODE=%s controls "
+            "collection; remove AUTO_STOP from your .env.",
+            config.sync_mode,
+        )
     return config
+
+
+def _parse_phase_list(value: str) -> tuple[str, ...]:
+    """Parse a comma-separated phase list; empty means every phase."""
+    return tuple(part.strip() for part in value.split(",") if part.strip())
 
 
 def _parse_target_class_filter(value: str) -> TargetClassFilter:

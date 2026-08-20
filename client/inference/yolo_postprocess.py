@@ -67,21 +67,3 @@ def best_detection_box(
     cy = (ry1 + ry2) / 2.0
 
     return (cx, cy, rx1, ry1, rx2, ry2)
-
-
-# Keep the old name as an alias so any external callers still work.
-def best_detection_center(
-    output: np.ndarray,
-    orig_h: int,
-    orig_w: int,
-    input_h: int,
-    input_w: int,
-    conf_threshold: float,
-    target_class_id: TargetClassFilter = None,
-    target_conf_threshold: float | None = None,
-) -> tuple[float, float]:
-    result = best_detection_box(
-        output, orig_h, orig_w, input_h, input_w,
-        conf_threshold, target_class_id, target_conf_threshold,
-    )
-    return (result[0], result[1])

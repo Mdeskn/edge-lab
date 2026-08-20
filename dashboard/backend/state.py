@@ -1,20 +1,21 @@
 """Thread-safe rolling dashboard state."""
+import time
 from collections import deque
 from copy import deepcopy
 from dataclasses import dataclass, field
 from threading import RLock
-import time
 from typing import Any
 
-CURRENT_PHASE_ORDER = [
-    "cycle_start",
-    "gpu_load",
-    "jitter_light",
-    "bandwidth_20",
-    "mixed",
-    "cycle_end",
-]
-CURRENT_PHASES = set(CURRENT_PHASE_ORDER)
+from common.gpu_metrics import normalize_gpu_metrics, normalize_net_metrics
+from common.phases import EXPERIMENT_PHASE_SET, EXPERIMENT_PHASES
+
+CURRENT_PHASE_ORDER = list(EXPERIMENT_PHASES)
+CURRENT_PHASES = EXPERIMENT_PHASE_SET
+
+#: Key each history record carries so a client can tell which records in a
+#: delta it has already applied. Underscore-prefixed to keep it visually
+#: distinct from the metric fields the charts read.
+SEQ_KEY = "__seq"
 
 
 def normalize_group_id(group_id: str | int | None) -> str:
@@ -37,6 +38,22 @@ def _numbers(items: deque, key: str) -> list[float]:
 
 def _average(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
+
+
+def _since(items: deque, seq: int) -> list[dict[str, Any]]:
+    """Return the records appended after `seq`, oldest first.
+
+    Records are appended in sequence order, so this walks back from the newest
+    end and stops at the first already-seen record instead of scanning the
+    whole window.
+    """
+    newer: list[dict[str, Any]] = []
+    for item in reversed(items):
+        if item.get(SEQ_KEY, 0) <= seq:
+            break
+        newer.append(item)
+    newer.reverse()
+    return newer
 
 
 def _percentile(values: list[float], percentile: float) -> float | None:
@@ -156,6 +173,21 @@ class DashboardState:
         self._phase_summary: dict[str, dict] = {}
         self._cycle_duration_refresh_requested = False
         self._cycle_command: str | None = None
+        # Monotonic across all three history streams so one cursor lets a
+        # browser ask for "everything after N" in a single comparison.
+        self._history_seq = 0
+
+    def _stamped(self, record: dict[str, Any]) -> dict[str, Any]:
+        """Tag a history record with the next sequence number. Caller holds _lock."""
+        self._history_seq += 1
+        record[SEQ_KEY] = self._history_seq
+        return record
+
+    @property
+    def history_seq(self) -> int:
+        """The sequence number of the most recently appended history record."""
+        with self._lock:
+            return self._history_seq
 
     def update_app_metric(self, metric: dict[str, Any]) -> bool:
         """Record one scored frame, returning True when it is a new sample."""
@@ -185,7 +217,7 @@ class DashboardState:
             group.seen_samples.append(sample_key)
             group.seen_sample_set.add(sample_key)
 
-            group.history.append(clean)
+            group.history.append(self._stamped(clean))
             group.total_frames += 1
 
             mode = str(clean.get("processing_mode", "")).lower()
@@ -253,17 +285,21 @@ class DashboardState:
 
     def update_gpu_metrics(self, metric: dict[str, Any]) -> None:
         with self._lock:
-            clean = self._flatten_gpu_metrics(metric)
-            clean.setdefault("timestamp", time.time())
+            # include_raw=False: the nested original would roughly double the
+            # size of every GPU record sent to browsers and nothing renders it.
+            clean = normalize_gpu_metrics(metric, include_raw=False)
+            if not clean.get("timestamp"):
+                clean["timestamp"] = time.time()
             self._gpu_metrics = clean
-            self._gpu_history.append(clean)
+            self._gpu_history.append(self._stamped(clean))
 
     def update_network_metrics(self, metric: dict[str, Any]) -> None:
         with self._lock:
-            clean = deepcopy(metric)
-            clean.setdefault("timestamp", time.time())
+            clean = normalize_net_metrics(metric, include_raw=False)
+            if not clean.get("timestamp"):
+                clean["timestamp"] = time.time()
             self._network_metrics = clean
-            self._network_history.append(clean)
+            self._network_history.append(self._stamped(clean))
 
     def update_phase(self, phase: str) -> None:
         with self._lock:
@@ -372,8 +408,21 @@ class DashboardState:
         if miss:
             s["deadline_misses"] += 1
 
-    def snapshot(self, include_history: bool = True) -> dict[str, Any]:
-        """Return a JSON-ready immutable dashboard view."""
+    def snapshot(
+        self,
+        include_history: bool = True,
+        since_seq: int | None = None,
+    ) -> dict[str, Any]:
+        """
+        Return a JSON-ready immutable dashboard view.
+
+        `since_seq` switches the "history" block from the full rolling window
+        to only the records appended after that sequence number. A full window
+        is roughly 260 KB of JSON; broadcasting it twice a second per browser
+        tab spent meaningful Pi CPU re-sending records that had not changed,
+        on the same machine whose inference latency is being graded. Browsers
+        seed once and then apply deltas.
+        """
         with self._lock:
             group = self._group
             latency_values = _numbers(group.history, "latency_ms")
@@ -393,11 +442,24 @@ class DashboardState:
                 group.preview_image is not None or group.frame_image is not None
             )
 
-            history = {
-                "frames": list(group.history) if include_history else [],
-                "gpu": list(self._gpu_history) if include_history else [],
-                "network": list(self._network_history) if include_history else [],
-            }
+            if not include_history:
+                history = {"frames": [], "gpu": [], "network": []}
+                history_mode = "none"
+            elif since_seq is None:
+                history = {
+                    "frames": list(group.history),
+                    "gpu": list(self._gpu_history),
+                    "network": list(self._network_history),
+                }
+                history_mode = "full"
+            else:
+                history = {
+                    "frames": _since(group.history, since_seq),
+                    "gpu": _since(self._gpu_history, since_seq),
+                    "network": _since(self._network_history, since_seq),
+                }
+                history_mode = "delta"
+
             return {
                 "group_id": self.group_id,
                 "latest": deepcopy(group.latest_metric),
@@ -446,12 +508,22 @@ class DashboardState:
                 "phase_summary": deepcopy(self._phase_summary),
                 "phase_order": list(CURRENT_PHASE_ORDER),
                 "history": history,
+                "history_mode": history_mode,
+                "history_seq": self._history_seq,
+                "max_history": self.max_history,
                 "updated_at": time.time(),
             }
 
     def history(self) -> dict[str, Any]:
-        """Return only rolling chart history."""
-        return self.snapshot()["history"]
+        """Return only rolling chart history, without building a full snapshot."""
+        with self._lock:
+            return {
+                "frames": list(self._group.history),
+                "gpu": list(self._gpu_history),
+                "network": list(self._network_history),
+                "history_seq": self._history_seq,
+                "max_history": self.max_history,
+            }
 
     def frame_image(self) -> bytes | None:
         """Return the newest JPEG bytes."""
@@ -536,66 +608,6 @@ class DashboardState:
             f"{metric.get('group_id')}:{metric.get('frame_number')}:"
             f"{float(metric.get('timestamp', 0.0)):.6f}"
         )
-
-    @staticmethod
-    def _flatten_gpu_metrics(message: dict[str, Any]) -> dict[str, Any]:
-        """Flatten GPU metrics into a consistent flat dict for the dashboard.
-
-        Handles two formats on the same Kafka topic:
-          - Nested (Eldiyar's publisher): has "server", "totals", "models" keys.
-          - Flat (gpu_metrics_publisher.py): has "gpu_utilization_pct", etc.
-        """
-        if "server" in message or "models" in message:
-            server = message.get("server", {})
-            totals = message.get("totals", {})
-            models = message.get("models", [])
-            yolo = next((m for m in models if m.get("model_name") == "yolov10n"), {})
-            return {
-                "gpu_util_pct": server.get("gpu_util_percent", 0.0),
-                "gpu_freq_mhz": server.get("gpu_freq_mhz", 0.0),
-                "gpu_temp_c": server.get("gpu_temp_c", 0.0),
-                "gpu_mem_used_mb": server.get("gpu_mem_used_mb", 0.0),
-                "gpu_mem_total_mb": server.get("gpu_mem_total_mb", 0.0),
-                "cpu_util_pct": server.get("cpu_util_percent", 0.0),
-                "mem_util_pct": server.get("mem_util_percent", 0.0),
-                "power_w": server.get("power_w", 0.0),
-                "total_rps": totals.get("total_rps", 0.0),
-                "total_success_rps": totals.get("total_success_rps", 0.0),
-                "total_failure_rps": totals.get("total_failure_rps", 0.0),
-                "total_pending": totals.get("total_pending_requests", 0),
-                "yolo_pending": yolo.get("pending_requests", 0),
-                "yolo_success_rps": yolo.get("success_rps", 0.0),
-                "yolo_inference_rps": yolo.get("inference_rps", 0.0),
-                "yolo_queue_ms": yolo.get("avg_queue_time_ms", 0.0),
-                "yolo_input_ms": yolo.get("avg_compute_input_ms", 0.0),
-                "yolo_infer_ms": yolo.get("avg_compute_infer_ms", 0.0),
-                "yolo_output_ms": yolo.get("avg_compute_output_ms", 0.0),
-                "timestamp": message.get("timestamp", 0.0),
-            }
-
-        rps = message.get("triton_requests_per_sec", 0.0)
-        return {
-            "gpu_util_pct": message.get("gpu_utilization_pct", 0.0),
-            "gpu_freq_mhz": 0.0,
-            "gpu_temp_c": message.get("gpu_temperature_c", 0.0),
-            "gpu_mem_used_mb": message.get("gpu_memory_used_mb", 0.0),
-            "gpu_mem_total_mb": message.get("gpu_memory_total_mb", 0.0),
-            "cpu_util_pct": 0.0,
-            "mem_util_pct": 0.0,
-            "power_w": message.get("gpu_power_draw_w", 0.0),
-            "total_rps": rps,
-            "total_success_rps": rps,
-            "total_failure_rps": 0.0,
-            "total_pending": 0,
-            "yolo_pending": 0,
-            "yolo_success_rps": rps,
-            "yolo_inference_rps": rps,
-            "yolo_queue_ms": message.get("triton_queue_duration_ms", 0.0),
-            "yolo_input_ms": 0.0,
-            "yolo_infer_ms": message.get("triton_inference_duration_ms", 0.0),
-            "yolo_output_ms": 0.0,
-            "timestamp": message.get("timestamp", 0.0),
-        }
 
     @staticmethod
     def _summary(group: GroupState) -> dict[str, Any]:

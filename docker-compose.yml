@@ -1,8 +1,10 @@
 services:
   client:
     build:
-      context: ./client
-      dockerfile: Dockerfile
+      # Root context so the image can include the shared `common` package
+      # alongside the client's own flat modules.
+      context: .
+      dockerfile: client/Dockerfile
     env_file:
       - .env
     volumes:

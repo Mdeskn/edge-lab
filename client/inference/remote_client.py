@@ -8,8 +8,7 @@ import numpy as np
 import requests
 import tritonclient.grpc as grpcclient
 
-from inference.yolo_postprocess import best_detection_box
-from inference.yolo_postprocess import TargetClassFilter
+from inference.yolo_postprocess import TargetClassFilter, best_detection_box
 
 logger = logging.getLogger(__name__)
 

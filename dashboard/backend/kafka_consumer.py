@@ -22,7 +22,7 @@ class DashboardKafkaConsumer:
         self._group_id = state.group_id
         self._app_topic = (
             os.environ.get("APP_METRICS_TOPIC", "").strip()
-            or f"dnn_partition.client_metrics"
+            or "dnn_partition.client_metrics"
         )
         self._gpu_topic = os.environ.get("KAFKA_GPU_TOPIC", "dnn_partition.server_metrics")
         self._network_topic = os.environ.get("KAFKA_NET_TOPIC", "edgelab.network.metrics")
