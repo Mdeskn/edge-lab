@@ -61,6 +61,10 @@ class Config:
     latency_probes_enabled: bool
     latency_probe_interval_sec: float
     latency_deadline_ms: float
+    warmup_spike_filter_enabled: bool
+    warmup_spike_settle_sec: float
+    warmup_spike_multiplier: float
+    warmup_spike_floor_ms: float
 
 
 def load_config() -> Config:
@@ -131,6 +135,12 @@ def load_config() -> Config:
         ).lower() == "true",
         latency_probe_interval_sec=float(os.environ.get("LATENCY_PROBE_INTERVAL_SEC", "10.0")),
         latency_deadline_ms=float(os.environ.get("LATENCY_DEADLINE_MS", "300.0")),
+        warmup_spike_filter_enabled=os.environ.get(
+            "WARMUP_SPIKE_FILTER_ENABLED", "true"
+        ).lower() == "true",
+        warmup_spike_settle_sec=float(os.environ.get("WARMUP_SPIKE_SETTLE_SEC", "2.0")),
+        warmup_spike_multiplier=float(os.environ.get("WARMUP_SPIKE_MULTIPLIER", "3.0")),
+        warmup_spike_floor_ms=float(os.environ.get("WARMUP_SPIKE_FLOOR_MS", "150.0")),
     )
     if config.sp_agent_class not in ("student", "example"):
         raise ValueError(

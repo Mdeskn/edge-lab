@@ -25,6 +25,17 @@ def test_duplicate_metric_does_not_double_count_summary() -> None:
     assert len(snapshot["history"]["frames"]) == 1
 
 
+def test_excluded_metric_is_kept_out_of_history_and_summary() -> None:
+    state = DashboardState(max_history=10, group_id="1")
+    state.update_app_metric(metric() | {"excluded": True})
+
+    snapshot = state.snapshot()
+    assert snapshot["summary"]["total_frames"] == 0
+    assert snapshot["summary"]["cumulative_displacement_px"] == 0.0
+    assert len(snapshot["history"]["frames"]) == 0
+    assert snapshot["latest"] == {}
+
+
 def test_missing_infrastructure_metrics_are_empty() -> None:
     state = DashboardState(max_history=10, group_id="2")
 

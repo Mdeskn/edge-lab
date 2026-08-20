@@ -165,6 +165,11 @@ class DashboardState:
             if clean.get("event_type") == "latency_probe":
                 return self._update_latency_probe(group, clean)
 
+            if clean.get("excluded"):
+                # A flagged warm-up spike (e.g. gpu_load phase entry): keep
+                # it out of chart history and score aggregates entirely.
+                return True
+
             group.latest_metric = clean
             app_phase = clean.get("experiment_phase")
             if app_phase in CURRENT_PHASES:

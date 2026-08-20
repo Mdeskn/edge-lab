@@ -95,8 +95,14 @@ class DashboardPublisher:
         cumulative_displacement_px: float,
         experiment_phase: str,
         collection_state: dict | None = None,
+        excluded: bool = False,
     ) -> None:
-        """Queue one scored record for direct low-latency dashboard updates."""
+        """
+        Queue one scored record for direct low-latency dashboard updates.
+
+        `excluded` marks a frame (e.g. a gpu_load warm-up spike) that the
+        dashboard backend should keep out of chart history and score totals.
+        """
         if not self._enabled:
             return
         payload = {
@@ -114,6 +120,7 @@ class DashboardPublisher:
             "predicted_x": round(predicted_x, 2),
             "predicted_y": round(predicted_y, 2),
             "cumulative_displacement_px": round(cumulative_displacement_px, 2),
+            "excluded": bool(excluded),
         }
         if collection_state is not None:
             payload["collection_state"] = collection_state

@@ -63,9 +63,14 @@ class AppMetricsPublisher:
         jitter_ms: float = 0.0,
         deadline_miss: bool = False,
         collection_state: dict | None = None,
+        excluded: bool = False,
     ) -> None:
         """
         Serialize metrics to JSON and produce to the configured topic.
+
+        `excluded` marks a frame (e.g. a gpu_load warm-up spike) that should
+        not count toward the score or dashboard charts. latency_ms is always
+        the real, unfiltered value: the SP-Agent must still see it.
 
         Silently logs errors without raising. Kafka failures must not crash the pipeline.
         """
@@ -88,6 +93,7 @@ class AppMetricsPublisher:
             "predicted_x": round(predicted_x, 2),
             "predicted_y": round(predicted_y, 2),
             "cumulative_displacement_px": round(cumulative_displacement_px, 2),
+            "excluded": bool(excluded),
         }
         if collection_state is not None:
             payload["collection_state"] = collection_state

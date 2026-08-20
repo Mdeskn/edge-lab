@@ -12,28 +12,76 @@ const phaseDescriptions = {
   unknown: "Waiting for phase metrics",
 };
 
+// Validated categorical palette (dataviz skill: fixed hue order, CVD/contrast
+// checked). Colors are snapped to existing on-page conventions where one
+// already exists (jitter = the .jitter-card orange, local/remote = the
+// mode-card green/violet) so the charts agree with the rest of the dashboard.
+const palette = {
+  blue: "#2a78d6",
+  aqua: "#1baf7a",
+  amber: "#d9a735",
+  green: "#26845a",
+  violet: "#6559a8",
+  red: "#d14a45",
+  orange: "#d4560e",
+};
+
+const placementColors = {
+  local: palette.green,
+  local_fallback: palette.aqua,
+  remote: palette.violet,
+  unknown: "#a9b6b4",
+};
+
+const placementLabels = {
+  local: "Local",
+  local_fallback: "Fallback",
+  remote: "Remote",
+  unknown: "Unknown",
+};
+
+const phaseAbbrev = {
+  cycle_start: "START",
+  gpu_load: "GPU",
+  jitter_light: "JITTER",
+  bandwidth_20: "BW20",
+  mixed: "MIXED",
+  cycle_end: "END",
+};
+
+function abbreviatePhase(phase) {
+  if (phaseAbbrev[phase]) return phaseAbbrev[phase];
+  const bandwidthMatch = String(phase || "").match(/^bandwidth_(\d+)$/);
+  if (bandwidthMatch) return `BW${bandwidthMatch[1]}`;
+  return String(phase || "").slice(0, 6).toUpperCase();
+}
+
 const chartDefs = [
-  { title: "Latency", unit: " ms", series: [{ label: "latency", color: "#147d92", source: "frames", key: "latency_ms" }] },
-  { title: "Latency jitter", unit: " ms", series: [{ label: "jitter", color: "#d4560e", source: "frames", key: "jitter_ms" }] },
-  { title: "Frame displacement", unit: " px", series: [{ label: "distance", color: "#d14a45", source: "frames", key: "displacement_px" }] },
-  { title: "Cumulative displacement", unit: " px", series: [{ label: "score", color: "#b37916", source: "frames", key: "cumulative_displacement_px" }] },
-  {
-    title: "Placement mode",
-    unit: "",
-    min: 0,
-    max: 1,
-    series: [{ label: "local=0 fallback=0.5 remote=1", color: "#6559a8", source: "mode" }],
-  },
-  { title: "GPU utilization", unit: "%", min: 0, max: 100, series: [{ label: "GPU", color: "#26845a", source: "gpu", key: "gpu_util_pct" }] },
+  { title: "Latency", unit: "ms", series: [{ label: "latency", color: palette.blue, source: "frames", key: "latency_ms" }] },
+  { title: "Latency jitter", unit: "ms", series: [{ label: "jitter", color: palette.orange, source: "frames", key: "jitter_ms" }] },
+  { title: "Frame displacement", unit: "px", series: [{ label: "distance", color: palette.red, source: "frames", key: "displacement_px" }] },
+  { title: "Cumulative displacement", unit: "px", series: [{ label: "score", color: palette.amber, source: "frames", key: "cumulative_displacement_px" }] },
+  { title: "Placement mode", kind: "state" },
+  { title: "GPU utilization", unit: "%", min: 0, max: 100, series: [{ label: "GPU", color: palette.green, source: "gpu", key: "gpu_util_pct" }] },
   {
     title: "Network conditions",
-    unit: " ms",
+    unit: "ms",
     series: [
-      { label: "delay", color: "#147d92", source: "network", key: "delay_ms" },
-      { label: "jitter", color: "#b37916", source: "network", key: "jitter_ms" },
+      { label: "delay", color: palette.blue, source: "network", key: "delay_ms" },
+      { label: "jitter", color: palette.orange, source: "network", key: "jitter_ms" },
     ],
   },
 ];
+
+const CHART_W = 440;
+const CHART_H = 170;
+const PAD_L = 36;
+const PAD_R = 10;
+const PAD_T = 10;
+const PAD_B = 16;
+
+const chartRuntime = [];
+let tooltipEl = null;
 
 const el = {};
 let latestState = null;
@@ -94,10 +142,18 @@ function bindControls() {
   el["results-save-btn"].addEventListener("click", async () => {
     const label = el["results-label-input"].value;
     const status = el["results-save-status"];
+    status.textContent = "Preparing charts…";
+    let charts = {};
+    let chartWarning = "";
+    try {
+      charts = await buildSavedCharts();
+    } catch (e) {
+      chartWarning = ` (charts not included: ${e.message})`;
+    }
     status.textContent = "Saving…";
     try {
-      const result = await postJson("/api/save", { label });
-      status.textContent = `Saved as ${result.stem}. Files: ${result.files.join(", ")}`;
+      const result = await postJson("/api/save", { label, charts });
+      status.textContent = `Saved as ${result.stem}. Files: ${result.files.join(", ")}${chartWarning}`;
     } catch (e) {
       status.textContent = "Save failed: " + e.message;
     }
@@ -377,78 +433,380 @@ function buildCharts() {
       <div class="chart-body"></div>
     `;
     grid.appendChild(article);
+    const body = article.querySelector(".chart-body");
+    body.addEventListener("pointermove", (event) => onChartHover(event, index));
+    body.addEventListener("pointerleave", hideTooltip);
+  }
+  if (!tooltipEl) {
+    tooltipEl = document.createElement("div");
+    tooltipEl.id = "chart-tooltip";
+    tooltipEl.className = "chart-tooltip hidden";
+    document.body.appendChild(tooltipEl);
   }
 }
 
 function renderCharts(state) {
+  const history = state.history || {};
   for (let index = 0; index < chartDefs.length; index += 1) {
     const def = chartDefs[index];
     const article = el["charts-grid"].children[index];
     article.querySelector("h3").textContent = def.title;
-    const legend = article.querySelector(".chart-legend");
-    legend.innerHTML = def.series.map((item) => `<span><i style="background:${item.color}"></i>${escapeHtml(item.label)}</span>`).join("");
-    article.querySelector(".chart-body").innerHTML = sparkSvg(def, valuesForChart(def, state));
+
+    if (def.kind === "state") {
+      renderLegend(article, [
+        { label: placementLabels.local, color: placementColors.local },
+        { label: placementLabels.local_fallback, color: placementColors.local_fallback },
+        { label: placementLabels.remote, color: placementColors.remote },
+      ]);
+      const { svg, runtime } = stateStripSvg(def, history.frames || []);
+      article.querySelector(".chart-body").innerHTML = svg;
+      chartRuntime[index] = runtime;
+      continue;
+    }
+
+    renderLegend(article, def.series);
+    const series = valuesForChart(def, state);
+    const items = sourceItemsFor(def, history);
+    const showPhase = def.series.every((s) => s.source === "frames");
+    const { svg, runtime } = lineChartSvg(def, series, items, showPhase);
+    article.querySelector(".chart-body").innerHTML = svg;
+    chartRuntime[index] = runtime;
   }
 }
 
-function valuesForChart(def, state) {
-  const history = state.history || {};
-  return def.series.map((series) => {
-    let items = [];
-    if (series.source === "frames") items = history.frames || [];
-    else if (series.source === "gpu") items = history.gpu || [];
-    else if (series.source === "network") items = history.network || [];
-    else if (series.source === "mode") {
-      return {
-        ...series,
-        values: (history.frames || []).map((frame) => {
-          if (String(frame.processing_mode || "").startsWith("remote")) return 1;
-          if (frame.processing_mode === "local_fallback") return 0.5;
-          if (frame.processing_mode === "local") return 0;
-          return null;
-        }),
-      };
-    }
-    return {
-      ...series,
-      values: items.map((item) => typeof item[series.key] === "number" ? item[series.key] : null),
-    };
-  });
+function renderLegend(article, items) {
+  const legend = article.querySelector(".chart-legend");
+  legend.innerHTML = items
+    .map((item) => `<span><i style="background:${item.color}"></i>${escapeHtml(item.label)}</span>`)
+    .join("");
 }
 
-function sparkSvg(def, series) {
-  const width = 420;
-  const height = 150;
-  const pad = 12;
-  const values = series.flatMap((item) => item.values).filter((value) => value != null);
-  if (!values.length) return `<div class="chart-empty">Waiting for metrics</div>`;
+function sourceItemsFor(def, history) {
+  const source = def.series[0]?.source;
+  if (source === "frames") return history.frames || [];
+  if (source === "gpu") return history.gpu || [];
+  if (source === "network") return history.network || [];
+  return [];
+}
 
-  const yMin = def.min ?? Math.min(...values);
-  const yMax = def.max ?? Math.max(...values);
-  const span = Math.max(yMax - yMin, 1);
-  const longest = Math.max(...series.map((item) => item.values.length), 1);
-  const point = (value, index) => {
-    const x = pad + index / Math.max(longest - 1, 1) * (width - pad * 2);
-    const y = height - pad - (value - yMin) / span * (height - pad * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  };
-  const lines = series.map((item) => {
-    const points = item.values
-      .map((value, index) => value == null ? null : point(value, index))
-      .filter(Boolean)
-      .join(" ");
-    return `<polyline points="${points}" fill="none" stroke="${item.color}" stroke-width="3"></polyline>`;
-  }).join("");
+function valuesForChart(def, state) {
+  const items = sourceItemsFor(def, state.history || {});
+  return def.series.map((series) => ({
+    ...series,
+    values: items.map((item) => (typeof item[series.key] === "number" ? item[series.key] : null)),
+  }));
+}
 
-  return `
-    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(def.title)} over time">
-      <line x1="${pad}" x2="${width - pad}" y1="${height - pad}" y2="${height - pad}" class="chart-axis"></line>
-      <line x1="${pad}" x2="${width - pad}" y1="${pad}" y2="${pad}" class="chart-gridline"></line>
-      ${lines}
-      <text x="${pad}" y="${pad + 11}">${yMax.toFixed(1)}${def.unit}</text>
-      <text x="${pad}" y="${height - pad - 5}">${yMin.toFixed(1)}${def.unit}</text>
+// ---- Shared layout helpers ----
+
+function consecutiveRuns(items, keyFn) {
+  if (!items.length) return [];
+  const runs = [];
+  let start = 0;
+  let key = keyFn(items[0]);
+  for (let i = 1; i <= items.length; i += 1) {
+    const nextKey = i < items.length ? keyFn(items[i]) : null;
+    if (i === items.length || nextKey !== key) {
+      runs.push({ start, end: i - 1, key });
+      start = i;
+      key = nextKey;
+    }
+  }
+  return runs;
+}
+
+function phaseBands(items) {
+  return consecutiveRuns(items, (item) => item.experiment_phase || "unknown")
+    .map((run) => ({ startIndex: run.start, endIndex: run.end, phase: run.key }));
+}
+
+function placementStateOf(item) {
+  const mode = String(item?.processing_mode || "");
+  if (mode.startsWith("remote")) return "remote";
+  if (mode === "local_fallback") return "local_fallback";
+  if (mode === "local") return "local";
+  return "unknown";
+}
+
+function niceNumber(range, round) {
+  if (!(range > 0)) return 1;
+  const exponent = Math.floor(Math.log10(range));
+  const fraction = range / 10 ** exponent;
+  let niceFraction;
+  if (round) {
+    if (fraction < 1.5) niceFraction = 1;
+    else if (fraction < 3) niceFraction = 2;
+    else if (fraction < 7) niceFraction = 5;
+    else niceFraction = 10;
+  } else if (fraction <= 1) niceFraction = 1;
+  else if (fraction <= 2) niceFraction = 2;
+  else if (fraction <= 5) niceFraction = 5;
+  else niceFraction = 10;
+  return niceFraction * 10 ** exponent;
+}
+
+// Picks clean axis ticks and anchors magnitude metrics at zero, so a normal
+// wobble in a tightly-scaled auto range never reads as a dramatic spike.
+function niceAxis(dataMin, dataMax, tickCount) {
+  let min = Number.isFinite(dataMin) ? dataMin : 0;
+  let max = Number.isFinite(dataMax) ? dataMax : 1;
+  if (min > 0) min = 0;
+  if (min === max) max = min + 1;
+  const step = niceNumber((max - min) / Math.max(tickCount - 1, 1), true);
+  const niceMin = Math.floor(min / step) * step;
+  const niceMax = Math.max(Math.ceil(max / step) * step, niceMin + step);
+  const ticks = [];
+  for (let v = niceMin; v <= niceMax + step * 0.5; v += step) ticks.push(Math.round(v * 1000) / 1000);
+  return { min: niceMin, max: niceMax, ticks };
+}
+
+function formatTick(value) {
+  if (value == null || Number.isNaN(value)) return "N/A";
+  const abs = Math.abs(value);
+  return abs !== 0 && abs < 10 ? value.toFixed(1) : String(Math.round(value));
+}
+
+function bandsSvg(bands, xAt, plotTop, plotH, plotRight) {
+  return bands
+    .map((band, i) => {
+      const x1 = xAt(band.startIndex);
+      const x2 = i < bands.length - 1 ? xAt(bands[i + 1].startIndex) : plotRight;
+      const w = Math.max(x2 - x1, 0);
+      const tint = i % 2 === 0 ? "chart-band-a" : "chart-band-b";
+      const label = w >= 30
+        ? `<text x="${(x1 + 4).toFixed(1)}" y="${(plotTop + 9).toFixed(1)}" class="chart-band-label">${escapeHtml(abbreviatePhase(band.phase))}</text>`
+        : "";
+      const boundary = i > 0
+        ? `<line x1="${x1.toFixed(1)}" x2="${x1.toFixed(1)}" y1="${plotTop}" y2="${(plotTop + plotH).toFixed(1)}" class="chart-band-boundary"></line>`
+        : "";
+      return `<rect x="${x1.toFixed(1)}" y="${plotTop}" width="${w.toFixed(1)}" height="${plotH.toFixed(1)}" class="${tint}"></rect>${boundary}${label}`;
+    })
+    .join("");
+}
+
+function crosshairSvg(plotTop, plotBottom) {
+  return `<line class="chart-crosshair" x1="0" y1="${plotTop}" x2="0" y2="${plotBottom.toFixed(1)}" visibility="hidden"></line>`;
+}
+
+// ---- Line / area charts (latency, jitter, displacement, GPU, network…) ----
+
+function lineChartSvg(def, series, items, showPhase) {
+  const allValues = series.flatMap((s) => s.values).filter((v) => v != null);
+  if (!allValues.length) {
+    return { svg: `<div class="chart-empty">Waiting for metrics</div>`, runtime: null };
+  }
+
+  const longest = Math.max(...series.map((s) => s.values.length), 1);
+  const dataMin = def.min ?? Math.min(...allValues);
+  const dataMax = def.max ?? Math.max(...allValues);
+  const axis = niceAxis(dataMin, dataMax, 4);
+  const span = Math.max(axis.max - axis.min, 1e-6);
+
+  const plotW = CHART_W - PAD_L - PAD_R;
+  const plotH = CHART_H - PAD_T - PAD_B;
+  const plotRight = PAD_L + plotW;
+  const plotBottom = PAD_T + plotH;
+  const xAt = (index) => PAD_L + (longest <= 1 ? 0 : (index / (longest - 1)) * plotW);
+  const yAt = (value) => PAD_T + plotH - ((value - axis.min) / span) * plotH;
+
+  const bands = showPhase && items.length > 1 ? phaseBands(items) : [];
+
+  const ticksSvg = axis.ticks
+    .map((tick, i) => {
+      const y = yAt(tick);
+      const isTop = i === axis.ticks.length - 1;
+      const gridline = tick > axis.min
+        ? `<line x1="${PAD_L}" x2="${plotRight}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="chart-gridline"></line>`
+        : "";
+      const labelText = `${formatTick(tick)}${isTop && def.unit ? " " + def.unit : ""}`;
+      return `${gridline}<text x="${(PAD_L - 6).toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="end" class="chart-tick-label">${escapeHtml(labelText)}</text>`;
+    })
+    .join("");
+
+  const linesSvg = series
+    .map((s) => {
+      const points = s.values
+        .map((v, i) => (v == null ? null : `${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`))
+        .filter(Boolean)
+        .join(" ");
+      let endMark = "";
+      for (let i = s.values.length - 1; i >= 0; i -= 1) {
+        if (s.values[i] == null) continue;
+        const ex = xAt(i);
+        const ey = yAt(s.values[i]);
+        const labelText = `${formatTick(s.values[i])}${def.unit ? " " + def.unit : ""}`;
+        const nearRight = ex > plotRight - 46;
+        const lx = nearRight ? ex - 6 : ex + 8;
+        endMark = `
+          <circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="6" class="chart-end-ring"></circle>
+          <circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="4" fill="${s.color}"></circle>
+          <text x="${lx.toFixed(1)}" y="${(ey - 8).toFixed(1)}" text-anchor="${nearRight ? "end" : "start"}" class="chart-end-label">${escapeHtml(labelText)}</text>
+        `;
+        break;
+      }
+      return `<polyline points="${points}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>${endMark}`;
+    })
+    .join("");
+
+  const svg = `
+    <svg viewBox="0 0 ${CHART_W} ${CHART_H}" role="img" aria-label="${escapeHtml(def.title)} over time" preserveAspectRatio="none">
+      ${bandsSvg(bands, xAt, PAD_T, plotH, plotRight)}
+      ${ticksSvg}
+      <line x1="${PAD_L}" x2="${plotRight}" y1="${plotBottom.toFixed(1)}" y2="${plotBottom.toFixed(1)}" class="chart-axis"></line>
+      ${linesSvg}
+      ${crosshairSvg(PAD_T, plotBottom)}
     </svg>
   `;
+
+  const runtime = {
+    kind: "line", def, series, items, showPhase, longest, xAt,
+    plotLeft: PAD_L, plotRight, plotTop: PAD_T, plotBottom,
+  };
+  return { svg, runtime };
+}
+
+// ---- Placement mode: a categorical state strip, not a fake continuous line ----
+
+function stateStripSvg(def, frames) {
+  if (!frames.length) {
+    return { svg: `<div class="chart-empty">Waiting for metrics</div>`, runtime: null };
+  }
+
+  const longest = frames.length;
+  const plotW = CHART_W - PAD_L - PAD_R;
+  const plotH = CHART_H - PAD_T - PAD_B;
+  const plotRight = PAD_L + plotW;
+  const plotBottom = PAD_T + plotH;
+  const xAt = (index) => PAD_L + (longest <= 1 ? 0 : (index / (longest - 1)) * plotW);
+
+  const bands = phaseBands(frames);
+  const stripTop = PAD_T + plotH * 0.32;
+  const stripH = plotH * 0.36;
+  const segSvg = consecutiveRuns(frames, placementStateOf)
+    .map((run) => {
+      const x1 = xAt(run.start);
+      const x2 = run.end + 1 < longest ? xAt(run.end + 1) : plotRight;
+      const w = Math.max(x2 - x1 - 1, 1);
+      const color = placementColors[run.key] || placementColors.unknown;
+      return `<rect x="${x1.toFixed(1)}" y="${stripTop.toFixed(1)}" width="${w.toFixed(1)}" height="${stripH.toFixed(1)}" rx="2" fill="${color}"></rect>`;
+    })
+    .join("");
+
+  const svg = `
+    <svg viewBox="0 0 ${CHART_W} ${CHART_H}" role="img" aria-label="${escapeHtml(def.title)} over time" preserveAspectRatio="none">
+      ${bandsSvg(bands, xAt, PAD_T, plotH, plotRight)}
+      ${segSvg}
+      ${crosshairSvg(PAD_T, plotBottom)}
+    </svg>
+  `;
+
+  const runtime = {
+    kind: "state", def, items: frames, showPhase: true, longest, xAt,
+    plotLeft: PAD_L, plotRight, plotTop: PAD_T, plotBottom,
+  };
+  return { svg, runtime };
+}
+
+// ---- Hover: crosshair + shared tooltip ----
+
+function onChartHover(event, index) {
+  const runtime = chartRuntime[index];
+  if (!runtime) return;
+  const svg = event.currentTarget.querySelector("svg");
+  if (!svg) return;
+  const rect = svg.getBoundingClientRect();
+  if (!rect.width) return;
+
+  const userX = ((event.clientX - rect.left) / rect.width) * CHART_W;
+  const clampedX = Math.min(Math.max(userX, runtime.plotLeft), runtime.plotRight);
+  const frac = runtime.plotRight > runtime.plotLeft
+    ? (clampedX - runtime.plotLeft) / (runtime.plotRight - runtime.plotLeft)
+    : 0;
+  const nearestIndex = Math.round(frac * Math.max(runtime.longest - 1, 0));
+
+  const crosshair = svg.querySelector(".chart-crosshair");
+  if (crosshair) {
+    const x = runtime.xAt(nearestIndex).toFixed(1);
+    crosshair.setAttribute("x1", x);
+    crosshair.setAttribute("x2", x);
+    crosshair.setAttribute("visibility", "visible");
+  }
+
+  showTooltip(event, runtime, nearestIndex);
+}
+
+function showTooltip(event, runtime, index) {
+  if (!tooltipEl) return;
+  const item = runtime.items[index];
+  const frameLabel = item?.frame_number != null ? `Frame ${item.frame_number}` : `Sample ${index + 1}`;
+  const phaseLabel = runtime.showPhase && item?.experiment_phase ? ` · ${formatPhaseName(item.experiment_phase)}` : "";
+
+  let rows;
+  if (runtime.kind === "state") {
+    const state = placementStateOf(item);
+    rows = `<div class="chart-tooltip-row"><span class="chart-tooltip-key"><i style="background:${placementColors[state]}"></i>${escapeHtml(placementLabels[state])}</span></div>`;
+  } else {
+    rows = runtime.series
+      .map((s) => {
+        const raw = s.values[index];
+        const value = raw == null ? "N/A" : `${formatTick(raw)}${runtime.def.unit ? " " + runtime.def.unit : ""}`;
+        return `<div class="chart-tooltip-row"><span class="chart-tooltip-key"><i style="background:${s.color}"></i>${escapeHtml(s.label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+      })
+      .join("");
+  }
+
+  tooltipEl.innerHTML = `<div class="chart-tooltip-head">${escapeHtml(frameLabel)}${escapeHtml(phaseLabel)}</div>${rows}`;
+  tooltipEl.classList.remove("hidden");
+
+  const pad = 14;
+  let left = event.clientX + pad;
+  let top = event.clientY + pad;
+  const tw = tooltipEl.offsetWidth;
+  const th = tooltipEl.offsetHeight;
+  if (left + tw > window.innerWidth - 8) left = event.clientX - tw - pad;
+  if (top + th > window.innerHeight - 8) top = event.clientY - th - pad;
+  tooltipEl.style.left = `${Math.max(8, left)}px`;
+  tooltipEl.style.top = `${Math.max(8, top)}px`;
+}
+
+function hideTooltip() {
+  if (tooltipEl) tooltipEl.classList.add("hidden");
+  for (const article of el["charts-grid"]?.children || []) {
+    article.querySelector(".chart-crosshair")?.setAttribute("visibility", "hidden");
+  }
+}
+
+// ---- Full-cycle chart export (used by the Save results flow) ----
+// The live charts only keep a rolling window (dashboard max_history), which
+// is shorter than a full cycle at typical frame rates. /api/results reads
+// the complete per-frame CSV instead, so saved charts cover the whole
+// cycle_start -> cycle_end run. GPU/network charts are skipped: that data is
+// only ever kept in the rolling in-memory buffer, never persisted, so an
+// export of them would silently be a partial window, not the full cycle.
+const SAVED_CHART_INDEX = { latency: 0, jitter: 1, displacement: 2, cumulative: 3, placement: 4 };
+
+async function buildSavedCharts() {
+  const cs = latestState?.collection_state;
+  const since = cs?.cycle_started_at;
+  const until = cs?.cycle_completed_at;
+  if (since == null || until == null) return {};
+
+  const params = new URLSearchParams({ since: String(since), until: String(until) });
+  const response = await fetch(apiUrl(`/api/results?${params.toString()}`));
+  if (!response.ok) throw new Error(`could not load full-cycle results (${response.status})`);
+  const { frames } = await response.json();
+  if (!frames || !frames.length) return {};
+
+  const wrappedState = { history: { frames } };
+  const charts = {};
+  for (const [key, index] of Object.entries(SAVED_CHART_INDEX)) {
+    const def = chartDefs[index];
+    const { svg } = def.kind === "state"
+      ? stateStripSvg(def, frames)
+      : lineChartSvg(def, valuesForChart(def, wrappedState), frames, true);
+    if (svg && svg.trim().startsWith("<svg")) charts[key] = svg.trim();
+  }
+  return charts;
 }
 
 function interpretation(state) {

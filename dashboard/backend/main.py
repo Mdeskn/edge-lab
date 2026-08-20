@@ -2,6 +2,7 @@
 import asyncio
 import base64
 import binascii
+import csv
 from contextlib import asynccontextmanager
 import json
 import logging
@@ -191,6 +192,47 @@ def history() -> dict[str, Any]:
     return dashboard_state.history()
 
 
+@app.get("/api/results")
+def get_results(since: float | None = None, until: float | None = None) -> dict[str, Any]:
+    """
+    Return per-frame scored results as JSON, optionally windowed by timestamp.
+
+    Reads the full results CSV rather than the dashboard's rolling in-memory
+    history, so callers can reconstruct charts covering an entire cycle even
+    though the live view only keeps the last `max_history` samples. Frames
+    flagged as an excluded warm-up spike are left out, matching the live
+    dashboard's scoring and charts.
+    """
+    if not RESULTS_LOG_PATH.exists():
+        raise HTTPException(status_code=404, detail="No results file yet.")
+
+    frames = []
+    with RESULTS_LOG_PATH.open(newline="") as handle:
+        for row in csv.DictReader(handle):
+            if row.get("excluded_warmup_spike") == "1":
+                continue
+            timestamp = _to_float(row.get("timestamp"))
+            if timestamp is None:
+                continue
+            if since is not None and timestamp < since:
+                continue
+            if until is not None and timestamp > until:
+                continue
+            frames.append(
+                {
+                    "timestamp": timestamp,
+                    "frame_number": _to_int(row.get("frame_number")),
+                    "experiment_phase": row.get("experiment_phase") or "unknown",
+                    "processing_mode": row.get("processing_mode") or "unknown",
+                    "latency_ms": _to_float(row.get("latency_ms")),
+                    "jitter_ms": _to_float(row.get("jitter_ms")),
+                    "displacement_px": _to_float(row.get("displacement_px")),
+                    "cumulative_displacement_px": _to_float(row.get("cumulative_displacement_px")),
+                }
+            )
+    return {"frames": frames}
+
+
 @app.post("/api/frame", status_code=202)
 async def post_frame(update: FrameUpdate) -> dict[str, Any]:
     jpeg = _decode_jpeg(update.image_base64)
@@ -337,6 +379,12 @@ async def post_save(request: SaveRequest) -> dict[str, Any]:
         shutil.copy2(RESULTS_BY_PHASE_PATH, dest)
         saved_files.append(str(dest))
 
+    for key, svg in (request.charts or {}).items():
+        safe_key = re.sub(r"[^A-Za-z0-9_-]", "-", key)[:40].strip("-") or "chart"
+        dest = SAVE_DIR / f"chart-{safe_key}-{stem}.svg"
+        dest.write_text(svg, encoding="utf-8")
+        saved_files.append(str(dest))
+
     if not saved_files:
         raise HTTPException(
             status_code=404,
@@ -386,6 +434,24 @@ async def video_stream() -> StreamingResponse:
             "X-Accel-Buffering": "no",
         },
     )
+
+
+def _to_float(value: str | None) -> float | None:
+    if not value:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def _to_int(value: str | None) -> int | None:
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
 
 
 def _decode_jpeg(image_base64: str) -> bytes:

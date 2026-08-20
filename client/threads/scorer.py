@@ -12,6 +12,7 @@ from config import Config
 from metrics.dashboard_publisher import DashboardPublisher
 from shared_state import SharedState
 from metrics.kafka_publisher import AppMetricsPublisher
+from spike_filter import WarmupSpikeFilter
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,12 @@ class Scorer:
         self.results_file = results_file
         self._csv_writer = None
         self._last_latency_ms: float | None = None
+        self._spike_filter = WarmupSpikeFilter(
+            enabled=config.warmup_spike_filter_enabled,
+            settle_sec=config.warmup_spike_settle_sec,
+            multiplier=config.warmup_spike_multiplier,
+            floor_ms=config.warmup_spike_floor_ms,
+        )
 
     def run(self) -> None:
         """
@@ -67,6 +74,7 @@ class Scorer:
                 "predicted_y",
                 "displacement_px",
                 "cumulative_displacement_px",
+                "excluded_warmup_spike",
             ]
         )
         self.results_file.flush()
@@ -93,12 +101,28 @@ class Scorer:
 
             current_phase = self.shared_state.get_experiment_phase()
 
-            # Jitter: absolute frame-to-frame latency variation
+            # Flags at most one startup-artifact spike per gpu_load phase
+            # entry. The real value still reaches Kafka/the dashboard payload
+            # further below: only score aggregation and chart history honor
+            # this flag, so the SP-Agent's placement decisions are unaffected.
+            is_warmup_spike = self._spike_filter.check(current_phase, latency_ms)
+            if is_warmup_spike:
+                logger.warning(
+                    "Excluding warm-up latency spike from score/charts: "
+                    "frame=%d latency=%.1fms phase=%s",
+                    frame_number, latency_ms, current_phase,
+                )
+
+            # Jitter: absolute frame-to-frame latency variation. Excluded
+            # frames don't become the reference point either, otherwise the
+            # frame right after the spike would inherit its own artifact
+            # spike as a jitter echo when latency drops back down.
             if self._last_latency_ms is not None:
                 jitter_ms = abs(latency_ms - self._last_latency_ms)
             else:
                 jitter_ms = 0.0
-            self._last_latency_ms = latency_ms
+            if not is_warmup_spike:
+                self._last_latency_ms = latency_ms
 
             # Deadline miss
             deadline_miss = latency_ms > self.config.latency_deadline_ms
@@ -131,7 +155,7 @@ class Scorer:
             # debugging but they do not influence the saved score.
             is_collecting = self.shared_state.is_collecting()
 
-            if displacement_px is not None and is_collecting:
+            if displacement_px is not None and is_collecting and not is_warmup_spike:
                 self.shared_state.add_displacement(displacement_px)
                 self.shared_state.add_phase_result(
                     current_phase,
@@ -161,6 +185,7 @@ class Scorer:
                             round(pred_y, 2),
                             _round_optional(displacement_px),
                             round(score_summary["cumulative_displacement"], 2),
+                            int(is_warmup_spike),
                         ]
                     )
                     self.results_file.flush()
@@ -185,6 +210,7 @@ class Scorer:
                     cumulative_displacement_px=score_summary["cumulative_displacement"],
                     timestamp=result_time,
                     collection_state=collection_state,
+                    excluded=is_warmup_spike,
                 )
             except Exception as exc:
                 logger.error("Kafka publish error in Scorer: %s", exc)
@@ -204,6 +230,7 @@ class Scorer:
                 displacement_px=displacement_px,
                 cumulative_displacement_px=score_summary["cumulative_displacement"],
                 experiment_phase=current_phase,
+                excluded=is_warmup_spike,
             )
 
             if displacement_px is not None and has_prediction and current_gt_x is not None:

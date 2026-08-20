@@ -25,6 +25,7 @@ class AppMetric(BaseModel):
     predicted_y: float | None = None
     cumulative_displacement_px: float | None = None
     collection_state: dict | None = None
+    excluded: bool = False
 
 
 class FrameUpdate(AppMetric):
@@ -78,3 +79,4 @@ class SaveRequest(BaseModel):
     """Request to save the current results with a label."""
 
     label: str | None = None
+    charts: dict[str, str] | None = None
