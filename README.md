@@ -131,32 +131,63 @@ docker compose down                     # stop everything
 
 Each group edits **one file only**: `client/student/sp_agent.py`.
 
-The agent runs every `SP_AGENT_INTERVAL_MS` milliseconds and must return either `"local"` or `"remote"`. It receives a live metrics snapshot containing:
-
-```python
-class Metrics:
-    local_latency_ms: float       # recent local inference time
-    remote_latency_ms: float      # recent remote round-trip time
-    gpu_utilization: float        # 0–100 %
-    gpu_memory_used_mb: float
-    network_delay_ms: float
-    network_jitter_ms: float
-    packet_loss_percent: float
-    current_mode: str             # "local" | "remote"
-    phase: str                    # current experiment phase name
-```
+The agent runs every `SP_AGENT_INTERVAL_MS` milliseconds and must return either
+`"local"` or `"remote"`. `decide()` takes no arguments: metrics are read from
+`self`, and the base class keeps them current from Kafka in the background.
 
 Minimal skeleton:
 
 ```python
-from client.student.base_sp_agent import BaseSPAgent, Metrics
+from student.sp_agent_base import SPAgentBase
 
-class SPAgent(BaseSPAgent):
-    def decide(self, metrics: Metrics) -> str:
-        if metrics.remote_latency_ms < metrics.local_latency_ms:
-            return "remote"
-        return "local"
+
+class SPAgent(SPAgentBase):
+    def decide(self) -> str:
+        if self.gpu_metrics.get("gpu_util_pct", 0) > 70:
+            return "local"
+        return "remote"
 ```
+
+The import has no `client.` prefix. The client runs with its own directory as
+the import root, so `from client.student...` fails inside the container even
+though it may resolve when you run from the repository root.
+
+Always read metric dictionaries with `.get(key, default)`. They are empty until
+the first Kafka message arrives, so indexing raises `KeyError` on the very first
+decision.
+
+The most useful signals, with the exact key names:
+
+| Expression | Meaning |
+|---|---|
+| `self.gpu_metrics.get("gpu_util_pct", 0)` | GPU utilization, 0-100 % |
+| `self.gpu_metrics.get("gpu_mem_used_mb", 0)` | GPU memory in use, MB |
+| `self.gpu_metrics.get("yolo_queue_ms", 0)` | Time requests wait in the Triton queue, ms |
+| `self.gpu_metrics.get("total_pending", 0)` | Requests queued on the GPU server |
+| `self.net_metrics.get("delay_ms", 0)` | Added one-way network delay, ms |
+| `self.net_metrics.get("jitter_ms", 0)` | Delay variation, ms |
+| `self.net_metrics.get("packet_loss_pct", 0)` | Packet loss, 0-100 % |
+| `self.avg_latency` | Mean of recent end-to-end latencies, or `None` |
+| `self.avg_remote_latency` | Mean of recent remote samples only, or `None` |
+| `self.last_remote_probe_latency` | Latest probe of the idle remote backend |
+| `self.last_remote_probe_status` | `"ok"`, `"failed"`, or `"unavailable"` |
+| `self.current_mode` | `"local"` or `"remote"` right now |
+| `self.experiment_phase` | Current phase name |
+
+`yolo_queue_ms` is usually the earliest warning that remote inference is about
+to degrade: the queue grows before utilization looks alarming.
+
+The full list, including the Triton and ResNet fields, is in the module
+docstring at the top of [`client/student/sp_agent_base.py`](client/student/sp_agent_base.py).
+
+Check a submission without the lab hardware:
+
+```bash
+python scripts/check_sp_agent.py
+```
+
+It loads the agent and runs `decide()` against synthetic metric snapshots,
+including the cold-start case where nothing has arrived from Kafka yet.
 
 Set `SP_AGENT_CLASS=student` in `.env` to activate the submission. Set `SP_AGENT_CLASS=example` to compare against the reference implementation.
 
@@ -164,15 +195,38 @@ Set `SP_AGENT_CLASS=student` in `.env` to activate the submission. Set `SP_AGENT
 
 ## Scoring
 
-Each processed frame earns a score based on the pixel displacement between the predicted bounding-box center and the ground-truth center:
+The score is **cumulative displacement in pixels, and lower is better.** For each
+scored frame, the distance is measured between the predicted box centre and
+where the target actually is *at the moment the prediction arrives*:
 
 ```
-score = max(0, 1 − displacement / MISS_PENALTY_PX)  ×  latency_factor
+displacement = distance(prediction, ground_truth_now)
+score        = sum(displacement) over all scored frames
 ```
 
-A frame whose inference exceeds `LATENCY_DEADLINE_MS` (300 ms by default) is penalized. A missed detection (no box above threshold) scores 0.
+Comparing against the target's current position, rather than its position when
+the frame was captured, is what makes latency cost score. A correct answer that
+arrives 100 ms late is penalized, because the car kept moving while inference
+ran. This makes the score a measure of timeliness as much as accuracy, which is
+the point of the lab.
 
-Results are written to `data/results.csv` and `data/results_by_phase.csv` at the end of each collection cycle.
+A missed detection (no box above the confidence threshold) takes a fixed
+`MISS_PENALTY_PX` penalty, 100 px by default.
+
+`LATENCY_DEADLINE_MS` (300 ms by default) does **not** enter the score. Frames
+slower than it are counted as deadline misses and reported per phase, as a
+diagnostic for students analysing where a strategy struggled.
+
+Some frames are deliberately excluded from the score and flagged in the CSV:
+
+| Column | Excluded because |
+|---|---|
+| `excluded_warmup_spike` | One outlier right after a phase transition, while a backend absorbs the new load |
+| `excluded_video_wrap` | The clip looped while the frame was in flight, so "where the target is now" refers to the start of the clip rather than to real movement |
+
+Both counts are printed at the end of a run. Results are written to
+`data/results.csv` and `data/results_by_phase.csv` at the end of each collection
+cycle.
 
 ---
 
@@ -229,8 +283,8 @@ All settings are read from environment variables (`.env` file). Key variables:
 |---|---|---|
 | `SP_AGENT_CLASS` | `student` | `student` or `example` |
 | `SP_AGENT_INTERVAL_MS` | `500` | Agent decision interval |
-| `MANUAL_PLACEMENT_CONTROL` | `false` | Enable dashboard Local/Remote buttons |
-| `LATENCY_PROBES_ENABLED` | `true` | Background probes on idle backend |
+| `MANUAL_PLACEMENT_CONTROL` | `false` | Enable the dashboard Local / Remote / Auto buttons. Local and Remote lock placement; Auto returns control to the SP-Agent |
+| `LATENCY_PROBES_ENABLED` | `true` | Probe the idle backend at a low rate, so `last_remote_probe_*` is populated for every agent |
 
 ### Collection Sync
 

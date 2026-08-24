@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -94,6 +95,44 @@ SCENARIOS: list[tuple[str, dict]] = [
 ]
 
 
+def offending_imports(source: str) -> list[str]:
+    """
+    Return import lines that resolve from the repo root but not in the container.
+
+    The client image copies client/ to /app and runs with /app as the import
+    root, so there is no `client` package at runtime. `from client.student...`
+    therefore works when run from the repository root and fails on the Pi.
+    This checker puts the repository root on sys.path (it needs `common`), so
+    without this guard it would happily pass an agent that cannot start.
+    """
+    return [
+        line.strip()
+        for line in source.splitlines()
+        if re.match(r"\s*(from|import)\s+client\.", line)
+    ]
+
+
+def check_import_style(agent_name: str) -> bool:
+    """Report whether the submission's imports will resolve in the container."""
+    filename = "sp_agent.py" if agent_name == "student" else "sp_agent_example.py"
+    source = (REPO_ROOT / "client" / "student" / filename).read_text()
+
+    offenders = offending_imports(source)
+    if not offenders:
+        print("  ok    imports resolve the same way they will in the container")
+        return True
+
+    print("  FAIL  import will not resolve inside the container:")
+    for line in offenders:
+        print(f"          {line}")
+    print(
+        "\nThe client runs with its own directory as the import root, so there is\n"
+        "no `client` package at runtime. Drop the prefix:\n"
+        "    from student.sp_agent_base import SPAgentBase"
+    )
+    return False
+
+
 def build_agent(agent_name: str):
     """Load and construct the agent exactly the way main.py does."""
     import importlib
@@ -153,6 +192,9 @@ def main() -> int:
     )
 
     print(f"Checking SP-Agent: {args.agent}")
+
+    if not check_import_style(args.agent):
+        return 1
 
     try:
         agent, _shared_state, agent_class = build_agent(args.agent)
