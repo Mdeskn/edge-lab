@@ -5,8 +5,20 @@ import csv
 import logging
 import os
 import queue
+import sys
 import threading
 import time
+
+# The container copies client/ to /app and common/ to /app/common, so `common`
+# resolves from the working directory. A source checkout is laid out
+# differently: `cd client && python main.py`, the sequence both the README and
+# the lab runbook give, leaves the repository root off sys.path and every
+# `common` import fails at startup. Add the parent directory when, and only
+# when, `common` is not already importable.
+try:  # pragma: no cover - depends on how the process was launched
+    import common  # noqa: F401
+except ModuleNotFoundError:
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from common.phases import (
     CYCLE_END_PHASE,
