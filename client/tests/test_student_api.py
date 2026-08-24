@@ -127,3 +127,32 @@ def test_readme_does_not_describe_an_invented_scoring_formula() -> None:
     text = README.read_text()
     assert "latency_factor" not in text
     assert "cumulative displacement" in text.lower()
+
+
+# --- The client must start the way the docs say to start it ---------------
+
+
+def test_client_starts_from_its_own_directory() -> None:
+    """
+    The container runs `python main.py` with the client directory as the
+    working directory, and both the README and the lab runbook tell you to run
+    it the same way from a checkout. Introducing the shared `common` package
+    broke that: from client/ the repository root is not on sys.path, so every
+    `common` import failed and the client died at startup, publishing nothing.
+
+    Launching a real interpreter is the only honest check here, because the
+    test session already has both directories on sys.path.
+    """
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-c", "import main; print('ok')"],
+        cwd=REPO_ROOT / "client",
+        capture_output=True,
+        text=True,
+        timeout=120,
+        env={"PATH": "/usr/bin:/bin", "HOME": "/tmp"},
+    )
+    assert "ModuleNotFoundError" not in result.stderr, result.stderr
+    assert result.returncode == 0, result.stderr
