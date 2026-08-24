@@ -3,13 +3,13 @@ import asyncio
 import base64
 import binascii
 import csv
-from contextlib import asynccontextmanager
 import json
 import logging
 import os
 import re
 import shutil
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -20,7 +20,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 
 from .kafka_consumer import DashboardKafkaConsumer
-from .schemas import AppMetric, CycleCommandRequest, FrameUpdate, PlacementControlRequest, PreviewUpdate, SaveRequest
+from .schemas import (
+    AppMetric,
+    CycleCommandRequest,
+    FrameUpdate,
+    PlacementControlRequest,
+    PreviewUpdate,
+    SaveRequest,
+)
 from .state import DashboardState
 
 SAVE_DIR = Path(os.environ.get("DASHBOARD_SAVE_DIR", "/data/saved"))
@@ -47,6 +54,11 @@ class WebSocketManager:
         self._broadcast_task: asyncio.Task | None = None
         self._broadcast_requested = False
         self._last_broadcast_at = 0.0
+        # Cursor into the state's history sequence. Every broadcast carries
+        # only the records appended since the previous one. Clients seed from
+        # the full snapshot they get on connect and drop any delta record they
+        # have already applied, so a client that joins mid-interval is safe.
+        self._last_sent_seq = 0
 
     async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
@@ -81,9 +93,14 @@ class WebSocketManager:
             connections = list(self._connections)
 
         if not connections:
+            # Nothing to send, but the cursor still advances so a client that
+            # connects later does not receive a backlog it already has from
+            # its seeding snapshot.
+            self._last_sent_seq = self._state.history_seq
             return
 
-        snapshot = self._state.snapshot()
+        snapshot = self._state.snapshot(since_seq=self._last_sent_seq)
+        self._last_sent_seq = snapshot["history_seq"]
         disconnected: list[WebSocket] = []
         for websocket in connections:
             try:
@@ -209,7 +226,11 @@ def get_results(since: float | None = None, until: float | None = None) -> dict[
     frames = []
     with RESULTS_LOG_PATH.open(newline="") as handle:
         for row in csv.DictReader(handle):
+            # Both exclusion columns keep a frame out of the score, so both
+            # keep it out of the reconstructed charts.
             if row.get("excluded_warmup_spike") == "1":
+                continue
+            if row.get("excluded_video_wrap") == "1":
                 continue
             timestamp = _to_float(row.get("timestamp"))
             if timestamp is None:

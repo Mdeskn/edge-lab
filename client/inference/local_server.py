@@ -8,8 +8,7 @@ import os
 import numpy as np
 import onnxruntime as ort
 
-from inference.yolo_postprocess import best_detection_box
-from inference.yolo_postprocess import TargetClassFilter
+from inference.yolo_postprocess import TargetClassFilter, best_detection_box
 
 logger = logging.getLogger(__name__)
 

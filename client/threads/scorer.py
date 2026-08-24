@@ -10,9 +10,10 @@ import queue
 
 from config import Config
 from metrics.dashboard_publisher import DashboardPublisher
-from shared_state import SharedState
 from metrics.kafka_publisher import AppMetricsPublisher
+from shared_state import SharedState
 from spike_filter import WarmupSpikeFilter
+from threads.messages import InferenceResult
 
 logger = logging.getLogger(__name__)
 
@@ -41,18 +42,28 @@ class Scorer:
         self.results_file = results_file
         self._csv_writer = None
         self._last_latency_ms: float | None = None
+        self._wrapped_frames = 0
         self._spike_filter = WarmupSpikeFilter(
             enabled=config.warmup_spike_filter_enabled,
             settle_sec=config.warmup_spike_settle_sec,
             multiplier=config.warmup_spike_multiplier,
             floor_ms=config.warmup_spike_floor_ms,
+            phases=config.warmup_spike_phases,
         )
+
+    @property
+    def excluded_counts(self) -> dict[str, int]:
+        """Frames left out of the score, by reason, for end-of-run reporting."""
+        return {
+            "warmup_spike": self._spike_filter.excluded_count,
+            "video_wrap": self._wrapped_frames,
+        }
 
     def run(self) -> None:
         """
         Main thread loop.
 
-        Writes CSV header on startup, then processes each result tuple from
+        Writes CSV header on startup, then processes each InferenceResult from
         scorer_queue: computes displacement, writes CSV, and publishes Kafka.
         """
         logger.info("Scorer started")
@@ -75,29 +86,24 @@ class Scorer:
                 "displacement_px",
                 "cumulative_displacement_px",
                 "excluded_warmup_spike",
+                "excluded_video_wrap",
             ]
         )
         self.results_file.flush()
 
         while not self.shared_state.is_shutdown_requested():
             try:
-                (
-                    frame_number,
-                    frame,
-                    gt_x,
-                    gt_y,
-                    pred_x,
-                    pred_y,
-                    _pred_x1,
-                    _pred_y1,
-                    _pred_x2,
-                    _pred_y2,
-                    latency_ms,
-                    mode,
-                    result_time,
-                ) = self.scorer_queue.get(timeout=1.0)
+                result: InferenceResult = self.scorer_queue.get(timeout=1.0)
             except queue.Empty:
                 continue
+
+            frame_number = result.frame_number
+            frame = result.frame
+            pred_x = result.predicted_x
+            pred_y = result.predicted_y
+            latency_ms = result.latency_ms
+            mode = result.mode
+            result_time = result.completed_at
 
             current_phase = self.shared_state.get_experiment_phase()
 
@@ -132,14 +138,32 @@ class Scorer:
             # Scoring against this (not the bundled capture-time GT) is what makes
             # latency affect displacement: the longer inference takes, the further
             # the tracked object has moved, the higher the penalty.
-            _, current_gt_x, current_gt_y = self.shared_state.get_ground_truth()
+            (
+                _,
+                current_gt_x,
+                current_gt_y,
+                current_video_cycle,
+            ) = self.shared_state.get_ground_truth()
 
-            # Bundled GT (gt_x, gt_y) only gates whether this frame is scored.
-            # If there was no target at capture time, skip the frame entirely.
-            frame_had_ground_truth = gt_x is not None and gt_y is not None
-            has_prediction = pred_x != 0.0 or pred_y != 0.0
+            # If the clip looped while this frame was in flight, the current
+            # ground truth describes the start of the clip rather than where
+            # the tracked object continued to. The resulting displacement would
+            # measure the video wrapping, not the placement decision, and it
+            # would fall hardest on slow remote frames. Skip those frames.
+            wrapped_mid_flight = result.video_cycle != current_video_cycle
+            if wrapped_mid_flight:
+                self._wrapped_frames += 1
+                logger.debug(
+                    "Skipping frame %d: video wrapped mid-flight (cycle %d -> %d)",
+                    frame_number, result.video_cycle, current_video_cycle,
+                )
 
-            if frame_had_ground_truth:
+            # Bundled GT only gates whether this frame is scored. If there was
+            # no target at capture time, skip the frame entirely.
+            frame_had_ground_truth = result.gt_x is not None and result.gt_y is not None
+            has_prediction = result.has_prediction
+
+            if frame_had_ground_truth and not wrapped_mid_flight:
                 if has_prediction and current_gt_x is not None:
                     displacement_px = math.sqrt(
                         (current_gt_x - pred_x) ** 2 + (current_gt_y - pred_y) ** 2
@@ -148,14 +172,15 @@ class Scorer:
                     # YOLO missed detection, or current GT unavailable: fixed penalty.
                     displacement_px = self.config.miss_penalty_px
             else:
-                displacement_px = None  # no target at capture time, skip frame
+                displacement_px = None  # not scoreable, skip frame
 
             # Only count frames toward the cumulative score when actively collecting.
             # In ARMED/COMPLETE/DISCONNECTED the dashboard still shows live values for
             # debugging but they do not influence the saved score.
             is_collecting = self.shared_state.is_collecting()
+            excluded_from_score = is_warmup_spike or wrapped_mid_flight
 
-            if displacement_px is not None and is_collecting and not is_warmup_spike:
+            if displacement_px is not None and is_collecting and not excluded_from_score:
                 self.shared_state.add_displacement(displacement_px)
                 self.shared_state.add_phase_result(
                     current_phase,
@@ -186,6 +211,7 @@ class Scorer:
                             _round_optional(displacement_px),
                             round(score_summary["cumulative_displacement"], 2),
                             int(is_warmup_spike),
+                            int(wrapped_mid_flight),
                         ]
                     )
                     self.results_file.flush()
@@ -210,7 +236,7 @@ class Scorer:
                     cumulative_displacement_px=score_summary["cumulative_displacement"],
                     timestamp=result_time,
                     collection_state=collection_state,
-                    excluded=is_warmup_spike,
+                    excluded=excluded_from_score,
                 )
             except Exception as exc:
                 logger.error("Kafka publish error in Scorer: %s", exc)
@@ -230,7 +256,7 @@ class Scorer:
                 displacement_px=displacement_px,
                 cumulative_displacement_px=score_summary["cumulative_displacement"],
                 experiment_phase=current_phase,
-                excluded=is_warmup_spike,
+                excluded=excluded_from_score,
             )
 
             if displacement_px is not None and has_prediction and current_gt_x is not None:

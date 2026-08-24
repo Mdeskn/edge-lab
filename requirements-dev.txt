@@ -1,0 +1,5 @@
+# Tooling for running the test suite and linting. Not installed in the
+# container images: `make venv` installs this alongside both components'
+# runtime requirements.
+pytest==8.3.4
+ruff==0.8.6

@@ -1,0 +1,38 @@
+[project]
+name = "edge-lab"
+version = "1.0.0"
+description = "Edge-computing teaching lab: student service-placement agents scored against a live Pi/GPU pipeline"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+# Both suites run from one command. "client" is on the path because the client
+# uses flat imports (it runs with WORKDIR=/app in its container); "." is on the
+# path for the dashboard package and the shared `common` package.
+pythonpath = [".", "client"]
+testpaths = ["client", "dashboard", "common"]
+python_files = ["test_*.py"]
+addopts = "-q --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4"]
+ignore = [
+    # Long log-format strings and docstring tables read worse when wrapped.
+    "E501",
+]
+
+[tool.ruff.lint.isort]
+# The client runs with its own directory as the import root, so its top-level
+# modules are first-party even though they are not under a package.
+known-first-party = [
+    "common", "config", "shared_state", "spike_filter", "scenario_parser",
+    "inference", "metrics", "threads", "student", "dashboard",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The student-facing agent files keep their teaching imports even when the
+# starter template does not reference them yet.
+"client/student/sp_agent.py" = ["F401"]

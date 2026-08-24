@@ -49,19 +49,15 @@ class PreviewUpdate(BaseModel):
     image_base64: str
 
 
-class PhaseMetric(BaseModel):
-    """Current experiment phase."""
-
-    model_config = ConfigDict(extra="allow")
-
-    timestamp: float = Field(default_factory=time.time)
-    phase: str = "unknown"
-
-
 class PlacementControlRequest(BaseModel):
-    """Manual local/remote placement command from the dashboard."""
+    """Manual placement command from the dashboard.
 
-    mode: Literal["local", "remote"]
+    "auto" releases the manual lock and hands placement back to the SP-Agent.
+    Without it, one manual click disabled automatic decisions for the rest of
+    the run with no way back short of restarting the client.
+    """
+
+    mode: Literal["local", "remote", "auto"]
 
 
 class CycleCommandRequest(BaseModel):

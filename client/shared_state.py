@@ -3,12 +3,10 @@ Thread-safe shared state for all threads in the pipeline.
 Every field is accessed through getter/setter methods protected by a single lock.
 """
 import threading
-from collections import deque
-from enum import Enum
-from typing import Optional, Set
+from enum import StrEnum
 
 
-class CollectionState(str, Enum):
+class CollectionState(StrEnum):
     """Lifecycle of the per-cycle data collection."""
     DISCONNECTED = "disconnected"
     ARMED = "armed"
@@ -30,17 +28,22 @@ class SharedState:
         self._lock = threading.Lock()
         self._shutdown_event = threading.Event()
 
-        self._current_gt_x: Optional[float] = None
-        self._current_gt_y: Optional[float] = None
+        # Held for the duration of a local ONNX inference. The latency probe
+        # takes it non-blockingly so its own CPU-bound local inference can
+        # never overlap a scored frame's, which would inflate the very latency
+        # the student is graded on.
+        self.local_inference_lock = threading.Lock()
+
+        self._current_gt_x: float | None = None
+        self._current_gt_y: float | None = None
         self._current_frame_number: int = 0
+        self._current_video_cycle: int = 0
         self._latest_frame_number: int | None = None
         self._latest_frame = None
         self._latest_prediction: dict | None = None
 
         self._processing_mode: str = self._validate_processing_mode(initial_mode)
         self._manual_processing_lock: bool = False
-
-        self._recent_latencies: deque = deque(maxlen=20)
 
         self._cumulative_displacement: float = 0.0
         self._frames_processed: int = 0
@@ -51,7 +54,7 @@ class SharedState:
         self._collection_state: CollectionState = CollectionState.DISCONNECTED
         self._cycle_started_at: float | None = None
         self._cycle_completed_at: float | None = None
-        self._cycle_phases_seen: Set[str] = set()
+        self._cycle_phases_seen: set[str] = set()
         self._cycles_completed: int = 0
         self._previous_phase: str | None = None
         self._armed_for_next_cycle: bool = False
@@ -121,19 +124,34 @@ class SharedState:
     def update_ground_truth(
         self,
         frame_number: int,
-        gt_x: Optional[float],
-        gt_y: Optional[float],
+        gt_x: float | None,
+        gt_y: float | None,
+        video_cycle: int = 0,
     ) -> None:
         """Update the current ground truth coordinates for a given frame."""
         with self._lock:
             self._current_frame_number = frame_number
             self._current_gt_x = gt_x
             self._current_gt_y = gt_y
+            self._current_video_cycle = video_cycle
 
     def get_ground_truth(self) -> tuple:
-        """Return (frame_number, gt_x, gt_y) as a tuple."""
+        """
+        Return (frame_number, gt_x, gt_y, video_cycle).
+
+        `video_cycle` counts how many times the clip has looped. The Scorer
+        compares it against the cycle a result was captured in: the two differ
+        only when the video wrapped while that frame was in flight, and the
+        current ground truth then refers to the far end of the clip rather
+        than to where the tracked object actually moved.
+        """
         with self._lock:
-            return (self._current_frame_number, self._current_gt_x, self._current_gt_y)
+            return (
+                self._current_frame_number,
+                self._current_gt_x,
+                self._current_gt_y,
+                self._current_video_cycle,
+            )
 
     # ─── Collection state machine API ────────────────────────────────────
 
@@ -169,10 +187,6 @@ class SharedState:
                 "final_cumulative_displacement": self._final_cumulative_displacement,
             }
 
-    def transition_to_disconnected(self) -> None:
-        with self._lock:
-            self._collection_state = CollectionState.DISCONNECTED
-
     def transition_to_armed(self) -> None:
         """Move to ARMED. Reset per-cycle counters but keep cycles_completed."""
         with self._lock:
@@ -190,10 +204,6 @@ class SharedState:
         with self._lock:
             if self._collection_state == CollectionState.ARMED:
                 self._armed_for_next_cycle = True
-
-    def cancel_pending_start(self) -> None:
-        with self._lock:
-            self._armed_for_next_cycle = False
 
     def transition_to_collecting(self, started_at: float) -> bool:
         """
@@ -216,10 +226,6 @@ class SharedState:
             if self._collection_state == CollectionState.COLLECTING:
                 self._cycle_phases_seen.add(phase)
 
-    def get_phases_seen(self) -> Set[str]:
-        with self._lock:
-            return set(self._cycle_phases_seen)
-
     def transition_to_complete(self, completed_at: float, final_score: float) -> None:
         with self._lock:
             self._collection_state = CollectionState.COMPLETE
@@ -240,7 +246,6 @@ class SharedState:
         self._cumulative_displacement = 0.0
         self._frames_processed = 0
         self._phase_scores = {}
-        self._recent_latencies = deque(maxlen=20)
 
     # --- Latest raw frame for optional latency probes ---
 
@@ -288,25 +293,6 @@ class SharedState:
                 else None
             )
 
-    # --- Latency history ---
-
-    def add_latency(self, latency_ms: float) -> None:
-        """Append a latency measurement (ms) to the rolling history."""
-        with self._lock:
-            self._recent_latencies.append(latency_ms)
-
-    def get_recent_latencies(self) -> list:
-        """Return a copy of the recent latency list."""
-        with self._lock:
-            return list(self._recent_latencies)
-
-    def get_average_latency(self) -> Optional[float]:
-        """Return mean of recent latencies, or None if no measurements exist."""
-        with self._lock:
-            if not self._recent_latencies:
-                return None
-            return sum(self._recent_latencies) / len(self._recent_latencies)
-
     # --- Scoring ---
 
     def add_displacement(self, displacement_px: float) -> None:
@@ -342,13 +328,6 @@ class SharedState:
             return self._experiment_phase
 
     # --- Per-phase scoring ---
-
-    def add_phase_displacement(self, phase: str, displacement_px: float) -> None:
-        """Record a displacement measurement for a specific experiment phase."""
-        with self._lock:
-            self._ensure_phase_stats(phase)
-            self._phase_scores[phase]["total_displacement"] += displacement_px
-            self._phase_scores[phase]["frames"] += 1
 
     def add_phase_result(
         self,

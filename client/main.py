@@ -8,22 +8,25 @@ import queue
 import threading
 import time
 
-from config import load_config, Config
-from scenario_parser import load_cycle_duration_sec
-from shared_state import SharedState, CollectionState
+from common.phases import (
+    CYCLE_END_PHASE,
+    CYCLE_START_PHASE,
+    EXPERIMENT_PHASES,
+)
+from config import Config, load_config
 from inference.local_server import LocalServer
 from inference.remote_client import RemoteClient
 from metrics.dashboard_publisher import DashboardPublisher
 from metrics.kafka_publisher import AppMetricsPublisher
 from metrics.telemetry import setup_telemetry
-from threads.frame_reader import FrameReader
+from scenario_parser import load_cycle_duration_sec
+from shared_state import CollectionState, SharedState
 from threads.dispatcher import Dispatcher
-from threads.scorer import Scorer
+from threads.frame_reader import FrameReader
 from threads.latency_probe import LatencyProbe
+from threads.scorer import Scorer
 
 logger = logging.getLogger(__name__)
-
-EXPERIMENT_PHASES = ["cycle_start", "gpu_load", "jitter_light", "bandwidth_20", "mixed", "cycle_end"]
 
 
 def run_cycle_monitor(config: Config, shared_state: SharedState) -> None:
@@ -37,9 +40,6 @@ def run_cycle_monitor(config: Config, shared_state: SharedState) -> None:
     logger.info("CycleMonitor started (sync_mode=%s)", config.sync_mode)
 
     effective_mode = config.sync_mode
-    if effective_mode == "off" and config.auto_stop:
-        effective_mode = "wait_for_cycle"
-        logger.info("AUTO_STOP=true detected, treating as SYNC_MODE=wait_for_cycle")
 
     if effective_mode == "wait_for_cycle":
         shared_state.transition_to_armed()
@@ -54,7 +54,6 @@ def run_cycle_monitor(config: Config, shared_state: SharedState) -> None:
         logger.info("SYNC_MODE=off: collecting indefinitely, no cycle detection")
         return
 
-    all_phases = {"cycle_start", "gpu_load", "jitter_light", "bandwidth_20", "mixed", "cycle_end"}
     poll_interval = 0.5
     cycle_timeout_sec = config.phase_timeout_sec if config.phase_timeout_sec > 0 else None
 
@@ -75,9 +74,9 @@ def run_cycle_monitor(config: Config, shared_state: SharedState) -> None:
         # ARMED → COLLECTING on cycle boundary (entering cycle_start from another phase)
         if collection_state == CollectionState.ARMED:
             if (
-                current_phase == "cycle_start"
+                current_phase == CYCLE_START_PHASE
                 and previous_phase is not None
-                and previous_phase != "cycle_start"
+                and previous_phase != CYCLE_START_PHASE
             ):
                 if shared_state.transition_to_collecting(time.time()):
                     logger.info("cycle_start detected, COLLECTING started")
@@ -87,8 +86,7 @@ def run_cycle_monitor(config: Config, shared_state: SharedState) -> None:
         if collection_state == CollectionState.COLLECTING:
             shared_state.add_phase_seen(current_phase)
 
-            phases_seen = shared_state.get_phases_seen()
-            phase_based_done = (current_phase == "cycle_end")
+            phase_based_done = (current_phase == CYCLE_END_PHASE)
             if phase_based_done:
                 score_summary = shared_state.get_score_summary()
                 final_score = float(score_summary.get("cumulative_displacement", 0.0))
@@ -123,7 +121,7 @@ def run_cycle_monitor(config: Config, shared_state: SharedState) -> None:
 def write_phase_summary_csv(
     config: Config,
     shared_state: SharedState,
-    phase_names: list[str],
+    phase_names: tuple[str, ...],
 ) -> None:
     """Write per-phase aggregate results to a separate CSV file."""
     phase_summary = shared_state.get_phase_summary()
@@ -209,7 +207,7 @@ def _load_sp_agent_class(class_name: str):
         module = importlib.import_module("student.sp_agent_example")
     else:
         raise ValueError(f"Unknown sp_agent_class: {class_name!r}")
-    return getattr(module, "SPAgent")
+    return module.SPAgent
 
 
 def main() -> None:
@@ -266,7 +264,6 @@ def main() -> None:
     logger.info("  latency_probes      : %s", config.latency_probes_enabled)
     logger.info("  probe_interval_sec  : %.1f", config.latency_probe_interval_sec)
     logger.info("  sync_mode            : %s", config.sync_mode)
-    logger.info("  auto_stop            : %s (legacy)", config.auto_stop)
     logger.info("  phase_timeout_sec    : %.0f", config.phase_timeout_sec)
     logger.info("  miss_penalty_px      : %.1f", config.miss_penalty_px)
     logger.info("  dashboard_enabled    : %s", config.dashboard_enabled)
@@ -442,6 +439,18 @@ def main() -> None:
         "cumulative",
         score_summary["cumulative_displacement"],
     )
+
+    # Excluded frames change the score, so they are reported rather than left
+    # to be discovered in the CSV.
+    excluded = scorer.excluded_counts
+    if any(excluded.values()):
+        logger.info("-" * 60)
+        logger.info(
+            "  %-16s  %d warm-up spike(s), %d video-wrap frame(s)",
+            "excluded",
+            excluded["warmup_spike"],
+            excluded["video_wrap"],
+        )
     logger.info("=" * 60)
 
 

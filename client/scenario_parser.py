@@ -13,7 +13,6 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +40,7 @@ def load_cycle_duration_sec(scenario_path: str | Path) -> float:
         return DEFAULT_CYCLE_DURATION_SEC
 
     try:
-        with open(path, "r") as fh:
+        with open(path) as fh:
             scenario = json.load(fh)
     except (json.JSONDecodeError, OSError) as exc:
         logger.warning(

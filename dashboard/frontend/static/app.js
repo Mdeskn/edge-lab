@@ -111,6 +111,7 @@ function bindElements() {
 function bindControls() {
   el["force-local"].addEventListener("click", () => requestPlacement("local"));
   el["force-remote"].addEventListener("click", () => requestPlacement("remote"));
+  el["force-auto"].addEventListener("click", () => requestPlacement("auto"));
 
   el["cycle-start-btn"].addEventListener("click", async () => {
     try { await postJson("/api/control/cycle", { action: "start_on_next_cycle" }); }
@@ -179,11 +180,53 @@ function wsUrl() {
   return `${protocol}//${window.location.host}/ws`;
 }
 
+// ---- Rolling chart history ----------------------------------------------
+// The backend used to resend the entire rolling window (roughly 260 KB) on
+// every WebSocket broadcast. It now sends a full window once, then only the
+// records appended since the previous broadcast, and the browser keeps the
+// window itself. Merging happens on receive rather than on render, because
+// renders are coalesced and a dropped frame of rendering must not drop the
+// history records that arrived with it.
+const HISTORY_STREAMS = ["frames", "gpu", "network"];
+const historyBuffers = { frames: [], gpu: [], network: [] };
+let historySeq = 0;
+let historyMax = 300;
+
+function applyHistory(state) {
+  if (typeof state.max_history === "number" && state.max_history > 0) {
+    historyMax = state.max_history;
+  }
+  const incoming = state.history || {};
+
+  if (state.history_mode === "delta" && historySeq > 0) {
+    for (const stream of HISTORY_STREAMS) {
+      const buffer = historyBuffers[stream];
+      for (const record of incoming[stream] || []) {
+        // A client that connected mid-interval sees an overlap between its
+        // seeding snapshot and the first delta. Sequence numbers make the
+        // duplicates cheap to drop.
+        if ((record.__seq || 0) > historySeq) buffer.push(record);
+      }
+      const overflow = buffer.length - historyMax;
+      if (overflow > 0) buffer.splice(0, overflow);
+    }
+  } else {
+    // A full snapshot: on first load, on reconnect, or from /api/state.
+    for (const stream of HISTORY_STREAMS) {
+      historyBuffers[stream] = (incoming[stream] || []).slice(-historyMax);
+    }
+  }
+
+  if (typeof state.history_seq === "number") historySeq = state.history_seq;
+  state.history = historyBuffers;
+  return state;
+}
+
 async function loadInitialState() {
   try {
     const response = await fetch(apiUrl("/api/state"));
     if (!response.ok) throw new Error(`Dashboard API returned ${response.status}`);
-    render(await response.json());
+    render(applyHistory(await response.json()));
     hideError();
   } catch (error) {
     showError(`${error.message}. The dashboard will reconnect automatically.`);
@@ -196,7 +239,7 @@ function connectSocket() {
   socket.onopen = () => setSocketConnected(true);
   socket.onmessage = (event) => {
     try {
-      queueSocketRender(JSON.parse(event.data));
+      queueSocketRender(applyHistory(JSON.parse(event.data)));
       hideError();
     } catch (error) {
       console.error("Dashboard update failed", error);
@@ -349,18 +392,24 @@ function renderPlacement(state) {
   const localActive = mode.startsWith("LOCAL");
   const remoteActive = mode.startsWith("REMOTE");
   const buttonsDisabled = !manualEnabled || Boolean(pendingMode);
+  // "auto" is a release command, not a placement, so it never lights up as
+  // the active mode: it is highlighted while no manual lock is held.
+  const requested = String(control.requested_mode || "").toLowerCase();
+  const autoActive = requested === "" || requested === "auto";
 
   el["force-local"].disabled = buttonsDisabled;
   el["force-remote"].disabled = buttonsDisabled;
-  el["force-local"].classList.toggle("active", localActive);
-  el["force-remote"].classList.toggle("active", remoteActive);
+  el["force-auto"].disabled = buttonsDisabled || autoActive;
+  el["force-local"].classList.toggle("active", localActive && !autoActive);
+  el["force-remote"].classList.toggle("active", remoteActive && !autoActive);
+  el["force-auto"].classList.toggle("active", autoActive);
 
   let status = "Automatic SP-agent";
   if (manualEnabled) {
     if (pendingMode) status = "Sending command";
     else if (controlError) status = "Command failed";
-    else if (control.requested_mode) status = `Requested ${String(control.requested_mode).toUpperCase()}`;
-    else status = "Manual override";
+    else if (autoActive) status = "Automatic SP-agent";
+    else status = `Locked to ${requested.toUpperCase()}`;
   }
   text("placement-status", status);
   el["placement-status"].classList.toggle("error", Boolean(controlError));

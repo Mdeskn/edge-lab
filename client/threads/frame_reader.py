@@ -6,7 +6,7 @@ import csv
 import logging
 import queue
 import time
-from typing import Dict, Optional, Tuple
+from bisect import bisect_left
 
 import cv2
 import numpy as np
@@ -14,6 +14,7 @@ import numpy as np
 from config import Config
 from metrics.dashboard_publisher import DashboardPublisher
 from shared_state import SharedState
+from threads.messages import FrameJob
 
 logger = logging.getLogger(__name__)
 
@@ -38,18 +39,18 @@ class FrameReader:
         self.dashboard_publisher = dashboard_publisher
         self.frame_counter: int = 0
         self._video_cycle: int = 0
-        self._ground_truth: Dict[int, Tuple[Optional[float], Optional[float]]] = {}
+        self._ground_truth: dict[int, tuple[float | None, float | None]] = {}
+        self._gt_frame_numbers: list[int] = []
 
-    def _load_ground_truth(self) -> Dict[int, Tuple[Optional[float], Optional[float]]]:
+    def _load_ground_truth(self) -> dict[int, tuple[float | None, float | None]]:
         """
         Load ground_truth.csv into {frame_number: (center_x, center_y)}.
 
-        Raises FileNotFoundError if the file is missing.
-        For frames without an exact entry the nearest recorded frame number
-        is used as a fallback (linear scan; the lookup dict is kept sorted
-        so the nearest key can be found efficiently with min()).
+        Raises FileNotFoundError if the file is missing. Rows whose frame
+        number or centre cannot be parsed are skipped. `_lookup_gt` handles
+        frames with no exact entry.
         """
-        gt: Dict[int, Tuple[Optional[float], Optional[float]]] = {}
+        gt: dict[int, tuple[float | None, float | None]] = {}
         path = self.config.ground_truth_path
 
         try:
@@ -66,29 +67,34 @@ class FrameReader:
                         )
                     except (ValueError, KeyError):
                         continue
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Ground truth file not found: {path}")
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(f"Ground truth file not found: {path}") from exc
 
         logger.info("Loaded %d ground truth entries from %s", len(gt), path)
         return gt
 
-    def _lookup_gt(self, frame_number: int) -> Tuple[Optional[float], Optional[float]]:
+    def _lookup_gt(self, frame_number: int) -> tuple[float | None, float | None]:
         """
         Return ground truth coordinates for frame_number.
 
         Falls back to the nearest available frame number if an exact match
-        does not exist. Logs at DEBUG level for fallback lookups.
+        does not exist, using a binary search over the sorted frame numbers
+        built at load time. Logs at DEBUG level for fallback lookups.
         """
         if frame_number in self._ground_truth:
             return self._ground_truth[frame_number]
 
-        if not self._ground_truth:
+        if not self._gt_frame_numbers:
             return (0.0, 0.0)
 
-        nearest = min(self._ground_truth.keys(), key=lambda k: abs(k - frame_number))
-        logger.debug(
-            "GT fallback: frame %d → nearest %d", frame_number, nearest
-        )
+        index = bisect_left(self._gt_frame_numbers, frame_number)
+        candidates = []
+        if index < len(self._gt_frame_numbers):
+            candidates.append(self._gt_frame_numbers[index])
+        if index > 0:
+            candidates.append(self._gt_frame_numbers[index - 1])
+        nearest = min(candidates, key=lambda k: abs(k - frame_number))
+        logger.debug("GT fallback: frame %d -> nearest %d", frame_number, nearest)
         return self._ground_truth[nearest]
 
     def run(self) -> None:
@@ -102,6 +108,7 @@ class FrameReader:
         logger.info("FrameReader started")
 
         self._ground_truth = self._load_ground_truth()
+        self._gt_frame_numbers = sorted(self._ground_truth)
 
         cap = cv2.VideoCapture(self.config.video_path)
         if not cap.isOpened():
@@ -121,19 +128,21 @@ class FrameReader:
                 self.frame_counter += 1
 
                 gt_x, gt_y = self._lookup_gt(self.frame_counter)
-                self.shared_state.update_ground_truth(self.frame_counter, gt_x, gt_y)
+                self.shared_state.update_ground_truth(
+                    self.frame_counter, gt_x, gt_y, self._video_cycle
+                )
                 if self.config.latency_probes_enabled:
                     self.shared_state.update_latest_frame(self.frame_counter, frame)
 
                 try:
                     self.reader_queue.put(
-                        (
-                            self.frame_counter,
-                            self._video_cycle,
-                            frame.copy(),
-                            gt_x,
-                            gt_y,
-                            time.time(),
+                        FrameJob(
+                            frame_number=self.frame_counter,
+                            video_cycle=self._video_cycle,
+                            frame=frame.copy(),
+                            gt_x=gt_x,
+                            gt_y=gt_y,
+                            enqueued_at=time.time(),
                         ),
                         timeout=0.05,
                     )

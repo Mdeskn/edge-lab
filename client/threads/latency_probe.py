@@ -9,11 +9,11 @@ ignored by scoring and CSV output.
 import logging
 import time
 
-import cv2
 import numpy as np
 
 from config import Config
 from inference.local_server import LocalServer
+from inference.preprocess import preprocess_frame
 from inference.remote_client import RemoteClient
 from metrics.kafka_publisher import AppMetricsPublisher
 from shared_state import SharedState
@@ -63,9 +63,20 @@ class LatencyProbe:
         logger.info("LatencyProbe stopped")
 
     def _probe_local(self, frame_number: int, frame: np.ndarray) -> None:
+        # A local probe is a full YOLO inference on all four Pi cores. Running
+        # it alongside a scored frame's inference inflates that frame's
+        # latency, which is the number the student is graded on. Take the
+        # shared lock without blocking and skip this round if the Dispatcher
+        # holds it, rather than stalling the pipeline waiting for a probe.
+        if not self.shared_state.local_inference_lock.acquire(blocking=False):
+            logger.debug("Skipping local latency probe: pipeline inference in flight")
+            return
+
         started = time.perf_counter()
         try:
-            tensor = self._preprocess(frame)
+            tensor = preprocess_frame(
+                frame, self.config.input_width, self.config.input_height
+            )
             self.local_server.infer(tensor, frame.shape)
             latency_ms = (time.perf_counter() - started) * 1000.0
             self.kafka_publisher.publish_latency_probe(
@@ -84,6 +95,8 @@ class LatencyProbe:
                 status="failed",
                 error=str(exc),
             )
+        finally:
+            self.shared_state.local_inference_lock.release()
 
     def _probe_remote(self, frame_number: int, frame: np.ndarray) -> None:
         if self.remote_client is None:
@@ -103,7 +116,9 @@ class LatencyProbe:
             if self.remote_client.sends_raw_frames():
                 self.remote_client.infer(frame)
             else:
-                tensor = self._preprocess(frame)
+                tensor = preprocess_frame(
+                    frame, self.config.input_width, self.config.input_height
+                )
                 self.remote_client.infer(tensor, frame.shape)
             latency_ms = (time.perf_counter() - started) * 1000.0
             self.kafka_publisher.publish_latency_probe(
@@ -122,10 +137,3 @@ class LatencyProbe:
                 status="failed",
                 error=str(exc),
             )
-
-    def _preprocess(self, frame: np.ndarray) -> np.ndarray:
-        resized = cv2.resize(frame, (self.config.input_width, self.config.input_height))
-        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-        normalized = rgb.astype(np.float32) / 255.0
-        chw = np.transpose(normalized, (2, 0, 1))
-        return np.expand_dims(chw, axis=0)

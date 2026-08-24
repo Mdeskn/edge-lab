@@ -5,6 +5,7 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.ruff_cache/
 .venv*/
 venv/
 
@@ -37,3 +38,9 @@ export_project_inventory*.py
 # IDE
 .vscode/
 .idea/
+
+# Claude Code: per-developer settings only. .claude/settings.json is shared
+# project config and stays tracked if it is ever added. This was previously
+# covered only by a personal global ignore file, which does not apply on the
+# Pi, in CI, or for anyone else who clones.
+.claude/settings.local.json

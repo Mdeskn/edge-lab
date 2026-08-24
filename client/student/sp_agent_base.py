@@ -12,7 +12,7 @@ pipeline is writing the processing mode via set_mode().
 METRICS AVAILABLE IN YOUR decide() METHOD:
 
     self.gpu_metrics  (dict):
-        Normalized from Eldiyar's nested server metrics message.
+        GPU server and Triton metrics, normalized to the flat keys below.
         Empty until the first Kafka message arrives from KAFKA_GPU_TOPIC.
         Always use .get(key, default) to avoid KeyError.
 
@@ -48,7 +48,7 @@ METRICS AVAILABLE IN YOUR decide() METHOD:
         "resnet_queue_ms"     float
         "resnet_infer_ms"     float
 
-        "raw"                 dict   Full original nested message from Kafka
+        "raw"                 dict   Full original message as received from Kafka
 
     self.net_metrics  (dict):
         Network conditions on the path between client and GPU server.
@@ -104,20 +104,21 @@ import logging
 import threading
 import time
 from collections import deque
-from typing import Optional
 
+from common.gpu_metrics import (
+    default_net_metrics,
+    normalize_gpu_metrics,
+    normalize_net_metrics,
+)
 from config import Config
 from shared_state import REQUESTED_PROCESSING_MODES, SharedState
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_NET_METRICS = {
-    "delay_ms": 0.0,
-    "jitter_ms": 0.0,
-    "packet_loss_pct": 0.0,
-    "packet_loss_percent": 0.0,
-    "bandwidth": "unknown",
-}
+#: Manual placement commands the dashboard may send. "auto" hands control back
+#: to the SP-Agent; without it a single manual click disabled automatic
+#: decisions for the rest of the run.
+MANUAL_PLACEMENT_COMMANDS = REQUESTED_PROCESSING_MODES + ("auto",)
 
 
 def _normalize_phase_value(value) -> str:
@@ -157,13 +158,16 @@ class SPAgentBase:
         # read by decide() via properties. Protected by _metrics_lock.
         self._metrics_lock = threading.Lock()
         self._gpu_metrics: dict = {}
-        self._net_metrics: dict = dict(_DEFAULT_NET_METRICS)
+        self._net_metrics: dict = default_net_metrics()
         self._experiment_phase: str = "cycle_start"
         self._recent_latencies: deque = deque(maxlen=20)
         self._recent_remote_latencies: deque = deque(maxlen=20)
         self._last_remote_probe_latency: float | None = None
         self._last_remote_probe_status: str = "unavailable"
         self._last_remote_probe_at: float | None = None
+
+        self._decide_calls = 0
+        self._decide_failures = 0
 
         self._debug_metrics: bool = getattr(config, "sp_agent_debug_metrics", False)
         self._manual_control_enabled: bool = getattr(config, "manual_placement_control", False)
@@ -234,7 +238,7 @@ class SPAgentBase:
             return list(self._recent_latencies)
 
     @property
-    def avg_latency(self) -> Optional[float]:
+    def avg_latency(self) -> float | None:
         """Mean of recent_latencies, or None if no measurements have arrived."""
         with self._metrics_lock:
             if not self._recent_latencies:
@@ -242,7 +246,7 @@ class SPAgentBase:
             return sum(self._recent_latencies) / len(self._recent_latencies)
 
     @property
-    def avg_remote_latency(self) -> Optional[float]:
+    def avg_remote_latency(self) -> float | None:
         """Mean of recent active remote-inference samples, or None if unavailable."""
         with self._metrics_lock:
             if not self._recent_remote_latencies:
@@ -347,18 +351,67 @@ class SPAgentBase:
                     self.current_mode,
                 )
             else:
+                self._decide_calls += 1
                 try:
                     result = self.decide()
                     self.set_mode(result)
                 except NotImplementedError:
-                    logger.error("decide() not implemented: SPAgent is a no-op")
+                    self._record_decide_failure(
+                        "decide() is not implemented: the agent cannot choose a "
+                        "placement and the pipeline stays in its current mode",
+                        with_traceback=False,
+                    )
+                except ValueError as exc:
+                    # set_mode rejects anything that is not "local"/"remote",
+                    # which is the most common student mistake.
+                    self._record_decide_failure(
+                        f"decide() returned an invalid placement: {exc}",
+                        with_traceback=False,
+                    )
                 except Exception:
-                    logger.exception("Unhandled exception in SPAgent.decide()")
+                    self._record_decide_failure(
+                        "decide() raised an unhandled exception",
+                        with_traceback=True,
+                    )
 
             elapsed = time.time() - loop_start
             time.sleep(max(0.0, interval_s - elapsed))
 
-        logger.info("SPAgent stopped")
+        if self._decide_failures:
+            logger.error(
+                "SPAgent stopped: decide() failed on %d of %d calls. The "
+                "placement stayed at whatever it was last set to, so these "
+                "results do not reflect a working strategy.",
+                self._decide_failures,
+                self._decide_calls,
+            )
+        else:
+            logger.info("SPAgent stopped")
+
+    def _record_decide_failure(self, message: str, with_traceback: bool) -> None:
+        """
+        Report a failing decide() loudly once, then stay quiet but keep counting.
+
+        A silently-swallowed exception here produces a run that looks complete
+        and scores like the always-local baseline, so the first failure is
+        logged in full and the total is reported at shutdown.
+        """
+        self._decide_failures += 1
+        if self._decide_failures == 1:
+            if with_traceback:
+                logger.exception("SP-AGENT ERROR: %s", message)
+            else:
+                logger.error("SP-AGENT ERROR: %s", message)
+            logger.error(
+                "Further identical failures will be counted and reported at "
+                "shutdown instead of logged every %d ms.",
+                self._config.sp_agent_interval_ms,
+            )
+        elif self._decide_failures % 100 == 0:
+            logger.error(
+                "SP-AGENT ERROR: decide() has now failed %d times.",
+                self._decide_failures,
+            )
 
     # ------------------------------------------------------------------ #
     # Kafka background consumer                                            #
@@ -468,8 +521,14 @@ class SPAgentBase:
 
         mode = str(payload.get("mode", "")).strip().lower()
         if mode:
-            if mode not in REQUESTED_PROCESSING_MODES:
+            if mode not in MANUAL_PLACEMENT_COMMANDS:
                 logger.warning("Ignoring invalid manual placement mode: %r", mode)
+            elif mode == "auto":
+                self._shared_state.unlock_processing_mode()
+                logger.info(
+                    "Manual placement released, SP-Agent decisions resume: source=%s",
+                    payload.get("source", "unknown"),
+                )
             else:
                 prev = self.current_mode
                 self._shared_state.lock_processing_mode(mode)
@@ -546,115 +605,18 @@ class SPAgentBase:
     # ------------------------------------------------------------------ #
 
     def _normalize_gpu_metrics(self, message: dict) -> dict:
+        """Normalize a GPU/Triton metrics message into flat student-facing keys.
+
+        Both producer formats seen on KAFKA_GPU_TOPIC are handled in
+        common.gpu_metrics so the dashboard cannot disagree with what students
+        read. Always includes "raw" with the original nested message.
         """
-        Normalize a GPU/Triton server metrics message into flat student-friendly fields.
-
-        Accepts two formats on the same Kafka topic (dnn_partition.server_metrics):
-          - Nested format (Eldiyar's publisher): has "server", "totals", "models" keys.
-          - Flat format (gpu_metrics_publisher.py): has "gpu_utilization_pct",
-            "triton_requests_per_sec", "triton_queue_duration_ms", etc.
-
-        Output: flat dict with consistent snake_case keys. Always includes "raw".
-        """
-        if "server" in message or "models" in message:
-            return self._normalize_gpu_metrics_nested(message)
-        if "gpu_utilization_pct" in message or "triton_requests_per_sec" in message:
-            return self._normalize_gpu_metrics_flat(message)
-        return self._normalize_gpu_metrics_nested(message)
-
-    def _normalize_gpu_metrics_nested(self, message: dict) -> dict:
-        """Handle Eldiyar's nested server metrics format."""
-        server = message.get("server", {})
-        totals = message.get("totals", {})
-        models = message.get("models", [])
-
-        yolo = next((m for m in models if m.get("model_name") == "yolov10n"), {})
-        resnet = next((m for m in models if m.get("model_name") == "resnet50_full"), {})
-
-        return {
-            "gpu_util_pct": server.get("gpu_util_percent", 0.0),
-            "gpu_freq_mhz": server.get("gpu_freq_mhz", 0.0),
-            "gpu_temp_c": server.get("gpu_temp_c", 0.0),
-            "gpu_mem_used_mb": server.get("gpu_mem_used_mb", 0.0),
-            "gpu_mem_total_mb": server.get("gpu_mem_total_mb", 0.0),
-            "cpu_util_pct": server.get("cpu_util_percent", 0.0),
-            "mem_util_pct": server.get("mem_util_percent", 0.0),
-            "power_w": server.get("power_w", 0.0),
-
-            "total_rps": totals.get("total_rps", 0.0),
-            "total_success_rps": totals.get("total_success_rps", 0.0),
-            "total_failure_rps": totals.get("total_failure_rps", 0.0),
-            "total_pending": totals.get("total_pending_requests", 0),
-
-            "yolo_success_rps": yolo.get("success_rps", 0.0),
-            "yolo_inference_rps": yolo.get("inference_rps", 0.0),
-            "yolo_pending": yolo.get("pending_requests", 0),
-            "yolo_queue_ms": yolo.get("avg_queue_time_ms", 0.0),
-            "yolo_input_ms": yolo.get("avg_compute_input_ms", 0.0),
-            "yolo_infer_ms": yolo.get("avg_compute_infer_ms", 0.0),
-            "yolo_output_ms": yolo.get("avg_compute_output_ms", 0.0),
-
-            "resnet_success_rps": resnet.get("success_rps", 0.0),
-            "resnet_inference_rps": resnet.get("inference_rps", 0.0),
-            "resnet_pending": resnet.get("pending_requests", 0),
-            "resnet_queue_ms": resnet.get("avg_queue_time_ms", 0.0),
-            "resnet_infer_ms": resnet.get("avg_compute_infer_ms", 0.0),
-
-            "raw": message,
-        }
-
-    def _normalize_gpu_metrics_flat(self, message: dict) -> dict:
-        """Handle the flat format from gpu_metrics_publisher.py."""
-        rps = message.get("triton_requests_per_sec", 0.0)
-        queue_ms = message.get("triton_queue_duration_ms", 0.0)
-        infer_ms = message.get("triton_inference_duration_ms", 0.0)
-
-        return {
-            "gpu_util_pct": message.get("gpu_utilization_pct", 0.0),
-            "gpu_freq_mhz": 0.0,
-            "gpu_temp_c": message.get("gpu_temperature_c", 0.0),
-            "gpu_mem_used_mb": message.get("gpu_memory_used_mb", 0.0),
-            "gpu_mem_total_mb": message.get("gpu_memory_total_mb", 0.0),
-            "cpu_util_pct": 0.0,
-            "mem_util_pct": 0.0,
-            "power_w": message.get("gpu_power_draw_w", 0.0),
-
-            "total_rps": rps,
-            "total_success_rps": rps,
-            "total_failure_rps": 0.0,
-            "total_pending": 0,
-
-            "yolo_success_rps": rps,
-            "yolo_inference_rps": rps,
-            "yolo_pending": 0,
-            "yolo_queue_ms": queue_ms,
-            "yolo_input_ms": 0.0,
-            "yolo_infer_ms": infer_ms,
-            "yolo_output_ms": 0.0,
-
-            "resnet_success_rps": 0.0,
-            "resnet_inference_rps": 0.0,
-            "resnet_pending": 0,
-            "resnet_queue_ms": 0.0,
-            "resnet_infer_ms": 0.0,
-
-            "raw": message,
-        }
+        return normalize_gpu_metrics(message, include_raw=True)
 
     def _normalize_net_metrics(self, message: dict) -> dict:
-        """
-        Normalize a network conditions message into a safe flat dict.
+        """Normalize a network conditions message into a safe flat dict.
 
-        Accepts messages from network_conditions_publisher.py. Both
-        packet_loss_pct and packet_loss_percent are populated for compatibility.
-        Missing fields fall back to zero / "unknown".
+        Both packet_loss_pct and packet_loss_percent are populated for
+        compatibility. Missing fields fall back to zero / "unknown".
         """
-        loss = message.get("packet_loss_pct", message.get("packet_loss_percent", 0.0))
-        return {
-            "delay_ms": float(message.get("delay_ms", 0.0)),
-            "jitter_ms": float(message.get("jitter_ms", 0.0)),
-            "packet_loss_pct": float(loss),
-            "packet_loss_percent": float(loss),
-            "bandwidth": str(message.get("bandwidth", "unknown")),
-            "raw": message,
-        }
+        return normalize_net_metrics(message, include_raw=True)

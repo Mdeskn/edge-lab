@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "final-stage", "fix/**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Lint, test, and check the SP-Agent
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            client/requirements.txt
+            dashboard/backend/requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # onnxruntime and OpenCV are needed because the client's inference
+          # modules are imported by the test suite.
+          pip install -r client/requirements.txt
+          pip install -r dashboard/backend/requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        run: pytest
+
+      - name: Check the reference SP-Agent
+        run: python scripts/check_sp_agent.py --agent example
+
+      - name: Check the student SP-Agent template
+        run: python scripts/check_sp_agent.py --agent student
+
+  images:
+    name: Build the container images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Both images build from the repo root so they can include the shared
+      # `common` package; this catches a Dockerfile that drops it.
+      - name: Build client image
+        run: docker build -f client/Dockerfile -t edge-lab-client .
+
+      - name: Build dashboard backend image
+        run: docker build -f dashboard/backend/Dockerfile -t edge-lab-dashboard .
+
+      - name: Build dashboard frontend image
+        run: docker build -t edge-lab-frontend dashboard/frontend
+
+      - name: Verify the shared package is present in both images
+        run: |
+          docker run --rm edge-lab-client python -c "import common.phases; print('client ok')"
+          docker run --rm edge-lab-dashboard python -c "import common.phases; print('dashboard ok')"

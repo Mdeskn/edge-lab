@@ -1,0 +1,38 @@
+# The client and dashboard images build from the repo root so they can include
+# the shared `common` package. Without this file the build context would also
+# ship the git history, the virtualenvs, and the multi-megabyte model and video
+# (which are bind-mounted at runtime, not baked into the image).
+.git
+.github
+.venv*
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+
+# nginx serves dashboard/frontend/static directly, so the frontend toolchain
+# is never needed in an image. The backend image copies all of dashboard/,
+# which would otherwise pull in ~107 MB of node_modules.
+node_modules/
+dashboard/frontend/dist/
+dashboard/frontend/src/
+
+data/
+distributed-materials/
+seqam/
+*.md
+!client/**/*.md
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+.vscode
+.idea
+*.log
+*.png
+*.svg
+*.mp4
+*.onnx
