@@ -21,7 +21,7 @@ VERSIONED = re.compile(r'(?:href|src)="/(app\.js|styles\.css)\?v=([^"]+)"')
 
 
 def references() -> dict[str, str]:
-    return {name: version for name, version in VERSIONED.findall(INDEX.read_text())}
+    return dict(VERSIONED.findall(INDEX.read_text()))
 
 
 @pytest.mark.parametrize("asset", ["app.js", "styles.css"])
