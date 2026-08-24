@@ -168,6 +168,26 @@ def test_overlapping_delta_does_not_duplicate() -> None:
     assert merged["frames"] == list(range(10))
 
 
+def test_delta_before_any_seed_is_not_rendered_alone() -> None:
+    """
+    A delta with nothing to append it to must not be displayed by itself. One
+    delta is about five frames, and showing it alone looks like the chart is
+    being overwritten rather than accumulating. The client asks for a full
+    window instead; here the fetch is unavailable, so the buffer stays empty
+    rather than showing something misleading.
+    """
+    state = DashboardState(max_history=300, group_id="1")
+    add(state, 10)
+    cursor = state.history_seq
+    add(state, 5, start=10)
+
+    merged = run_merge(
+        [{"state": state.snapshot(since_seq=cursor), "authoritative": True}]
+    )
+    assert merged["frames"] == []
+    assert merged["seq"] == 0
+
+
 def test_client_trims_to_the_servers_window() -> None:
     state = DashboardState(max_history=10, group_id="1")
     add(state, 5)

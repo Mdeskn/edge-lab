@@ -229,8 +229,14 @@ function applyHistory(state, { authoritative = false } = {}) {
     }
     historySeeded = true;
   } else {
-    // A stale fetch landing after the socket seeded, or a delta arriving
-    // before any seed. Keep what we have and leave historySeq alone.
+    if (state.history_mode === "delta") {
+      // A delta with nothing to append it to. Rendering it alone would show a
+      // few points that look overwritten rather than accumulated, so pull a
+      // full window instead of displaying something misleading.
+      resyncHistory();
+    }
+    // Otherwise a stale fetch landing after the socket seeded. Keep what we
+    // have, and leave historySeq alone so the next delta still lines up.
     state.history = historyBuffers;
     return state;
   }
@@ -238,6 +244,36 @@ function applyHistory(state, { authoritative = false } = {}) {
   if (typeof state.history_seq === "number") historySeq = state.history_seq;
   state.history = historyBuffers;
   return state;
+}
+
+let resyncPending = false;
+
+async function resyncHistory() {
+  if (resyncPending) return;
+  resyncPending = true;
+  try {
+    const response = await fetch(apiUrl("/api/history"));
+    if (!response.ok) return;
+    const history = await response.json();
+    applyHistory(
+      {
+        history: {
+          frames: history.frames,
+          gpu: history.gpu,
+          network: history.network,
+        },
+        history_mode: "full",
+        history_seq: history.history_seq,
+        max_history: history.max_history,
+      },
+      { authoritative: true },
+    );
+    if (latestState) render(latestState);
+  } catch (error) {
+    // Best effort. The next socket reconnect sends a full window anyway.
+  } finally {
+    resyncPending = false;
+  }
 }
 
 async function loadInitialState() {
