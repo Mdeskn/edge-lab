@@ -11,6 +11,13 @@ __pycache__
 .pytest_cache
 .ruff_cache
 
+# nginx serves dashboard/frontend/static directly, so the frontend toolchain
+# is never needed in an image. The backend image copies all of dashboard/,
+# which would otherwise pull in ~107 MB of node_modules.
+node_modules/
+dashboard/frontend/dist/
+dashboard/frontend/src/
+
 data/
 distributed-materials/
 seqam/
