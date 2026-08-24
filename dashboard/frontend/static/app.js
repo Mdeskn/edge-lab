@@ -191,14 +191,23 @@ const HISTORY_STREAMS = ["frames", "gpu", "network"];
 const historyBuffers = { frames: [], gpu: [], network: [] };
 let historySeq = 0;
 let historyMax = 300;
+let historySeeded = false;
 
-function applyHistory(state) {
+// `authoritative` marks a snapshot that may replace what we already hold.
+// Only the WebSocket is authoritative. The page also fetches /api/state at
+// load so something renders before the socket opens, and those two race: if
+// the socket seeds first and the slower fetch lands second, treating the fetch
+// as authoritative would replace the buffer with older records AND rewind
+// historySeq, so the next delta would start past the gap and those records
+// would be lost for the rest of the session. That showed up as a hole in the
+// charts near the start of a session.
+function applyHistory(state, { authoritative = false } = {}) {
   if (typeof state.max_history === "number" && state.max_history > 0) {
     historyMax = state.max_history;
   }
   const incoming = state.history || {};
 
-  if (state.history_mode === "delta" && historySeq > 0) {
+  if (state.history_mode === "delta" && historySeeded) {
     for (const stream of HISTORY_STREAMS) {
       const buffer = historyBuffers[stream];
       for (const record of incoming[stream] || []) {
@@ -210,11 +219,20 @@ function applyHistory(state) {
       const overflow = buffer.length - historyMax;
       if (overflow > 0) buffer.splice(0, overflow);
     }
-  } else {
-    // A full snapshot: on first load, on reconnect, or from /api/state.
+  } else if (state.history_mode === "full" && (authoritative || !historySeeded)) {
+    // The socket on connect or reconnect, or the initial fetch when the socket
+    // has not seeded yet. A reconnect legitimately replaces everything, which
+    // is also how the page recovers if the backend restarted and its sequence
+    // began again from zero.
     for (const stream of HISTORY_STREAMS) {
       historyBuffers[stream] = (incoming[stream] || []).slice(-historyMax);
     }
+    historySeeded = true;
+  } else {
+    // A stale fetch landing after the socket seeded, or a delta arriving
+    // before any seed. Keep what we have and leave historySeq alone.
+    state.history = historyBuffers;
+    return state;
   }
 
   if (typeof state.history_seq === "number") historySeq = state.history_seq;
@@ -226,7 +244,7 @@ async function loadInitialState() {
   try {
     const response = await fetch(apiUrl("/api/state"));
     if (!response.ok) throw new Error(`Dashboard API returned ${response.status}`);
-    render(applyHistory(await response.json()));
+    render(applyHistory(await response.json(), { authoritative: false }));
     hideError();
   } catch (error) {
     showError(`${error.message}. The dashboard will reconnect automatically.`);
@@ -239,7 +257,7 @@ function connectSocket() {
   socket.onopen = () => setSocketConnected(true);
   socket.onmessage = (event) => {
     try {
-      queueSocketRender(applyHistory(JSON.parse(event.data)));
+      queueSocketRender(applyHistory(JSON.parse(event.data), { authoritative: true }));
       hideError();
     } catch (error) {
       console.error("Dashboard update failed", error);
