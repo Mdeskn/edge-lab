@@ -154,14 +154,21 @@ class Dispatcher:
             span.set_attribute("processing.requested_mode", requested_mode)
             span.set_attribute("processing.manual_locked", manual_mode_locked)
 
-            forced_remote = manual_mode_locked and requested_mode == "remote"
-            allow_remote_fallback = (
-                self.config.remote_fallback_to_local and not forced_remote
-            )
+            # Placement is handled identically whether it came from the
+            # SP-Agent or from the dashboard's manual lock. It used to differ:
+            # a manual "remote" both disabled local fallback and bypassed the
+            # failure cooldown, so the always-remote baseline students are told
+            # to beat took a full miss penalty where a student's agent choosing
+            # remote fell back to local and got a real prediction. Part of every
+            # group's improvement over that baseline was therefore an artifact
+            # of which control set the mode. REMOTE_FALLBACK_TO_LOCAL now
+            # governs both paths, so "pure remote, no safety net" is still
+            # available, just as a deliberate setting rather than a side effect.
+            allow_remote_fallback = self.config.remote_fallback_to_local
             remote_ok = (
                 requested_mode == "remote"
                 and self.remote_client is not None
-                and self.remote_client.is_available(ignore_cooldown=forced_remote)
+                and self.remote_client.is_available()
             )
 
             tensors = _TensorCache(frame, self.config, self.tracer)
