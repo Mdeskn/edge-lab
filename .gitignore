@@ -30,6 +30,13 @@ data/saved/*
 # Non-Pi VM handoff bundle and local development leftovers
 distributed-materials/
 
+# Student-facing lab handouts. The .docx files are ignored because Word
+# rewrites the whole binary on every save, which bloats history for a diff
+# nobody can read. The folder's README stays tracked so the repository still
+# records what belongs here and where the canonical copy lives.
+lab-documents/*
+!lab-documents/README.md
+
 # Generated local reports/tools
 *_project_inventory.md
 benchmark_inference*.py
