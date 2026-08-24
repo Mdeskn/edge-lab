@@ -72,7 +72,12 @@ class CycleCommandRequest(BaseModel):
 
 
 class SaveRequest(BaseModel):
-    """Request to save the current results with a label."""
+    """Request to save the current results with a label.
+
+    `charts` maps a chart name to a base64-encoded PNG. Raw SVG markup is also
+    accepted, so a browser running an older app.js still saves something
+    usable; the server picks the file extension from the content.
+    """
 
     label: str | None = None
     charts: dict[str, str] | None = None

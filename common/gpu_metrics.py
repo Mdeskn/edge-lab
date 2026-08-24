@@ -160,7 +160,15 @@ _DEFAULT_NET_METRICS: dict[str, Any] = {
     "packet_loss_pct": 0.0,
     "packet_loss_percent": 0.0,
     "bandwidth": "unknown",
+    "mode": "unknown",
 }
+
+#: The publisher puts the full `tc qdisc show` output under "raw". It is a few
+#: hundred bytes of text per message, it is not rendered anywhere, and keeping
+#: it would put it in every one of the 300 records the dashboard retains. The
+#: whole original message is still available under "raw" when include_raw is
+#: set, which is what the SP-Agent documentation promises.
+_NET_DROPPED_ON_PASSTHROUGH = frozenset({"raw"})
 
 
 def default_net_metrics() -> dict[str, Any]:
@@ -172,22 +180,36 @@ def normalize_net_metrics(message: dict, include_raw: bool = True) -> dict[str, 
     """
     Return flat network conditions with both packet-loss key spellings.
 
+    Fields the publisher sends beyond the ones normalized here are passed
+    through untouched: "mode", "tc_active", "rate", "tbf_latency",
+    "interface", and whatever else it adds later. An earlier version of this
+    function allow-listed five keys and silently dropped the rest, which blanked
+    the dashboard's network Mode readout and made
+    `self.net_metrics.get("mode", "clear")`, a signal the runbook tells students
+    to use, always return its default.
+
     Missing fields fall back to zero delay / loss and an "unknown" bandwidth,
-    which is what students see before the network publisher's first message.
+    which is what students see before the publisher's first message.
     """
     if not isinstance(message, dict):
         message = {}
 
     loss = message.get("packet_loss_pct", message.get("packet_loss_percent", 0.0))
+
     normalized = {
-        "delay_ms": _as_float(message.get("delay_ms")),
-        "jitter_ms": _as_float(message.get("jitter_ms")),
-        "packet_loss_pct": _as_float(loss),
-        "packet_loss_percent": _as_float(loss),
-        "bandwidth": str(message.get("bandwidth", "unknown")),
+        key: value
+        for key, value in message.items()
+        if key not in _NET_DROPPED_ON_PASSTHROUGH
     }
-    if "timestamp" in message:
-        normalized["timestamp"] = message["timestamp"]
+    normalized.update(
+        {
+            "delay_ms": _as_float(message.get("delay_ms")),
+            "jitter_ms": _as_float(message.get("jitter_ms")),
+            "packet_loss_pct": _as_float(loss),
+            "packet_loss_percent": _as_float(loss),
+            "bandwidth": str(message.get("bandwidth", "unknown")),
+        }
+    )
     if include_raw:
         normalized["raw"] = message
     return normalized

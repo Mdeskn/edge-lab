@@ -5,6 +5,8 @@ and the copies had already drifted (the dashboard's flat branch had lost the
 ResNet fields), so students and the dashboard could disagree about the same
 Kafka message.
 """
+import pytest
+
 from common.gpu_metrics import (
     GPU_METRIC_DEFAULTS,
     default_net_metrics,
@@ -119,3 +121,77 @@ def test_default_net_metrics_are_a_fresh_copy() -> None:
     first = default_net_metrics()
     first["delay_ms"] = 99.0
     assert default_net_metrics()["delay_ms"] == 0.0
+
+
+# --- Fields the publisher sends must survive normalization ---------------
+
+#: An actual message captured off edgelab.network.metrics on the running lab.
+#: Normalizing used to allow-list five keys and drop everything else, which
+#: blanked the dashboard's network "Mode" readout and made
+#: self.net_metrics.get("mode", "clear") always return its default.
+LIVE_NET_MESSAGE = {
+    "delay_ms": 0.0,
+    "jitter_ms": 0.0,
+    "packet_loss_pct": 0.0,
+    "packet_loss_percent": 0.0,
+    "bandwidth": "unlimited",
+    "rate": "unlimited",
+    "tbf_latency": None,
+    "tc_active": False,
+    "mode": "clear",
+    "interface": "ens18",
+    "source": "tc",
+    "raw": "qdisc fq_codel 0: root refcnt 2 limit 10240p flows 1024 " * 8,
+    "timestamp": 1787581000.0,
+}
+
+
+@pytest.mark.parametrize(
+    "key", ["mode", "tc_active", "rate", "tbf_latency", "interface", "source"]
+)
+def test_publisher_fields_survive_normalization(key) -> None:
+    assert key in normalize_net_metrics(LIVE_NET_MESSAGE, include_raw=False)
+
+
+def test_network_mode_reaches_the_dashboard() -> None:
+    """The Infrastructure panel renders network.mode; it must not be dropped."""
+    assert normalize_net_metrics(LIVE_NET_MESSAGE, include_raw=False)["mode"] == "clear"
+
+    shaped = dict(LIVE_NET_MESSAGE, mode="netem_tbf", tc_active=True)
+    assert normalize_net_metrics(shaped, include_raw=False)["mode"] == "netem_tbf"
+
+
+def test_every_field_the_dashboard_renders_is_produced() -> None:
+    """
+    Keys read by renderInfrastructure() in app.js. Adding a field there without
+    adding it here is how the Mode readout went blank.
+    """
+    rendered = {"bandwidth", "delay_ms", "jitter_ms", "mode", "packet_loss_pct"}
+    produced = set(normalize_net_metrics(LIVE_NET_MESSAGE, include_raw=False))
+    assert rendered <= produced, f"not produced: {sorted(rendered - produced)}"
+
+
+def test_tc_output_is_kept_out_of_the_dashboard_copy() -> None:
+    """
+    The publisher's "raw" is a few hundred bytes of tc output, rendered
+    nowhere, and the dashboard keeps 300 network records. It stays out of the
+    dashboard copy while the SP-Agent still gets the whole message.
+    """
+    dashboard = normalize_net_metrics(LIVE_NET_MESSAGE, include_raw=False)
+    assert "raw" not in dashboard
+
+    agent = normalize_net_metrics(LIVE_NET_MESSAGE, include_raw=True)
+    assert isinstance(agent["raw"], dict)
+    assert agent["raw"]["mode"] == "clear"
+
+
+def test_normalized_values_win_over_passthrough() -> None:
+    """Passthrough must not reintroduce an unparsed value for a managed key."""
+    messy = dict(LIVE_NET_MESSAGE, delay_ms="not a number", bandwidth=20)
+    result = normalize_net_metrics(messy, include_raw=False)
+    assert result["delay_ms"] == 0.0
+    assert result["bandwidth"] == "20"
+
+
+def test_mode_has_a_default_before_the_first_message() -> None:
+    assert default_net_metrics()["mode"] == "unknown"

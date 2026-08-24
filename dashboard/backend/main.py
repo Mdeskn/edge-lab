@@ -400,10 +400,9 @@ async def post_save(request: SaveRequest) -> dict[str, Any]:
         shutil.copy2(RESULTS_BY_PHASE_PATH, dest)
         saved_files.append(str(dest))
 
-    for key, svg in (request.charts or {}).items():
+    for key, chart in (request.charts or {}).items():
         safe_key = re.sub(r"[^A-Za-z0-9_-]", "-", key)[:40].strip("-") or "chart"
-        dest = SAVE_DIR / f"chart-{safe_key}-{stem}.svg"
-        dest.write_text(svg, encoding="utf-8")
+        dest = _write_chart(chart, SAVE_DIR / f"chart-{safe_key}-{stem}", key)
         saved_files.append(str(dest))
 
     if not saved_files:
@@ -473,6 +472,43 @@ def _to_int(value: str | None) -> int | None:
         return int(value)
     except ValueError:
         return None
+
+
+_PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+def _write_chart(chart: str, stem_path: Path, key: str) -> Path:
+    """
+    Save one exported chart, choosing the format from the content.
+
+    The dashboard sends a base64 PNG: charts end up in reports and slides, and
+    the SVG it used to send referenced stylesheet classes it did not carry, so
+    a saved file opened outside the dashboard lost its axis, gridlines, and
+    label colours. SVG is still accepted so a browser running an older app.js
+    saves something usable rather than failing.
+    """
+    text = chart.strip()
+    if text.startswith("<svg"):
+        dest = stem_path.with_suffix(".svg")
+        dest.write_text(chart, encoding="utf-8")
+        return dest
+
+    try:
+        data = base64.b64decode(text, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"chart {key!r} is neither SVG markup nor base64 PNG",
+        ) from exc
+
+    if not data.startswith(_PNG_MAGIC):
+        raise HTTPException(
+            status_code=400, detail=f"chart {key!r} decoded to something that is not a PNG"
+        )
+
+    dest = stem_path.with_suffix(".png")
+    dest.write_bytes(data)
+    return dest
 
 
 def _decode_jpeg(image_base64: str) -> bytes:

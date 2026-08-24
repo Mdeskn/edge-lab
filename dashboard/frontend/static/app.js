@@ -888,6 +888,70 @@ function hideTooltip() {
 // export of them would silently be a partial window, not the full cycle.
 const SAVED_CHART_INDEX = { latency: 0, jitter: 1, displacement: 2, cumulative: 3, placement: 4 };
 
+// The on-page charts take their axis, gridline, and label styling from
+// styles.css. An exported file has no stylesheet, so those rules are inlined
+// here. Without them the saved chart loses every stroke that a class supplies:
+// the axis and gridlines come out invisible and the labels fall back to black.
+const SAVED_CHART_STYLE = `
+  text { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .chart-axis { stroke: #c3c2b7; stroke-width: 1; }
+  .chart-gridline { stroke: #e5eae9; stroke-width: 1; }
+  .chart-band-a { fill: transparent; }
+  .chart-band-b { fill: rgba(23, 35, 34, 0.035); }
+  .chart-band-boundary { stroke: #e5eae9; stroke-width: 1; }
+  .chart-band-label { fill: #8b9997; font-size: 8px; font-weight: 700; letter-spacing: 0.02em; }
+  .chart-tick-label { fill: #708280; font-size: 9px; }
+  .chart-end-ring { fill: #ffffff; }
+  .chart-end-label { fill: #243433; font-size: 11px; font-weight: 700; }
+  .chart-crosshair { display: none; }
+`;
+
+//: Exported at 2x so the chart stays sharp when scaled up in a report or slide.
+const SAVED_CHART_SCALE = 2;
+
+function standaloneChartSvg(svg) {
+  // Replace the on-page root, which has no xmlns and inherits its size from
+  // the layout. A rasteriser needs the namespace and explicit dimensions, and
+  // an opaque background keeps the chart readable when pasted onto a slide.
+  return svg.trim().replace(
+    /^<svg[^>]*>/,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${CHART_W}" height="${CHART_H}"`
+      + ` viewBox="0 0 ${CHART_W} ${CHART_H}">`
+      + `<style>${SAVED_CHART_STYLE}</style>`
+      + `<rect width="${CHART_W}" height="${CHART_H}" fill="#ffffff"></rect>`,
+  );
+}
+
+function chartSvgToPngBase64(svg) {
+  return new Promise((resolve, reject) => {
+    const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const image = new Image();
+
+    image.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = CHART_W * SAVED_CHART_SCALE;
+        canvas.height = CHART_H * SAVED_CHART_SCALE;
+        const context = canvas.getContext("2d");
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/png").split(",")[1]);
+      } catch (error) {
+        reject(error);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("could not rasterise chart"));
+    };
+    image.src = url;
+  });
+}
+
 async function buildSavedCharts() {
   const cs = latestState?.collection_state;
   const since = cs?.cycle_started_at;
@@ -907,7 +971,8 @@ async function buildSavedCharts() {
     const { svg } = def.kind === "state"
       ? stateStripSvg(def, frames)
       : lineChartSvg(def, valuesForChart(def, wrappedState), frames, true);
-    if (svg && svg.trim().startsWith("<svg")) charts[key] = svg.trim();
+    if (!svg || !svg.trim().startsWith("<svg")) continue;
+    charts[key] = await chartSvgToPngBase64(standaloneChartSvg(svg));
   }
   return charts;
 }
